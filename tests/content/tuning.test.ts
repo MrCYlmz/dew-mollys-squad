@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { tuning } from '../../src/content/tuning'
 
 describe('cat base values at level 1', () => {
-  it('cat_fires_3_yarn_balls_per_second', () => {
-    expect(tuning.cat.fireRate).toBe(3)
+  it('cat_fires_2_yarn_balls_per_second', () => {
+    expect(tuning.cat.fireRate).toBe(2)
   })
 
   it('yarn_ball_deals_1_damage', () => {
@@ -16,5 +16,11 @@ describe('cat base values at level 1', () => {
 
   it('yarn_ball_flies_30_units_per_second', () => {
     expect(tuning.cat.yarnBallSpeed).toBe(30)
+  })
+})
+
+describe('gate shooting', () => {
+  it('10_hits_raise_a_gate_by_1', () => {
+    expect(tuning.gate.hitsPerStep).toBe(10)
   })
 })

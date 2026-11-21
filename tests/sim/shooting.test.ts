@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
-import { levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
+import { copied, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 function averageYarnBallsInFlight(run: Run, ticks: number): number {
   let total = 0
@@ -23,13 +23,13 @@ describe('yarn balls', () => {
     expect(run.state.yarnBalls[0].x).toBe(fired.x)
   })
 
-  // A yarn ball lives range / speed = 1 s, so at 3 shots/s about 3 are in flight per cat.
+  // A yarn ball lives range / speed = 1 s, so at 2 shots/s about 2 are in flight per cat.
   // The tolerance allows a tick either way on each yarn ball's lifetime and shot timing.
-  it('one_cat_fires_3_yarn_balls_per_second_that_vanish_at_the_end_of_their_range', () => {
+  it('one_cat_fires_2_yarn_balls_per_second_that_vanish_at_the_end_of_their_range', () => {
     const run = createRun({ level: levelOf([]), seed: 1 })
     stepTicks(run, 120)
 
-    expect(Math.abs(averageYarnBallsInFlight(run, 120) - 3)).toBeLessThanOrEqual(0.2)
+    expect(Math.abs(averageYarnBallsInFlight(run, 120) - 2)).toBeLessThanOrEqual(0.2)
   })
 
   it('every_cat_fires', () => {
@@ -43,7 +43,7 @@ describe('yarn balls', () => {
     stepUntil(run, (state) => state.squad.count === 2, 60)
     stepTicks(run, 120)
 
-    expect(Math.abs(averageYarnBallsInFlight(run, 120) - 6)).toBeLessThanOrEqual(0.4)
+    expect(Math.abs(averageYarnBallsInFlight(run, 120) - 4)).toBeLessThanOrEqual(0.4)
   })
 
   it('yarn_ball_deals_1_damage_to_the_puppy_it_hits', () => {
@@ -56,7 +56,7 @@ describe('yarn balls', () => {
     const events: GameEvent[] = []
 
     while (run.state.puppies.length > 0 && run.state.status === 'running') {
-      events.push(...run.step(noSteering))
+      events.push(...copied(run.step(noSteering)))
       const hp = run.state.puppies[0]?.hp
       if (hp !== undefined && hp !== hpSeen[hpSeen.length - 1]) hpSeen.push(hp)
     }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { applyGate } from '../../src/sim/gates'
 import { createRun } from '../../src/sim/run'
-import { levelOf, steerTo, stepUntil } from './runHarness'
+import { levelOf, noSteering, steerTo, stepUntil } from './runHarness'
 
 type GateRowEvent = Extract<Level['events'][number], { type: 'gates' }>
 
@@ -15,7 +15,7 @@ const halve = { op: 'divide', value: 2 } as const
 
 function runThroughGates(rows: GateRowEvent[], x = -2.5) {
   const run = createRun({ level: levelOf(rows), seed: 1 })
-  steerTo(run, x)
+  if (x !== 0) steerTo(run, x)
   const lastRowZ = rows[rows.length - 1].z
   stepUntil(run, (state) => state.squad.z > lastRowZ + 1, 6000)
   return run
@@ -117,6 +117,14 @@ describe('gates in a run', () => {
     expect(run.state.gateRows.map((row) => row.taken)).toEqual(['right', 'right'])
   })
 
+  it('squad_at_exactly_x_0_takes_the_right_gate', () => {
+    const run = runThroughGates([gateRow(10, halve, double), gateRow(20, halve, double)], 0)
+
+    expect(run.state.squad.x).toBe(0)
+    expect(run.state.squad.count).toBe(4)
+    expect(run.state.gateRows.map((row) => row.taken)).toEqual(['right', 'right'])
+  })
+
   it('gate_row_is_untaken_before_the_squad_reaches_it', () => {
     const run = createRun({ level: levelOf([gateRow(40, double)]), seed: 1 })
     steerTo(run, -2.5)
@@ -135,5 +143,39 @@ describe('gates in a run', () => {
     expect(run.state.gateRows[0].z).toBe(100)
     expect(run.state.gateRows[0].left).toMatchObject({ op: 'add', value: 10, colour: 'blue' })
     expect(run.state.gateRows[0].right).toMatchObject({ op: 'subtract', value: -15, colour: 'red' })
+  })
+})
+
+describe('tick order', () => {
+  // A wave appears 40 units ahead and closes at 8 + 4 units/s, so the puppy meets the squad about
+  // 13.8 units before the wave's z. Sweeping the wave's z around gate z + 13.8 makes some runs
+  // touch the puppy in the very tick the squad runs through the gate.
+  it('puppy_contact_in_the_gate_tick_applies_before_the_gate', () => {
+    const gateZ = 60
+    let sameTickRuns = 0
+
+    for (let offset = -1.5; offset <= 1.5; offset += 0.05) {
+      const run = createRun({
+        level: levelOf([
+          gateRow(gateZ, { op: 'add', value: 10 }),
+          { type: 'wave', z: gateZ + 13.8 + offset, enemy: 'puppy', pattern: 'line', count: 1 },
+        ]),
+        seed: 1,
+      })
+
+      while (run.state.status === 'running' && run.state.squad.z < gateZ + 1) {
+        const zBefore = run.state.squad.z
+        const events = run.step(noSteering)
+        const touched = events.some((event) => event.type === 'catsLost')
+        if (touched && zBefore < gateZ && run.state.squad.z >= gateZ) {
+          sameTickRuns++
+          // Contact first: 1 − 1 = 0 loses the run before the +10 gate could save it.
+          expect(run.state.status).toBe('lost')
+          expect(run.state.squad.count).toBe(0)
+        }
+      }
+    }
+
+    expect(sameTickRuns).toBeGreaterThan(0)
   })
 })

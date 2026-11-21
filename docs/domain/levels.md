@@ -8,7 +8,7 @@ Terms as in the [glossary](glossary.md).
 - Levels are hand-made by designers as data, so a new level needs no code change.
 - Gate rows come every 40–60 units. This sets only the gaps between rows; the first row may come earlier.
 - Between gate rows, enemy waves run at the squad.
-- Pickups and obstacles sit on the track: barrels to shoot, coins to collect, walls to steer around.
+- Barrels, coins and walls sit on the track: barrels to shoot, coins to collect, walls to steer around.
 - Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins or barrels.
 - A level takes 60–120 s to play.
 
@@ -19,13 +19,14 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 | Field | Value |
 | --- | --- |
 | `id` | Text, unique among levels, such as `"level-1"` |
+| `level` | The level number, a whole number 1 or more. It sets the level's [scaling](#scaling). Two levels may share a number, such as a placeholder and the real level it stands in for |
 | `length` | Distance from the start to the finish line, in units, 300–600 |
 | `placeholder` | Optional. `true` marks a stand-in level that designers will replace |
 | `events` | The level's events, sorted by `z` |
 
 - A level without a boss ends at the finish line at z = `length`.
 - Every event has a `type` and a `z` greater than 0 and less than `length`.
-- Barrels, coins, obstacles and the boss are added to this format when they are built.
+- Coins and the boss are added to this format when they are built.
 
 ### Gate row
 
@@ -34,10 +35,17 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 | `type` | `"gates"` |
 | `z` | Where the squad runs through the row |
 | `left`, `right` | The two gates, each `{ "op", "value" }`. The left gate covers x −5..0, the right gate x 0..5 |
-| `op` | `"add"`, `"subtract"`, `"multiply"` or `"divide"` |
-| `value` | The number shown, as a whole number without a sign: 1 or more for add and subtract, 2 for multiply and divide |
+| `op` | `"add"`, `"subtract"`, `"multiply"`, `"divide"`, `"fireRate"`, `"damage"`, `"multiShot"` or `"range"` |
+| `value` | The number shown, as a whole number without a sign: 1 or more for add and subtract, 2 for multiply and divide, 20 for fire rate (per cent), 1 for damage, 1 for multi-shot, 10 for range |
 
-Example: `{ "type": "gates", "z": 40, "left": { "op": "add", "value": 10 }, "right": { "op": "subtract", "value": 15 } }` is a row of +10 on the left and −15 on the right.
+- The two gates of a row may have any two ops, the same or different.
+- The weapon-buff values are fixed, like multiply and divide, because [the run](run.md#weapon-buffs) defines each buff's effect.
+
+Examples:
+
+- `{ "type": "gates", "z": 40, "left": { "op": "add", "value": 10 }, "right": { "op": "subtract", "value": 15 } }` is a row of +10 on the left and −15 on the right.
+- `{ "type": "gates", "z": 90, "left": { "op": "add", "value": 10 }, "right": { "op": "damage", "value": 1 } }` is a row of +10 on the left and DMG +1 on the right.
+- `{ "type": "gates", "z": 140, "left": { "op": "fireRate", "value": 20 }, "right": { "op": "range", "value": 10 } }` is a row of FIRE RATE +20% on the left and RANGE +10 on the right.
 
 ### Wave
 
@@ -45,7 +53,7 @@ Example: `{ "type": "gates", "z": 40, "left": { "op": "add", "value": 10 }, "rig
 | --- | --- |
 | `type` | `"wave"` |
 | `z` | Where the wave's front row stands when it appears |
-| `enemy` | `"puppy"` |
+| `enemy` | `"puppy"`, `"chihuahua"`, `"bulldog"` or `"shieldDog"`. A wave has one kind of enemy |
 | `pattern` | `"line"`, `"block"`, `"column"` or `"flank"`, with that pattern's fields below |
 
 - A wave appears when the squad is 40 units (the spawn distance) before its `z`. Its enemies then start moving.
@@ -68,11 +76,42 @@ Examples:
 - `{ "type": "wave", "z": 130, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": 0, "spacing": 1.5 }`: 20 puppies at x −3, −1.5, 0, 1.5 and 3, in rows at z 130, 131.5, 133 and 134.5.
 - `{ "type": "wave", "z": 180, "enemy": "puppy", "pattern": "column", "count": 8, "x": -3, "spacing": 2 }`: 8 puppies at x −3, from z 180 to 194.
 - `{ "type": "wave", "z": 230, "enemy": "puppy", "pattern": "flank", "count": 4, "spacing": 2 }`: 4 puppies at each edge, from z 230 to 236.
+- `{ "type": "wave", "z": 260, "enemy": "chihuahua", "pattern": "line", "count": 10 }`: 10 chihuahuas across the track.
+- These counts are for level 1. On higher levels the wave has more enemies (see [scaling](#scaling)).
+
+### Barrel
+
+| Field | Value |
+| --- | --- |
+| `type` | `"barrel"` |
+| `z` | Where the barrel stands |
+| `x` | Where the barrel stands across the track, within −5..5 |
+
+- A barrel is on the track from the start of the run.
+
+Example: `{ "type": "barrel", "z": 120, "x": 1.5 }` is a barrel at x = 1.5, z = 120.
+
+### Wall
+
+| Field | Value |
+| --- | --- |
+| `type` | `"wall"` |
+| `z` | The wall's front edge, the side facing the squad. The wall reaches from `z` to `z` + the wall depth |
+| `x` | The wall's centre across the track |
+| `width` | The wall's width across the track, more than 0 |
+
+- The whole wall must lie on the track: `x` − `width` ÷ 2 is at least −5, and `x` + `width` ÷ 2 is at most 5.
+- A wall is on the track from the start of the run.
+
+Example: `{ "type": "wall", "z": 160, "x": -2.5, "width": 5 }` is a wall over the left half of the track, x −5..0, from z = 160 to 161.
 
 ## Scaling
 
-- For each level number, enemy HP is multiplied by 1.08 and wave size by 1.05. Example: a puppy has 3 HP on level 1 and 3 × 1.08 = 3.24 HP on level 2.
-- Both factors are tunable in one place.
+- For each level number above 1, enemy HP is multiplied by 1.08 (the enemy HP growth) and wave size by 1.05 (the wave size growth), both in the tuning config. The level number is the level file's `level`.
+- On level L, enemy HP is the level 1 HP × 1.08^(L − 1), kept as is, without rounding. Examples: a puppy has 3 HP on level 1, 3 × 1.08 = 3.24 HP on level 2 and 3 × 1.08² = 3.4992 HP on level 3. A shield dog's shield and body both scale.
+- On level L, a wave's size is its size in the level file × 1.05^(L − 1), rounded to the nearest whole number, halves up. For line, column and flank waves this scales `count` (per side for flank). For block waves it scales `rows`, so the block keeps its width and grows backwards. Examples: a line of 10 has 10 × 1.05 = 10.5, so 11 enemies on level 2; a line of 5 has 5.25, so still 5. A block of 5 columns and 4 rows on level 5 has 4 × 1.05⁴ = 4.86, so 5 rows of 5.
+- Scaled waves follow the same placement rules: a scaled line still spreads evenly across the track, and extra rows and enemies stand further back at the same `spacing`.
+- Barrels, walls and gates do not scale.
 
 ## Balancing
 

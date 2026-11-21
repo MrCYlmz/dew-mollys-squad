@@ -46,6 +46,25 @@ describe('yarn balls', () => {
     expect(Math.abs(averageYarnBallsInFlight(run, 120) - 4)).toBeLessThanOrEqual(0.4)
   })
 
+  it('yarn_ball_vanishes_once_it_has_flown_its_30_unit_range', () => {
+    const run = createRun({ level: levelOf([]), seed: 1 })
+    stepUntil(run, (state) => state.yarnBalls.length > 0, 120)
+    // The only cat fired it from where it stands this tick.
+    const firedAtZ = run.state.cats[0].z
+
+    // The first yarn ball stays the farthest one until it vanishes.
+    let flown = 0
+    for (let tick = 0; tick < 120; tick++) {
+      run.step(noSteering)
+      const farthestZ = Math.max(...run.state.yarnBalls.map((yarnBall) => yarnBall.z))
+      if (farthestZ - firedAtZ < flown) break
+      flown = farthestZ - firedAtZ
+    }
+
+    expect(flown).toBeLessThanOrEqual(30 + 1e-9)
+    expect(flown).toBeGreaterThanOrEqual(29.5)
+  })
+
   it('yarn_ball_deals_1_damage_to_the_puppy_it_hits', () => {
     const run = createRun({
       level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'line', count: 1 }]),
@@ -81,6 +100,39 @@ describe('yarn balls', () => {
     }
 
     expect(damagedPuppiesBehindTheFront).toBe(0)
+  })
+
+  it('yarn_balls_miss_a_puppy_outside_the_lane_they_fly_in', () => {
+    const run = createRun({
+      level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'column', count: 1, x: 2.5, spacing: 1 }]),
+      seed: 1,
+    })
+    steerTo(run, -2.5)
+
+    let hpSeen = 3
+    while (run.state.squad.z < 60 && run.state.status === 'running') {
+      run.step(noSteering)
+      for (const puppy of run.state.puppies) hpSeen = Math.min(hpSeen, puppy.hp)
+    }
+
+    expect(hpSeen).toBe(3)
+  })
+
+  it('yarn_ball_stops_at_the_nearer_of_two_close_puppies', () => {
+    const run = createRun({
+      level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'column', count: 2, x: 0, spacing: 0.25 }]),
+      seed: 1,
+    })
+    stepUntil(run, (state) => state.puppies.length > 0, 600)
+
+    let backPuppyHitWhileFrontStood = false
+    while (run.state.puppies.length === 2 && run.state.status === 'running') {
+      run.step(noSteering)
+      const [, back] = [...run.state.puppies].sort((a, b) => a.z - b.z)
+      if (back !== undefined && back.hp < 3) backPuppyHitWhileFrontStood = true
+    }
+
+    expect(backPuppyHitWhileFrontStood).toBe(false)
   })
 
   it('yarn_ball_stops_at_a_gate_in_front_of_a_puppy', () => {

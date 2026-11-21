@@ -125,6 +125,35 @@ describe('gates in a run', () => {
     expect(run.state.gateRows.map((row) => row.taken)).toEqual(['right', 'right'])
   })
 
+  it('taking_a_gate_reports_the_gate_and_the_new_squad_count', () => {
+    const run = createRun({ level: levelOf([gateRow(10, double, halve)]), seed: 1 })
+    steerTo(run, -2.5)
+
+    const events = stepUntil(run, (state) => state.squad.z > 11, 6000)
+
+    expect(events.filter((event) => event.type === 'gateTaken')).toEqual([
+      { type: 'gateTaken', side: 'left', op: 'multiply', value: 2, squadCount: 2 },
+    ])
+  })
+
+  it('gate_that_lowers_the_squad_reports_the_cats_lost', () => {
+    const run = createRun({ level: levelOf([gateRow(10, double), gateRow(20, double), gateRow(30, double), gateRow(40, halve)]), seed: 1 })
+    steerTo(run, -2.5)
+
+    const events = stepUntil(run, (state) => state.squad.z > 41, 6000)
+
+    expect(events.filter((event) => event.type === 'catsLost')).toEqual([{ type: 'catsLost', count: 4 }])
+  })
+
+  it('gate_that_leaves_the_squad_unchanged_reports_no_cats_lost', () => {
+    const run = createRun({ level: levelOf([gateRow(10, halve)]), seed: 1 })
+    steerTo(run, -2.5)
+
+    const events = stepUntil(run, (state) => state.squad.z > 11, 6000)
+
+    expect(events.filter((event) => event.type === 'catsLost')).toEqual([])
+  })
+
   it('gate_row_is_untaken_before_the_squad_reaches_it', () => {
     const run = createRun({ level: levelOf([gateRow(40, double)]), seed: 1 })
     steerTo(run, -2.5)

@@ -73,6 +73,25 @@ describe('yarn ball cap', () => {
     expect([...hpSeen].filter((hp) => hp !== 3 && hp !== 1)).toEqual([])
   })
 
+  it('yarn_ball_standing_for_3_cats_kills_a_3_hp_puppy_with_one_hit', () => {
+    // 1,024 would be in flight, so each yarn ball stands for 3 cats and deals 3 damage
+    const wave: Level['events'][number] = { type: 'wave', z: 200, enemy: 'puppy', pattern: 'line', count: 5 }
+    const run = createRun({ level: levelOf([...doublingRows(9), wave]), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 91, 6000)
+    expect(run.state.squad.count).toBe(512)
+
+    const hpSeen = new Set<number>()
+    let shotKills = 0
+    while (run.state.squad.z < 200 && run.state.status === 'running') {
+      const events = run.step(noSteering)
+      shotKills += events.filter((event) => event.type === 'puppyKilled' && event.cause === 'shot').length
+      for (const puppy of run.state.puppies) hpSeen.add(puppy.hp)
+    }
+
+    expect(shotKills).toBeGreaterThan(0)
+    expect([...hpSeen]).toEqual([3])
+  })
+
   it('yarn_ball_standing_for_3_cats_counts_as_3_hits_on_a_gate', () => {
     // 1,024 would be in flight, so each yarn ball stands for 3 cats. 512 cats land about
     // 512 × 2 × 3.75 = 3,840 hits, so about 384 steps, the same as every cat firing its own.

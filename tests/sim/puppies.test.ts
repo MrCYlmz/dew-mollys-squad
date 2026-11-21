@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type GameEvent } from '../../src/sim/run'
-import { levelOf, steerTo, stepTicks, stepUntil } from './runHarness'
+import { tuning } from '../../src/content/tuning'
+import { doublingRows, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type WaveEvent = Extract<Level['events'][number], { type: 'wave' }>
 type Position = { x: number; z: number }
@@ -212,5 +213,111 @@ describe('puppy contact', () => {
     expect(run.state.puppies).toHaveLength(0)
     expect(run.state.squad.count).toBe(1)
     expect(events.filter((event) => event.type === 'catsLost')).toHaveLength(0)
+  })
+
+  it('puppy_touching_a_cat_does_not_lose_a_run_with_cats_left', () => {
+    const run = createRun({
+      level: levelOf([...doublingRows(3), { type: 'wave', z: 100, enemy: 'puppy', pattern: 'column', count: 80, x: 0, spacing: 0.25 }]),
+      seed: 1,
+    })
+
+    while (run.state.status === 'running' && run.state.squad.z < 110) {
+      const events = run.step(noSteering)
+      if (events.some((event) => event.type === 'catsLost') && run.state.squad.count > 0) {
+        expect(run.state.status).toBe('running')
+      }
+    }
+  })
+})
+
+// Lanes are picked from the squad's cat places (state.cats) and the hit radii in the tuning config,
+// so the tests hold whatever the formation looks like, as long as such a lane exists.
+describe('past the last cat', () => {
+  const touch = tuning.hitRadius.cat + tuning.hitRadius.puppy
+  const shot = tuning.hitRadius.yarnBall + tuning.hitRadius.puppy
+
+  function formedSquad(doublings: number) {
+    const run = createRun({ level: levelOf(doublingRows(doublings)), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 10 * doublings + 5, 6000)
+    const { cats, squad } = run.state
+    return { cats: cats.map((cat) => ({ x: cat.x - squad.x, z: cat.z - squad.z })), count: squad.count }
+  }
+
+  function runWithColumn(doublings: number, x: number, count: number, spacing: number) {
+    return createRun({
+      level: levelOf([...doublingRows(doublings), { type: 'wave', z: 150, enemy: 'puppy', pattern: 'column', count, x, spacing }]),
+      seed: 1,
+    })
+  }
+
+  it('cats_stand_around_the_squad_with_the_first_cat_in_the_centre', () => {
+    const { cats, count } = formedSquad(4)
+
+    expect(cats).toHaveLength(count)
+    expect(cats[0].x).toBeCloseTo(0, 6)
+    expect(cats[0].z).toBeCloseTo(0, 6)
+  })
+
+  it('drawn_cats_match_the_squad_count_after_every_tick', () => {
+    // At most 60 cats are drawn; the squad count shows the rest.
+    const run = createRun({
+      level: levelOf([
+        ...doublingRows(6),
+        { type: 'gates', z: 80, left: { op: 'divide', value: 2 }, right: { op: 'divide', value: 2 } },
+        { type: 'wave', z: 150, enemy: 'puppy', pattern: 'block', columns: 5, rows: 20, x: 0, spacing: 0.5 },
+      ]),
+      seed: 1,
+    })
+
+    let contacts = 0
+    while (run.state.status === 'running' && run.state.squad.z < 150) {
+      const events = run.step(noSteering)
+      if (events.some((event) => event.type === 'catsLost')) contacts++
+      expect(run.state.cats).toHaveLength(Math.min(run.state.squad.count, 60))
+    }
+    expect(contacts).toBeGreaterThan(0)
+  })
+
+  it('puppy_behind_the_squad_centre_costs_a_cat_until_past_the_last_cat', () => {
+    // A lane no cat's yarn balls reach, where the puppy first touches a cat only once it is
+    // behind the squad's centre and closer than touching distance to the last cat's z.
+    const { cats } = formedSquad(3)
+    const lastCatZ = Math.min(...cats.map((cat) => cat.z))
+    const firstContactZ = (x: number) =>
+      Math.max(
+        ...cats
+          .filter((cat) => Math.abs(cat.x - x) < touch - 0.02)
+          .map((cat) => cat.z + Math.sqrt(touch ** 2 - (cat.x - x) ** 2)),
+      )
+    const lanes = Array.from({ length: 601 }, (_, index) => -3 + index / 100)
+      .filter((x) => cats.every((cat) => Math.abs(cat.x - x) > shot + 0.02))
+      .filter((x) => cats.some((cat) => Math.abs(cat.x - x) < touch - 0.02))
+      .filter((x) => firstContactZ(x) < Math.min(0, lastCatZ + touch) - 0.1)
+      .sort((a, b) => firstContactZ(a) - firstContactZ(b))
+    expect(lanes.length).toBeGreaterThan(0)
+
+    // Two puppies almost on top of each other touch in the same tick.
+    const run = runWithColumn(3, lanes[0], 2, 0.001)
+    const events = stepUntil(run, (state) => state.squad.z > 150, 6000)
+
+    expect(events.filter((event) => event.type === 'puppyKilled' && event.cause === 'contact')).toHaveLength(2)
+    expect(events.filter((event) => event.type === 'catsLost')).toEqual([
+      { type: 'catsLost', count: 1 },
+      { type: 'catsLost', count: 1 },
+    ])
+    expect(run.state.squad.count).toBe(6)
+    expect(run.state.status).toBe('running')
+  })
+
+  it('puppy_passing_just_beside_the_outermost_cat_costs_nothing', () => {
+    const { cats } = formedSquad(4)
+    const lane = Math.max(...cats.map((cat) => cat.x)) + touch + 0.03
+
+    const run = runWithColumn(4, lane, 1, 1)
+    const events = stepUntil(run, (state) => state.squad.z > 150, 6000)
+
+    expect(events.filter((event) => event.type === 'catsLost')).toEqual([])
+    expect(run.state.squad.count).toBe(16)
+    expect(run.state.puppies).toHaveLength(0)
   })
 })

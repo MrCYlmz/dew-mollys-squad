@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRun } from '../../src/sim/run'
-import { levelOf, noSteering, stepTicks } from './runHarness'
+import { doublingRows, levelOf, noSteering, stepTicks, stepUntil } from './runHarness'
 
 const emptyLevel = levelOf([])
 
@@ -110,5 +110,18 @@ describe('squad follows the steering point', () => {
     // 200 ms in: less than 5% of the gap left
     expect(run.state.squad.x).toBeGreaterThan(3.8)
     expect(run.state.squad.x).toBeLessThanOrEqual(4)
+  })
+})
+
+describe('cats around the steering point', () => {
+  it('cats_stay_in_a_tight_cluster_around_the_squad_as_it_moves', () => {
+    const run = createRun({ level: levelOf(doublingRows(4)), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 45, 6000)
+
+    stepTicks(run, 120, { ...noSteering, right: true })
+
+    const { cats, squad } = run.state
+    expect(cats).toHaveLength(16)
+    for (const cat of cats) expect(Math.hypot(cat.x - squad.x, cat.z - squad.z)).toBeLessThan(2.5)
   })
 })

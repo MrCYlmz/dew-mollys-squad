@@ -96,6 +96,7 @@ Every enemy shows its HP as a number or bar. Values are for level 1 and scale pe
 
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - A puppy that gets past the squad disappears behind it and does no damage.
+- A puppy is past the squad only once it is past the squad's last cat. Until then, a puppy touching any cat, even one inside the cluster, costs a cat.
 - Shield dog: hits from the front reduce the shield first. The body takes damage only once the shield is at 0.
 
 ### Barrels

@@ -10,7 +10,7 @@ function gateLabel(gate: GateState): string {
     case 'subtract':
       if (gate.value > 0) return `${strings.gatePlus}${gate.value}`
       if (gate.value < 0) return `${strings.gateMinus}${-gate.value}`
-      return '0'
+      return String(gate.value)
     case 'multiply':
       return `${strings.gateTimes}${gate.value}`
     case 'divide':

@@ -62,7 +62,7 @@ export class GameRenderer {
   private readonly puppies: InstancedMesh
   private readonly hpBars: InstancedMesh
   private readonly yarnBalls: InstancedMesh
-  private readonly gatePanelGeometry = new PlaneGeometry(4.6, 2.2)
+  private readonly gatePanelGeometry = new PlaneGeometry(tuning.track.halfWidth, 2.2)
   private readonly levelGroup = new Group()
   private levelGeometries: BufferGeometry[] = []
   private levelMaterials: Material[] = []
@@ -72,7 +72,7 @@ export class GameRenderer {
   private cameraDistance = minCameraDistance
   private unitsPerPixel = 0.01
   private seconds = 0
-  private lastSquadCount = 0
+  private catsToScatter = 0
   private readonly scatter = {
     x: new Float32Array(scatterCapacity),
     y: new Float32Array(scatterCapacity),
@@ -110,12 +110,8 @@ export class GameRenderer {
     this.yarnBalls = this.instanced(
       this.ownGeometry(new SphereGeometry(0.12, 8, 6)),
       this.ownMaterial(new MeshLambertMaterial({ color: 0xe0407b })),
-      tuning.limits.yarnBalls,
+      tuning.yarnBallCap,
     )
-  }
-
-  get info() {
-    return this.renderer.info
   }
 
   resize(cssWidth: number, cssHeight: number, pixelRatio: number): void {
@@ -161,8 +157,12 @@ export class GameRenderer {
       }
     }
 
-    this.lastSquadCount = state.squad.count
+    this.catsToScatter = 0
     this.scatter.count = 0
+  }
+
+  scatterCats(count: number): void {
+    this.catsToScatter += count
   }
 
   // Draws the state between the tick before and the last one, alpha of the way.
@@ -258,8 +258,8 @@ export class GameRenderer {
   // Lost cats jump sideways off the track, unhurt.
   private drawScatteredCats(state: RunState, squadX: number, squadZ: number, frameSeconds: number): void {
     const scatter = this.scatter
-    const lost = this.lastSquadCount - state.squad.count
-    this.lastSquadCount = state.squad.count
+    const lost = this.catsToScatter
+    this.catsToScatter = 0
     for (let i = 0; i < lost && scatter.count < scatterCapacity; i++) {
       const slot = (state.squad.count + i) % tuning.squad.formationSlots
       const index = scatter.count++

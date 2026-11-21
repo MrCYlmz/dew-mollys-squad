@@ -27,3 +27,20 @@ export class Pool<T> {
     this.free.push(item)
   }
 }
+
+// Objects handed out again after reset(), for records the reader is done with by the next reset.
+export class Recycler<T> {
+  private readonly items: T[] = []
+  private used = 0
+
+  constructor(private readonly create: () => T) {}
+
+  next(): T {
+    if (this.used === this.items.length) this.items.push(this.create())
+    return this.items[this.used++]
+  }
+
+  reset(): void {
+    this.used = 0
+  }
+}

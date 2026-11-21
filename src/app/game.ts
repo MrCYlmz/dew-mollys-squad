@@ -7,7 +7,7 @@ import { createRun, type Run, type SteerInput } from '../sim/run'
 
 export type Screen = 'title' | 'playing' | 'paused' | 'victory' | 'defeat'
 
-// What the screens show. A new view is published only when one of these values changes.
+// What the screens show.
 export interface GameView {
   screen: Screen
   squadCount: number
@@ -28,6 +28,8 @@ export class Game {
   private readonly listeners = new Set<(view: GameView) => void>()
   private readonly steerInput: SteerInput = { drag: 0, left: false, right: false }
   private readonly labelPoint: ScreenPoint = { x: 0, y: 0 }
+  private shownLabelX = Number.NaN
+  private shownLabelY = Number.NaN
   private run: Run
   private squadLabel: HTMLElement | null = null
   private accumulator = 0
@@ -58,6 +60,7 @@ export class Game {
 
   readonly setSquadLabel = (element: HTMLElement | null): void => {
     this.squadLabel = element
+    this.shownLabelX = this.shownLabelY = Number.NaN
   }
 
   play(): void {
@@ -71,6 +74,8 @@ export class Game {
   resume(): void {
     if (this.view.screen !== 'paused') return
     this.lastTimestamp = null
+    // A drag made on the pause screen is not a steer.
+    this.input.takeDragPixels()
     this.publish({ screen: 'playing' })
   }
 
@@ -125,7 +130,9 @@ export class Game {
       this.steerInput.drag = this.input.takeDragPixels() * this.renderer.trackUnitsPerPixel()
       this.steerInput.left = this.input.left
       this.steerInput.right = this.input.right
-      this.run.step(this.steerInput)
+      for (const event of this.run.step(this.steerInput)) {
+        if (event.type === 'catsLost') this.renderer.scatterCats(event.count)
+      }
       if (state.status !== 'running') break
     }
 
@@ -144,7 +151,13 @@ export class Game {
   private placeSquadLabel(alpha: number): void {
     if (this.squadLabel === null) return
     this.renderer.squadLabelPoint(this.run.state, alpha, this.labelPoint)
-    this.squadLabel.style.transform = `translate(${this.labelPoint.x}px, ${this.labelPoint.y}px) translate(-50%, -100%)`
+    const x = Math.round(this.labelPoint.x)
+    const y = Math.round(this.labelPoint.y)
+    // The transform is a new string each time, so it is written only when the label moves a whole pixel.
+    if (x === this.shownLabelX && y === this.shownLabelY) return
+    this.shownLabelX = x
+    this.shownLabelY = y
+    this.squadLabel.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`
   }
 
   private publish(change: Partial<GameView>): void {

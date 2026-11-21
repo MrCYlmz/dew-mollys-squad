@@ -20,20 +20,19 @@ export const tuning = {
     keySpeed: 12,
   },
   cat: {
-    fireRate: 3,
+    fireRate: 2,
     damage: 1,
     range: 30,
     yarnBallSpeed: 30,
   },
   gate: {
-    valuePerHit: 1,
+    // Yarn ball hits that raise an add or subtract gate by 1.
+    hitsPerStep: 10,
   },
   puppy: {
     hp: 3,
     speed: 4,
     contactDamage: 1,
-    // How far behind the squad a puppy that got past it disappears.
-    despawnBehind: 4,
   },
   wave: {
     spawnDistance: 40,
@@ -43,9 +42,10 @@ export const tuning = {
     puppy: 0.4,
     yarnBall: 0.12,
   },
-  // Pool sizes from the playbook's performance budget. A shot fired while every yarn ball is in flight is skipped.
+  // Most yarn balls in flight; above it, one yarn ball stands for several cats.
+  yarnBallCap: 400,
+  // Most puppies alive at once, from the playbook's performance budget.
   limits: {
     puppies: 150,
-    yarnBalls: 400,
   },
 }

@@ -2,7 +2,7 @@ import type { GateOp, Level, WaveEvent } from '../content/level'
 import { tuning } from '../content/tuning'
 import { drawnCats, formationOffsetX, formationOffsetZ, formationRadius } from './formation'
 import { applyGate, gateColour, gateSideAt, type GateColour, type GateSide } from './gates'
-import { Pool } from './pool'
+import { Pool, Recycler } from './pool'
 import { createRng } from './rng'
 
 export interface SteerInput {
@@ -22,6 +22,12 @@ export interface SquadState {
   readonly previousX: number
   readonly previousZ: number
   readonly steeringPoint: number
+}
+
+// A drawn cat's place on the track at the end of the last tick.
+export interface CatState {
+  readonly x: number
+  readonly z: number
 }
 
 export interface PuppyState {
@@ -55,20 +61,44 @@ export interface RunState {
   readonly level: Level
   readonly status: RunStatus
   readonly squad: SquadState
+  // The drawn cats, at most formationSlots of them; cats beyond those stand in the same places.
+  readonly cats: readonly CatState[]
   readonly puppies: readonly PuppyState[]
   readonly yarnBalls: readonly YarnBallState[]
   readonly gateRows: readonly GateRowState[]
 }
 
-export type GameEvent =
-  | { type: 'puppyKilled'; cause: 'shot' | 'contact'; x: number; z: number }
-  | { type: 'catsLost'; count: number }
-  | { type: 'gateTaken'; side: GateSide; op: GateOp; value: number; squadCount: number }
+export interface PuppyKilledEvent {
+  type: 'puppyKilled'
+  cause: 'shot' | 'contact'
+  x: number
+  z: number
+}
+
+export interface CatsLostEvent {
+  type: 'catsLost'
+  count: number
+}
+
+export interface GateTakenEvent {
+  type: 'gateTaken'
+  side: GateSide
+  op: GateOp
+  value: number
+  squadCount: number
+}
+
+export type GameEvent = PuppyKilledEvent | CatsLostEvent | GateTakenEvent
 
 export interface Run {
   readonly state: RunState
-  // The returned list is reused by the next step.
+  // The returned list and its events are reused by the next step.
   step(input: SteerInput): readonly GameEvent[]
+}
+
+interface Cat {
+  x: number
+  z: number
 }
 
 interface Squad {
@@ -95,12 +125,16 @@ interface YarnBall {
   z: number
   previousZ: number
   distance: number
+  // How many cats this yarn ball stands for under the yarn ball cap.
+  cats: number
 }
 
 interface GateCell {
   op: GateOp
   value: number
   colour: GateColour
+  // Hits taken towards the next step.
+  hits: number
 }
 
 interface GateRow {
@@ -115,8 +149,11 @@ const halfWidth = tuning.track.halfWidth
 // Fraction of the gap to the steering point closed per tick, so that 95% is closed after followTime.
 const followFactor = 1 - Math.pow(20, -dt / tuning.squad.followTime)
 const fireInterval = 1 / tuning.cat.fireRate
+// Yarn balls in flight per cat if every cat fired its own.
+const yarnBallsPerCat = (tuning.cat.fireRate * tuning.cat.range) / tuning.cat.yarnBallSpeed
 const yarnBallStep = tuning.cat.yarnBallSpeed * dt
 const shotReach = tuning.hitRadius.yarnBall + tuning.hitRadius.puppy
+const contactReach = tuning.hitRadius.cat + tuning.hitRadius.puppy
 const flankStep = (tuning.puppy.speed * dt) / Math.SQRT2
 
 function clampToTrack(x: number): number {
@@ -125,20 +162,33 @@ function clampToTrack(x: number): number {
 
 function gateCell(op: GateOp, unsignedValue: number): GateCell {
   const value = op === 'subtract' ? -unsignedValue : unsignedValue
-  return { op, value, colour: gateColour({ op, value }) }
+  return { op, value, colour: gateColour({ op, value }), hits: 0 }
 }
 
 class RunSimulation implements Run {
   private readonly squad: Squad
+  private readonly cats: Cat[] = []
+  private readonly catPlaces: Cat[] = []
   private readonly puppies: Pool<Puppy>
   private readonly yarnBalls: Pool<YarnBall>
   private readonly gateRows: GateRow[]
   private readonly waves: WaveEvent[]
   private readonly events: GameEvent[] = []
+  private readonly puppyKilledEvents = new Recycler<PuppyKilledEvent>(() => ({ type: 'puppyKilled', cause: 'shot', x: 0, z: 0 }))
+  private readonly catsLostEvents = new Recycler<CatsLostEvent>(() => ({ type: 'catsLost', count: 0 }))
+  private readonly gateTakenEvents = new Recycler<GateTakenEvent>(() => ({
+    type: 'gateTaken',
+    side: 'left',
+    op: 'add',
+    value: 0,
+    squadCount: 0,
+  }))
   private readonly random: () => number
   // Time left until each cat's next shot.
   private readonly catCooldowns = new Float64Array(tuning.squad.maxCount)
   private catsWithCooldown = 0
+  // Cat shots not yet fired as a yarn ball.
+  private pendingCatShots = 0
   private nextWave = 0
   private nextGateRow = 0
 
@@ -147,6 +197,7 @@ class RunSimulation implements Run {
   constructor(level: Level, seed: number) {
     this.random = createRng(seed)
     this.squad = { count: tuning.squad.startCount, x: 0, z: 0, previousX: 0, previousZ: 0, steeringPoint: 0 }
+    for (let slot = 0; slot < tuning.squad.formationSlots; slot++) this.catPlaces.push({ x: 0, z: 0 })
     this.puppies = new Pool<Puppy>(
       tuning.limits.puppies,
       () => ({ x: 0, z: 0, previousX: 0, previousZ: 0, hp: 0, sideways: 0 }),
@@ -155,10 +206,10 @@ class RunSimulation implements Run {
       },
     )
     this.yarnBalls = new Pool<YarnBall>(
-      tuning.limits.yarnBalls,
-      () => ({ x: 0, z: 0, previousZ: 0, distance: 0 }),
+      tuning.yarnBallCap,
+      () => ({ x: 0, z: 0, previousZ: 0, distance: 0, cats: 0 }),
       (yarnBall) => {
-        yarnBall.x = yarnBall.z = yarnBall.previousZ = yarnBall.distance = 0
+        yarnBall.x = yarnBall.z = yarnBall.previousZ = yarnBall.distance = yarnBall.cats = 0
       },
     )
     this.gateRows = []
@@ -179,14 +230,19 @@ class RunSimulation implements Run {
       level,
       status: 'running',
       squad: this.squad,
+      cats: this.cats,
       puppies: this.puppies.active,
       yarnBalls: this.yarnBalls.active,
       gateRows: this.gateRows,
     }
+    this.placeCats()
   }
 
   step(input: SteerInput): readonly GameEvent[] {
     this.events.length = 0
+    this.puppyKilledEvents.reset()
+    this.catsLostEvents.reset()
+    this.gateTakenEvents.reset()
     if (this.state.status !== 'running') return this.events
 
     this.moveSquad(input)
@@ -210,6 +266,18 @@ class RunSimulation implements Run {
     squad.previousZ = squad.z
     squad.x += (squad.steeringPoint - squad.x) * followFactor
     squad.z += tuning.squad.forwardSpeed * dt
+    this.placeCats()
+  }
+
+  private placeCats(): void {
+    const drawn = drawnCats(this.squad.count)
+    for (let slot = 0; slot < drawn; slot++) {
+      const cat = this.catPlaces[slot]
+      cat.x = this.squad.x + formationOffsetX[slot]
+      cat.z = this.squad.z + formationOffsetZ[slot]
+      this.cats[slot] = cat
+    }
+    this.cats.length = drawn
   }
 
   private spawnWaves(): void {
@@ -262,17 +330,23 @@ class RunSimulation implements Run {
     for (let cat = this.catsWithCooldown; cat < squad.count; cat++) this.catCooldowns[cat] = this.random() * fireInterval
     this.catsWithCooldown = squad.count
 
-    const slots = drawnCats(squad.count)
+    const catsPerYarnBall = Math.max(Math.ceil((squad.count * yarnBallsPerCat) / tuning.yarnBallCap), 1)
+    const slots = this.cats.length
     for (let cat = 0; cat < squad.count; cat++) {
       this.catCooldowns[cat] -= dt
       if (this.catCooldowns[cat] > 0) continue
       this.catCooldowns[cat] += fireInterval
+      this.pendingCatShots++
+      if (this.pendingCatShots < catsPerYarnBall) continue
+      // With every yarn ball in flight, the shot waits for the next free one instead of being lost.
       const yarnBall = this.yarnBalls.acquire()
       if (yarnBall === undefined) continue
-      const slot = cat % slots
-      yarnBall.x = squad.x + formationOffsetX[slot]
-      yarnBall.z = yarnBall.previousZ = squad.z + formationOffsetZ[slot]
+      this.pendingCatShots -= catsPerYarnBall
+      const place = this.cats[cat % slots]
+      yarnBall.x = place.x
+      yarnBall.z = yarnBall.previousZ = place.z
       yarnBall.distance = 0
+      yarnBall.cats = catsPerYarnBall
     }
   }
 
@@ -300,7 +374,8 @@ class RunSimulation implements Run {
     let hitPuppy = -1
 
     const row = this.gateRows[this.nextGateRow]
-    if (row !== undefined && row.z > yarnBall.previousZ && row.z <= yarnBall.z) {
+    // A gate spans its half of the track; yarn balls from cats beyond the edge pass it.
+    if (row !== undefined && row.z > yarnBall.previousZ && row.z <= yarnBall.z && Math.abs(yarnBall.x) <= halfWidth) {
       hitZ = row.z
       hitGate = row[gateSideAt(yarnBall.x)]
     }
@@ -321,16 +396,19 @@ class RunSimulation implements Run {
 
     if (hitPuppy >= 0) {
       const puppy = puppies[hitPuppy]
-      puppy.hp -= tuning.cat.damage
+      puppy.hp -= tuning.cat.damage * yarnBall.cats
       if (puppy.hp <= 0) {
-        this.events.push({ type: 'puppyKilled', cause: 'shot', x: puppy.x, z: puppy.z })
+        this.pushPuppyKilled('shot', puppy)
         this.puppies.release(hitPuppy)
       }
       return true
     }
     if (hitGate !== null) {
       if (hitGate.op === 'add' || hitGate.op === 'subtract') {
-        hitGate.value += tuning.gate.valuePerHit
+        hitGate.hits += yarnBall.cats
+        const steps = Math.floor(hitGate.hits / tuning.gate.hitsPerStep)
+        hitGate.hits -= steps * tuning.gate.hitsPerStep
+        hitGate.value += steps
         hitGate.colour = gateColour(hitGate)
       }
       return true
@@ -340,21 +418,33 @@ class RunSimulation implements Run {
 
   private resolveContacts(): boolean {
     const squad = this.squad
-    const reach = formationRadius(squad.count) + tuning.hitRadius.cat + tuning.hitRadius.puppy
+    const squadReach = formationRadius(squad.count) + contactReach
     const puppies = this.puppies.active
     for (let i = puppies.length - 1; i >= 0; i--) {
-      const dx = puppies[i].x - squad.x
-      const dz = puppies[i].z - squad.z
-      if (dx * dx + dz * dz > reach * reach) continue
+      const puppy = puppies[i]
+      if (!this.touchesSquad(puppy, squadReach)) continue
       const catsLost = Math.min(tuning.puppy.contactDamage, squad.count)
       squad.count -= catsLost
-      this.events.push({ type: 'puppyKilled', cause: 'contact', x: puppies[i].x, z: puppies[i].z })
-      this.events.push({ type: 'catsLost', count: catsLost })
+      this.pushPuppyKilled('contact', puppy)
+      this.pushCatsLost(catsLost)
       this.puppies.release(i)
+      this.placeCats()
       if (squad.count === 0) {
         this.state.status = 'lost'
         return true
       }
+    }
+    return false
+  }
+
+  private touchesSquad(puppy: Puppy, squadReach: number): boolean {
+    const dx = puppy.x - this.squad.x
+    const dz = puppy.z - this.squad.z
+    if (dx * dx + dz * dz > squadReach * squadReach) return false
+    for (const cat of this.cats) {
+      const catDx = puppy.x - cat.x
+      const catDz = puppy.z - cat.z
+      if (catDx * catDx + catDz * catDz <= contactReach * contactReach) return true
     }
     return false
   }
@@ -366,9 +456,17 @@ class RunSimulation implements Run {
     while (row !== undefined && squad.z >= row.z) {
       const side = gateSideAt(squad.x)
       const gate = row[side]
+      const countBefore = squad.count
       squad.count = applyGate(squad.count, gate)
       row.taken = side
-      this.events.push({ type: 'gateTaken', side, op: gate.op, value: gate.value, squadCount: squad.count })
+      const event = this.gateTakenEvents.next()
+      event.side = side
+      event.op = gate.op
+      event.value = gate.value
+      event.squadCount = squad.count
+      this.events.push(event)
+      if (squad.count < countBefore) this.pushCatsLost(countBefore - squad.count)
+      this.placeCats()
       this.nextGateRow++
       if (squad.count === 0) {
         this.state.status = 'lost'
@@ -379,7 +477,23 @@ class RunSimulation implements Run {
     return false
   }
 
+  private pushPuppyKilled(cause: PuppyKilledEvent['cause'], puppy: Puppy): void {
+    const event = this.puppyKilledEvents.next()
+    event.cause = cause
+    event.x = puppy.x
+    event.z = puppy.z
+    this.events.push(event)
+  }
+
+  private pushCatsLost(count: number): void {
+    const event = this.catsLostEvents.next()
+    event.count = count
+    this.events.push(event)
+  }
+
   private movePuppies(): void {
+    let lastCatZ = Infinity
+    for (const cat of this.cats) lastCatZ = Math.min(lastCatZ, cat.z)
     const puppies = this.puppies.active
     for (let i = puppies.length - 1; i >= 0; i--) {
       const puppy = puppies[i]
@@ -395,7 +509,8 @@ class RunSimulation implements Run {
           puppy.sideways = 0
         }
       }
-      if (puppy.z < this.squad.z - tuning.puppy.despawnBehind) this.puppies.release(i)
+      // Past the last cat it can touch no cat any more.
+      if (puppy.z < lastCatZ - contactReach) this.puppies.release(i)
     }
   }
 }

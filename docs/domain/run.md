@@ -48,9 +48,20 @@ Base values at level 1, before weapon buffs and upgrades:
 | Range | 30 units |
 | Yarn ball speed | 30 units/s |
 
+### Yarn ball cap
+
+Never more than 400 yarn balls are in flight (the yarn ball cap, in the tuning config). A big squad fires fewer, stronger yarn balls instead, so results equal every cat firing its own:
+
+- If every cat fired its own yarn ball, the squad would have squad count × fire rate × range ÷ yarn ball speed yarn balls in flight.
+- When that is above the cap, each yarn ball stands for N cats: N is that number divided by the cap, rounded up. The squad then fires N times fewer yarn balls.
+- A yarn ball standing for N cats deals N × damage, and raises an add or subtract gate by N. It still stops at the first puppy or gate it hits.
+- At or below the cap, N is 1 and every cat fires its own yarn ball.
+
+Examples at the base values (3 yarn balls/s, range 30, speed 30, so each yarn ball flies 1 s): a squad of 100 would have 300 in flight, so N is 1. A squad of 300 would have 900, so N is 3: each yarn ball deals 3 damage, and about 300 are in flight. A squad of 999 would have 2,997, so N is 8, and about 375 are in flight.
+
 ## Gates
 
-Each gate row has two gates. The squad takes the gate it runs through.
+Each gate row has two gates. The squad takes the gate it runs through: a squad whose centre is at x < 0 takes the left gate, and one at x ≥ 0, including exactly 0, takes the right gate.
 
 | Gate | Shown as | Effect when taken | Colour |
 | --- | --- | --- | --- |

@@ -43,7 +43,7 @@ Base values at level 1, before weapon buffs and upgrades:
 
 | Value | Base |
 | --- | --- |
-| Fire rate | 3 yarn balls/s per cat |
+| Fire rate | 2 yarn balls/s per cat |
 | Damage | 1 per yarn ball |
 | Range | 30 units |
 | Yarn ball speed | 30 units/s |
@@ -54,10 +54,10 @@ Never more than 400 yarn balls are in flight (the yarn ball cap, in the tuning c
 
 - If every cat fired its own yarn ball, the squad would have squad count × fire rate × range ÷ yarn ball speed yarn balls in flight.
 - When that is above the cap, each yarn ball stands for N cats: N is that number divided by the cap, rounded up. The squad then fires N times fewer yarn balls.
-- A yarn ball standing for N cats deals N × damage, and raises an add or subtract gate by N. It still stops at the first puppy or gate it hits.
+- A yarn ball standing for N cats deals N × damage, and counts as N hits on an add or subtract gate. It still stops at the first puppy or gate it hits.
 - At or below the cap, N is 1 and every cat fires its own yarn ball.
 
-Examples at the base values (3 yarn balls/s, range 30, speed 30, so each yarn ball flies 1 s): a squad of 100 would have 300 in flight, so N is 1. A squad of 300 would have 900, so N is 3: each yarn ball deals 3 damage, and about 300 are in flight. A squad of 999 would have 2,997, so N is 8, and about 375 are in flight.
+Examples at the base values (2 yarn balls/s, range 30, speed 30, so each yarn ball flies 1 s): a squad of 200 would have 400 in flight, so N is 1. A squad of 300 would have 600, so N is 2: each yarn ball deals 2 damage, and about 300 are in flight. A squad of 999 would have 1,998, so N is 5, and about 400 are in flight.
 
 ## Gates
 
@@ -75,7 +75,7 @@ Each gate row has two gates. The squad takes the gate it runs through: a squad w
 | Range | RANGE +10 | yarn balls travel 10 units farther | Blue |
 
 - Examples: a squad of 8 taking ×2 becomes 16. A squad of 7 taking ÷2 becomes 3. A squad of 1 taking ÷2 stays 1. A squad of 10 taking −15 becomes 0 and the run is lost.
-- Shooting a gate: each yarn ball that hits an add or subtract gate raises its value by 1. Example: −15 → −14 → … → 0 → +1.
+- Shooting a gate: an add or subtract gate counts the yarn ball hits it takes, and every 10 hits (the hits per gate step, in the tuning config) raise its value by 1. Example: −15 → −14 → … → 0 → +1, so a −15 gate turns blue at +1 after 160 hits.
 - A gate is blue as soon as its value is positive. Example: a subtract gate shot from −2 to +1 turns blue and adds 1.
 - Multiply and divide gates do not change when shot.
 - Weapon buffs last until the end of the run.

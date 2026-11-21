@@ -6,7 +6,7 @@ Terms as in the [glossary](glossary.md).
 
 - A level is a list of events, each placed at a distance z along the track, ending with a boss or a finish line. Example: a gate row at z = 40, a wave at z = 80, the boss at z = 400.
 - Levels are hand-made by designers as data, so a new level needs no code change.
-- Gate rows come every 40–60 units.
+- Gate rows come every 40–60 units. This sets only the gaps between rows; the first row may come earlier.
 - Between gate rows, enemy waves run at the squad.
 - Pickups and obstacles sit on the track: barrels to shoot, coins to collect, walls to steer around.
 - Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins or barrels.

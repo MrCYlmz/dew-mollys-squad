@@ -21,6 +21,7 @@ One term per concept. Code, tests and docs use these words exactly.
 | Contact damage | The number of cats an enemy removes when it touches the squad. |
 | Wave | A group of enemies spawned together in one spawn pattern. |
 | Spawn pattern | The formation of a wave: line, block, column or flank. |
+| Spawn distance | How far before a wave's position the squad is when the wave appears. |
 | Barrel | A static water bucket on the track that splashes nearby enemies when destroyed. |
 | Obstacle | A wall on the track that the squad steers around. |
 | Coin | A fish. Coins are the currency for upgrades. |

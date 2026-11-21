@@ -38,6 +38,15 @@ One input steers. Firing is always on.
 - Every cat fires yarn balls straight ahead, all the time.
 - Each yarn ball travels up to the squad's range and damages the enemy, barrel or gate it hits.
 
+Base values at level 1, before weapon buffs and upgrades:
+
+| Value | Base |
+| --- | --- |
+| Fire rate | 3 yarn balls/s per cat |
+| Damage | 1 per yarn ball |
+| Range | 30 units |
+| Yarn ball speed | 30 units/s |
+
 ## Gates
 
 Each gate row has two gates. The squad takes the gate it runs through.
@@ -89,6 +98,8 @@ Every enemy shows its HP as a number or bar. Values are for level 1 and scale pe
 | Block | A grid, such as 5 × 4 puppies |
 | Column | Enemies in single file in one lane; steering away avoids them |
 | Flank | Enemies from the left and right edges walking inward |
+
+Where each pattern places its enemies is set in the [level file](levels.md#level-file).
 
 ## Boss
 

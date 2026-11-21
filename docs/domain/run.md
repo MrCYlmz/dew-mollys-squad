@@ -37,6 +37,7 @@ One input steers. Firing is always on.
 
 - Every cat fires yarn balls straight ahead, all the time.
 - Each yarn ball travels up to the squad's range and damages the enemy, barrel or gate it hits.
+- A yarn ball stops at the first puppy or gate it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range.
 
 Base values at level 1, before weapon buffs and upgrades:
 
@@ -83,6 +84,7 @@ Every enemy shows its HP as a number or bar. Values are for level 1 and scale pe
 | Shield dog | Shield bearer | 15, plus a shield of 30 from the front | 3 | 3 | The shield must break before the body takes damage |
 
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
+- A puppy that gets past the squad disappears behind it and does no damage.
 - Shield dog: hits from the front reduce the shield first. The body takes damage only once the shield is at 0.
 
 ### Barrels

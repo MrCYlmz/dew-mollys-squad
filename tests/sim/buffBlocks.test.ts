@@ -90,12 +90,11 @@ describe('buff block', () => {
     const behindTheBlock = 50 + tuning.buffBlock.depth + tuning.hitRadius.puppy + tuning.hitRadius.yarnBall
     let ticksBehindTheBlock = 0
 
-    while (run.state.status === 'running' && run.state.squad.z < 45) {
-      run.step(noSteering)
-      const puppy = run.state.enemies[0]
-      if (puppy === undefined || puppy.z <= behindTheBlock) break
+    stepUntil(run, (state) => state.enemies.length > 0, 600)
+    while (run.state.status === 'running' && (run.state.enemies[0]?.z ?? 0) > behindTheBlock) {
       ticksBehindTheBlock++
-      expect(puppy.hp).toBe(3)
+      expect(run.state.enemies[0].hp).toBe(3)
+      run.step(noSteering)
     }
 
     expect(ticksBehindTheBlock).toBeGreaterThan(60)
@@ -284,15 +283,17 @@ describe('buff block tick order', () => {
   const blockZ = 40
   const level = (hp: number) => [...squadOf(200), buffBlock(blockZ, 'centre', hp, 'add')]
 
-  // Per tick of a run through an unbreakable block: the damage dealt to it by the end of the tick, the squad's z before and after it, and its events.
+  // Per tick of a run through an unbreakable block, until the block is past the last cat: the damage dealt to it by the end
+  // of the tick, the squad's z before and after it, and its events.
   function damageLog() {
     const run = startRun(level(unbreakable))
     const ticks: { damage: number; zBefore: number; zAfter: number; events: GameEvent[] }[] = []
-    while (run.state.squad.z < blockZ + 5 && run.state.status === 'running') {
+    while (run.state.status === 'running') {
       const zBefore = run.state.squad.z
       const events = copied(run.step(noSteering))
-      const hp = run.state.buffBlocks[0]?.hp ?? unbreakable
-      ticks.push({ damage: unbreakable - hp, zBefore, zAfter: run.state.squad.z, events })
+      const block = run.state.buffBlocks[0]
+      if (block === undefined) break
+      ticks.push({ damage: unbreakable - block.hp, zBefore, zAfter: run.state.squad.z, events })
     }
     return ticks
   }
@@ -318,6 +319,27 @@ describe('buff block tick order', () => {
     // Still standing after the touch tick: it costs 10 cats.
     const standingAtTheTouch = playWithHp(during + 1)
     expect(eventsOf(standingAtTheTouch, 'catsLost')).toEqual([{ type: 'catsLost', count: 10 }])
+  })
+
+  // decisions.md: shots come before pickups in a tick, so a block broken in the tick the squad's centre reaches it gives the buff.
+  it('big_buff_uncovered_in_the_tick_it_reaches_the_squad_centre_is_collected', () => {
+    const ticks = damageLog()
+    const reachedTick = ticks.findIndex((tick) => tick.zAfter >= blockZ)
+    expect(ticks[reachedTick].zBefore).toBeLessThan(blockZ)
+    const damageWhenReached = ticks[reachedTick].damage
+    expect(damageWhenReached).toBeGreaterThan(ticks[reachedTick - 1].damage)
+
+    const run = startRun(level(damageWhenReached))
+    let breakTick = -1
+    const events: GameEvent[] = []
+    for (let tick = 0; run.state.squad.z < blockZ + 5 && run.state.status === 'running'; tick++) {
+      const tickEvents = copied(run.step(noSteering))
+      if (tickEvents.some((event) => event.type === 'buffBlockBroken')) breakTick = tick
+      events.push(...tickEvents)
+    }
+
+    expect(breakTick).toBe(reachedTick)
+    expect(eventsOf(events, 'bigBuffCollected')).toHaveLength(1)
   })
 
   it('big_buff_uncovered_after_it_reached_the_squad_centre_is_lost', () => {

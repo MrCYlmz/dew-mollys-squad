@@ -107,8 +107,7 @@ describe('wall', () => {
         ...Array.from({ length: 150 }, (_, index) => ({
           type: 'gates' as const,
           z: 1 + index / 10,
-          left: { op: 'damage' as const, value: 1 },
-          right: { op: 'damage' as const, value: 1 },
+          ...everyLane({ op: 'damage', value: 1 }),
         })),
         { type: 'wall', z: 10, x: 0, width: 10 },
       ]),

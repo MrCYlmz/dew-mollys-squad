@@ -220,7 +220,8 @@ describe('weapon-buff gates in a row', () => {
     const seen: { value: number; colour: string }[] = []
 
     while (run.state.gateRows[3].taken === null && run.state.status === 'running') {
-      seen.push({ value: run.state.gateRows[3].left.value, colour: run.state.gateRows[3].left.colour })
+      const gate = run.state.gateRows[3].left
+      if (gate) seen.push({ value: gate.value, colour: gate.colour })
       run.step(noSteering)
     }
 

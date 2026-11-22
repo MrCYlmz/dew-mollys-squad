@@ -255,10 +255,11 @@ describe('gates in a run', () => {
 })
 
 describe('tick order', () => {
-  // A wave appears 40 units ahead and closes at 8 + 4 units/s, so the puppy meets the squad about
-  // 13.8 units before the wave's z. Sweeping the wave's z around gate z + 13.8 makes some runs
-  // touch the puppy in the very tick the squad runs through the gate.
-  it('puppy_contact_in_the_gate_tick_applies_before_the_gate', () => {
+  // A wave appears 40 units ahead and closes at 8 + 2.5 units/s, so the bulldog meets the squad about
+  // 9.5 units before the wave's z. Sweeping the wave's z around gate z + 9.5 makes some runs touch the
+  // bulldog in the very tick the squad runs through the gate. Yarn balls fly through the gate, and a
+  // bulldog's 40 HP outlasts the shots of 1 cat, so it always reaches the squad.
+  it('bulldog_contact_in_the_gate_tick_applies_before_the_gate', () => {
     const gateZ = 60
     let sameTickRuns = 0
 
@@ -266,7 +267,7 @@ describe('tick order', () => {
       const run = createRun({
         level: levelOf([
           gateRow(gateZ, everyLane(addTen)),
-          { type: 'wave', z: gateZ + 13.8 + offset, enemy: 'puppy', pattern: 'line', count: 1 },
+          { type: 'wave', z: gateZ + 9.5 + offset, enemy: 'bulldog', pattern: 'line', count: 1 },
         ]),
         seed: 1,
       })
@@ -277,7 +278,7 @@ describe('tick order', () => {
         const touched = events.some((event) => event.type === 'catsLost')
         if (touched && zBefore < gateZ && run.state.squad.z >= gateZ) {
           sameTickRuns++
-          // Contact first: 1 − 1 = 0 loses the run before the +10 gate could save it.
+          // Contact first: 1 cat less 10 is 0, which loses the run before the +10 gate could save it.
           expect(run.state.status).toBe('lost')
           expect(run.state.squad.count).toBe(0)
         }

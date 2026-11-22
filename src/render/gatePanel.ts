@@ -16,13 +16,13 @@ function gateLabel(gate: GateState): string {
     case 'divide':
       return `${strings.gateDivide}${gate.value}`
     case 'fireRate':
-      return `${strings.gateFireRate} ${strings.gatePlus}${gate.value}%`
+      return strings.gateFireRate.replace('{value}', String(gate.value))
     case 'damage':
-      return `${strings.gateDamage} ${strings.gatePlus}${gate.value}`
+      return strings.gateDamage.replace('{value}', String(gate.value))
     case 'multiShot':
-      return `${strings.gatePlus}${gate.value} ${strings.gateMultiShot}`
+      return strings.gateMultiShot.replace('{value}', String(gate.value))
     case 'range':
-      return `${strings.gateRange} ${strings.gatePlus}${gate.value}`
+      return strings.gateRange.replace('{value}', String(gate.value))
   }
 }
 

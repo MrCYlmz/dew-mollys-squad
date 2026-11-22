@@ -386,7 +386,7 @@ class RunSimulation implements Run {
     if (this.resolveCollisions()) return this.events
     if (this.passGates()) return this.events
     this.moveEnemies()
-    this.removeObstaclesBehind()
+    this.removeBarrelsAndWallsBehind()
     if (this.squad.z >= this.state.level.length) this.state.status = 'won'
     return this.events
   }
@@ -557,8 +557,10 @@ class RunSimulation implements Run {
     let hitIndex = -1
     let hitGate: GateCell | null = null
 
-    const row = this.gateRows[this.nextGateRow]
-    if (row !== undefined && row.z > startZ && row.z <= yarnBall.z) {
+    // Rows the squad has not reached yet, nearest first; a fanned yarn ball that passed one beyond the edge may come back on track before the next.
+    for (let i = this.nextGateRow; i < this.gateRows.length && this.gateRows[i].z <= yarnBall.z; i++) {
+      const row = this.gateRows[i]
+      if (row.z <= startZ) continue
       const share = (row.z - startZ) / dz
       const crossingX = startX + share * dx
       // A gate spans its half of the track; yarn balls beyond the edge pass it.
@@ -566,6 +568,7 @@ class RunSimulation implements Run {
         hitShare = share
         target = 'gate'
         hitGate = row[gateSideAt(crossingX)]
+        break
       }
     }
 
@@ -782,7 +785,7 @@ class RunSimulation implements Run {
     }
   }
 
-  private removeObstaclesBehind(): void {
+  private removeBarrelsAndWallsBehind(): void {
     const lastCatZ = this.lastCatZ()
     const barrels = this.barrels.active
     for (let i = barrels.length - 1; i >= 0; i--) {

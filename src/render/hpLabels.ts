@@ -10,14 +10,13 @@ import {
   Vector3,
   type Quaternion,
 } from 'three'
+import { shownHp } from '../sim/hp'
 
 const glyphWidth = 32
 const glyphHeight = 48
 const digitWidth = 0.4
 const digitHeight = 0.6
 const maxDigits = 3
-// HP after level scaling is a fraction, and float error can push a whole number just above itself, such as 27.000000000000004.
-const wholeNumberTolerance = 1e-9
 
 const matrix = new Matrix4()
 const position = new Vector3()
@@ -82,7 +81,7 @@ export class HpLabels {
 
   // Shows hp rounded up, centred on (x, y, z) in world units.
   add(hp: number, x: number, y: number, z: number, colour: Color): void {
-    const shown = Math.min(Math.ceil(hp - wholeNumberTolerance), 10 ** maxDigits - 1)
+    const shown = Math.min(shownHp(hp), 10 ** maxDigits - 1)
     const digits = shown >= 100 ? 3 : shown >= 10 ? 2 : 1
     let rest = shown
     for (let i = digits - 1; i >= 0; i--) {

@@ -19,6 +19,41 @@ export function applyGate(squadCount: number, gate: SignedGate): number {
       return Math.min(squadCount * gate.value, tuning.squad.maxCount)
     case 'divide':
       return Math.max(Math.floor(squadCount / gate.value), 1)
+    case 'fireRate':
+    case 'damage':
+    case 'multiShot':
+    case 'range':
+      return squadCount
+  }
+}
+
+// The values every cat fires with, changed by weapon-buff gates until the end of the run.
+export interface Weapon {
+  fireRate: number
+  damage: number
+  yarnBallsPerShot: number
+  range: number
+}
+
+export function applyWeaponBuff(weapon: Weapon, gate: SignedGate): void {
+  switch (gate.op) {
+    case 'fireRate': {
+      const baseFireRate = tuning.cat.fireRate
+      weapon.fireRate = Math.min(
+        weapon.fireRate + (baseFireRate * gate.value) / 100,
+        baseFireRate * tuning.weaponBuff.maxFireRateFactor,
+      )
+      break
+    }
+    case 'damage':
+      weapon.damage += gate.value
+      break
+    case 'multiShot':
+      weapon.yarnBallsPerShot = Math.min(weapon.yarnBallsPerShot + gate.value, tuning.weaponBuff.maxYarnBallsPerShot)
+      break
+    case 'range':
+      weapon.range += gate.value
+      break
   }
 }
 
@@ -27,10 +62,14 @@ export function gateColour(gate: SignedGate): GateColour {
     case 'add':
     case 'subtract':
       return gate.value > 0 ? 'blue' : 'red'
-    case 'multiply':
-      return 'blue'
     case 'divide':
       return 'red'
+    case 'multiply':
+    case 'fireRate':
+    case 'damage':
+    case 'multiShot':
+    case 'range':
+      return 'blue'
   }
 }
 

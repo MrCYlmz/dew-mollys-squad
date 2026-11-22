@@ -13,5 +13,5 @@ if (!(gameElement instanceof HTMLElement) || !(canvas instanceof HTMLCanvasEleme
 }
 
 document.title = strings.gameName
-const game = new Game(levels[0], canvas, gameElement)
+const game = new Game(levels, canvas, gameElement)
 render(<App game={game} />, uiRoot)

@@ -20,7 +20,7 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three'
-import type { EnemyKind } from '../content/level'
+import type { BossKind, EnemyKind } from '../content/level'
 import { tuning } from '../content/tuning'
 import { formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
 import type { RunState } from '../sim/run'
@@ -31,6 +31,9 @@ import {
   createBulldogGeometry,
   createCatGeometry,
   createChihuahuaGeometry,
+  createDustBallGeometry,
+  createDustbotGeometry,
+  createMegaDustbotGeometry,
   createPuppyGeometry,
   createShieldDogGeometry,
   createShieldGeometry,
@@ -55,6 +58,11 @@ const barrelLabelHeight = 1.3
 const bodyHpColour = new Color(0xffffff)
 const shieldHpColour = new Color(0x8fd0ff)
 const barrelHpColour = new Color(0xd6ecff)
+const bossHitFlashSeconds = 0.08
+const bossHitColour = new Color(0x662222)
+const noEmissive = new Color(0x000000)
+const dustBallHeight = 1.2
+const bossKinds: readonly BossKind[] = ['dustbot', 'megaDustbot']
 
 export interface ScreenPoint {
   x: number
@@ -84,6 +92,10 @@ export class GameRenderer {
   private readonly enemyMeshes: InstancedMesh[]
   private readonly shields: InstancedMesh
   private readonly yarnBalls: InstancedMesh
+  private readonly bossMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
+  private readonly bosses: Record<BossKind, Mesh>
+  private readonly dustBalls: InstancedMesh
+  private bossFlashSeconds = 0
   private readonly barrelGeometry = this.ownGeometry(createBarrelGeometry())
   private readonly barrelMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
   private readonly wallGeometry = this.ownGeometry(new BoxGeometry(1, 1, 1))
@@ -142,6 +154,15 @@ export class GameRenderer {
       this.ownMaterial(new MeshLambertMaterial({ color: 0xe0407b })),
       tuning.yarnBallCap,
     )
+    this.bosses = {
+      dustbot: this.bossMesh(createDustbotGeometry()),
+      megaDustbot: this.bossMesh(createMegaDustbotGeometry()),
+    }
+    this.dustBalls = this.instanced(
+      this.ownGeometry(createDustBallGeometry()),
+      this.ownMaterial(new MeshLambertMaterial({ vertexColors: true })),
+      tuning.limits.dustBalls,
+    )
   }
 
   resize(cssWidth: number, cssHeight: number, pixelRatio: number): void {
@@ -175,8 +196,12 @@ export class GameRenderer {
     for (const edge of [-1, 1]) {
       this.addLevelMesh(new BoxGeometry(0.3, 0.3, trackLength), new MeshLambertMaterial({ color: 0xffffff }), edge * (tuning.track.halfWidth + 0.15), 0.15, -length / 2)
     }
-    this.addLevelMesh(new PlaneGeometry(tuning.track.halfWidth * 2, 1.2), new MeshBasicMaterial({ color: 0x222222 }), 0, 0.01, -length)
-    this.addLevelMesh(new BoxGeometry(tuning.track.halfWidth * 2 + 0.6, 0.4, 0.4), new MeshLambertMaterial({ color: 0xffd23f }), 0, 3.4, -length)
+    const bossEvent = state.level.events.find((event) => event.type === 'boss')
+    // A boss level has no finish line.
+    if (bossEvent === undefined) {
+      this.addLevelMesh(new PlaneGeometry(tuning.track.halfWidth * 2, 1.2), new MeshBasicMaterial({ color: 0x222222 }), 0, 0.01, -length)
+      this.addLevelMesh(new BoxGeometry(tuning.track.halfWidth * 2 + 0.6, 0.4, 0.4), new MeshLambertMaterial({ color: 0xffd23f }), 0, 3.4, -length)
+    }
 
     this.barrels = this.instanced(this.barrelGeometry, this.barrelMaterial, state.barrels.length)
     this.walls = this.instanced(this.wallGeometry, this.wallMaterial, state.walls.length)
@@ -195,12 +220,21 @@ export class GameRenderer {
 
     this.catsToScatter = 0
     this.scatter.count = 0
-    // Walls, barrels and some enemies first come into view during the run; compiling now keeps that from stalling a frame.
+    this.bossFlashSeconds = 0
+    this.bossMaterial.emissive.copy(noEmissive)
+    // Walls, barrels, the boss and some enemies first come into view during the run; compiling now keeps that from stalling a frame.
+    // Only visible objects are compiled, so the level's boss is shown for it.
+    if (bossEvent !== undefined) this.bosses[bossEvent.boss].visible = true
     this.renderer.compile(this.scene, this.camera)
+    for (const boss of Object.values(this.bosses)) boss.visible = false
   }
 
   scatterCats(count: number): void {
     this.catsToScatter += count
+  }
+
+  flashBoss(): void {
+    this.bossFlashSeconds = bossHitFlashSeconds
   }
 
   // Draws the state between the tick before and the last one, alpha of the way.
@@ -219,6 +253,8 @@ export class GameRenderer {
     this.hpLabels?.finish()
     this.drawWalls(state)
     this.drawYarnBalls(state, alpha)
+    this.drawBoss(state, alpha, frameSeconds)
+    this.drawDustBalls(state, alpha)
     this.drawGates(state)
     this.renderer.render(this.scene, this.camera)
   }
@@ -256,6 +292,13 @@ export class GameRenderer {
     mesh.count = 0
     // Instances move every frame; the mesh's bounding sphere would not follow them.
     mesh.frustumCulled = false
+    this.scene.add(mesh)
+    return mesh
+  }
+
+  private bossMesh(geometry: BufferGeometry): Mesh {
+    const mesh = new Mesh(this.ownGeometry(geometry), this.bossMaterial)
+    mesh.visible = false
     this.scene.add(mesh)
     return mesh
   }
@@ -409,6 +452,29 @@ export class GameRenderer {
     }
     this.yarnBalls.count = yarnBalls.length
     this.yarnBalls.instanceMatrix.needsUpdate = true
+  }
+
+  private drawBoss(state: RunState, alpha: number, frameSeconds: number): void {
+    const boss = state.boss
+    for (const kind of bossKinds) this.bosses[kind].visible = boss !== null && boss.kind === kind
+    if (boss === null) return
+    const mesh = this.bosses[boss.kind]
+    mesh.position.set(lerp(boss.previousX, boss.x, alpha), 0, -lerp(boss.previousZ, boss.z, alpha))
+    // The model faces +z; turn it towards the squad.
+    mesh.rotation.y = Math.atan2(state.squad.x - boss.x, boss.z - state.squad.z)
+    this.bossFlashSeconds = Math.max(this.bossFlashSeconds - frameSeconds, 0)
+    this.bossMaterial.emissive.copy(this.bossFlashSeconds > 0 ? bossHitColour : noEmissive)
+  }
+
+  private drawDustBalls(state: RunState, alpha: number): void {
+    const dustBalls = state.dustBalls
+    for (let i = 0; i < dustBalls.length; i++) {
+      const dustBall = dustBalls[i]
+      matrix.makeTranslation(lerp(dustBall.previousX, dustBall.x, alpha), dustBallHeight, -lerp(dustBall.previousZ, dustBall.z, alpha))
+      this.dustBalls.setMatrixAt(i, matrix)
+    }
+    this.dustBalls.count = dustBalls.length
+    this.dustBalls.instanceMatrix.needsUpdate = true
   }
 
   private drawGates(state: RunState): void {

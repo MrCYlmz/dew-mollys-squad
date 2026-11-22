@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
-import { copied, doublingRows, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
+import { copied, doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type WaveEvent = Extract<Level['events'][number], { type: 'wave' }>
 type EnemyKind = WaveEvent['enemy']
@@ -164,7 +164,7 @@ describe('enemy contact', () => {
   function lateContact(enemy: EnemyKind, add: number) {
     const run = createRun({
       level: levelOf([
-        { type: 'gates', z: 10, left: { op: 'add', value: add }, right: { op: 'add', value: add } },
+        { type: 'gates', z: 10, ...everyLane({ op: 'add', value: add }) },
         { type: 'wave', z: 100, enemy, pattern: 'column', count: 1, x: 3, spacing: 1 },
       ]),
       seed: 1,

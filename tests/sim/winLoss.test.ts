@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRun } from '../../src/sim/run'
-import { levelOf, stepUntil } from './runHarness'
+import { everyLane, levelOf, stepUntil } from './runHarness'
 
 describe('win and loss', () => {
   it('run_is_still_running_just_before_the_finish_line', () => {
@@ -23,7 +23,7 @@ describe('win and loss', () => {
 
   it('run_is_lost_when_the_squad_count_reaches_0', () => {
     const run = createRun({
-      level: levelOf([{ type: 'gates', z: 20, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }]),
+      level: levelOf([{ type: 'gates', z: 20, ...everyLane({ op: 'subtract', value: 30 }) }]),
       seed: 1,
     })
 
@@ -36,7 +36,7 @@ describe('win and loss', () => {
 
   it('squad_dropping_to_0_at_a_gate_on_the_finish_line_loses_the_run', () => {
     const run = createRun({
-      level: levelOf([{ type: 'gates', z: 50, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }], 50),
+      level: levelOf([{ type: 'gates', z: 50, ...everyLane({ op: 'subtract', value: 30 }) }], 50),
       seed: 1,
     })
 
@@ -49,7 +49,7 @@ describe('win and loss', () => {
 
   it('lost_run_stays_lost_on_further_steps', () => {
     const run = createRun({
-      level: levelOf([{ type: 'gates', z: 20, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }]),
+      level: levelOf([{ type: 'gates', z: 20, ...everyLane({ op: 'subtract', value: 30 }) }]),
       seed: 1,
     })
     stepUntil(run, () => false, 6000)
@@ -74,7 +74,7 @@ describe('win and loss', () => {
 
   it('run_lost_at_0_cats_is_out_of_cats', () => {
     const run = createRun({
-      level: levelOf([{ type: 'gates', z: 20, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }]),
+      level: levelOf([{ type: 'gates', z: 20, ...everyLane({ op: 'subtract', value: 30 }) }]),
       seed: 1,
     })
 

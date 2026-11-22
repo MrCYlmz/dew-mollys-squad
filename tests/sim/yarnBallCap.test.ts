@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type Run } from '../../src/sim/run'
-import { doublingRows, levelOf, noSteering, repeatedRows, stepTicks, stepUntil } from './runHarness'
+import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, stepTicks, stepUntil } from './runHarness'
 
 function yarnBallsInFlightPerTick(run: Run, ticks: number): number[] {
   const inFlight: number[] = []
@@ -38,11 +38,11 @@ describe('yarn ball cap', () => {
   })
 
   it('squad_of_200_fires_one_yarn_ball_per_cat', () => {
-    // 1 cat lands fewer than 10 hits on the +99 gates, so they stay +99: 1 + 99 = 100, then ×2
+    // 1 + 99 = 100, then ×2
     const run = createRun({
       level: levelOf([
-        { type: 'gates', z: 10, left: { op: 'add', value: 99 }, right: { op: 'add', value: 99 } },
-        { type: 'gates', z: 20, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+        { type: 'gates', z: 10, ...everyLane({ op: 'add', value: 99 }) },
+        { type: 'gates', z: 20, ...everyLane({ op: 'multiply', value: 2 }) },
       ]),
       seed: 1,
     })
@@ -91,58 +91,15 @@ describe('yarn ball cap', () => {
     expect(shotKills).toBeGreaterThan(0)
     expect([...hpSeen]).toEqual([3])
   })
-
-  it('yarn_ball_standing_for_3_cats_counts_as_3_hits_on_a_gate', () => {
-    // 1,024 would be in flight, so each yarn ball stands for 3 cats. 512 cats land about
-    // 512 × 2 × 3.75 = 3,840 hits, so about 384 steps, the same as every cat firing its own.
-    const run = createRun({
-      level: levelOf([
-        ...doublingRows(9),
-        { type: 'gates', z: 200, left: { op: 'add', value: 1 }, right: { op: 'add', value: 1 } },
-      ]),
-      seed: 1,
-    })
-    stepUntil(run, (state) => state.squad.z > 91, 6000)
-    expect(run.state.squad.count).toBe(512)
-
-    stepUntil(run, (state) => state.squad.z > 201, 6000)
-    const row = run.state.gateRows[9]
-    const steps = row.left.value - 1 + (row.right.value - 1)
-
-    expect(steps).toBeGreaterThanOrEqual(384 * 0.85)
-    expect(steps).toBeLessThanOrEqual(384 * 1.15)
-  })
-
-  it('gate_carries_spare_hits_over_to_its_next_step', () => {
-    // 256 cats fire yarn balls of 2 hits and 512 cats yarn balls of 3 hits, which leave spare
-    // hits past each 10. With the spare hits kept, twice the cats raise the gate twice as far.
-    const stepsFrom = (doublings: number) => {
-      const run = createRun({
-        level: levelOf([
-          ...doublingRows(doublings),
-          { type: 'gates', z: 200, left: { op: 'add', value: 1 }, right: { op: 'add', value: 1 } },
-        ]),
-        seed: 1,
-      })
-      stepUntil(run, (state) => state.squad.z > 201, 6000)
-      const row = run.state.gateRows[doublings]
-      return row.left.value - 1 + (row.right.value - 1)
-    }
-
-    const ratio = stepsFrom(9) / stepsFrom(8)
-
-    expect(ratio).toBeGreaterThanOrEqual(1.84)
-    expect(ratio).toBeLessThanOrEqual(2.16)
-  })
 })
 
-// Squads of exactly 100 or 200 cats: 1 cat lands fewer than 10 hits on the +99 gates, so they stay +99.
+// Squads of exactly 100 or 200 cats.
 function hundredCats(): Level['events'] {
-  return [{ type: 'gates', z: 10, left: { op: 'add', value: 99 }, right: { op: 'add', value: 99 } }]
+  return [{ type: 'gates', z: 10, ...everyLane({ op: 'add', value: 99 }) }]
 }
 
 function twoHundredCats(): Level['events'] {
-  return [...hundredCats(), { type: 'gates', z: 15, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } }]
+  return [...hundredCats(), { type: 'gates', z: 15, ...everyLane({ op: 'multiply', value: 2 }) }]
 }
 
 describe('yarn ball cap with weapon buffs', () => {
@@ -246,7 +203,7 @@ describe('yarn ball cap with weapon buffs', () => {
     const run = createRun({
       level: levelOf([
         ...doublingRows(8),
-        { type: 'gates', z: 85, left: { op: 'damage', value: 1 }, right: { op: 'damage', value: 1 } },
+        { type: 'gates', z: 85, ...everyLane({ op: 'damage', value: 1 }) },
         { type: 'wave', z: 150, enemy: 'bulldog', pattern: 'line', count: 5 },
       ]),
       seed: 1,

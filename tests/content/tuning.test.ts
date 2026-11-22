@@ -19,12 +19,6 @@ describe('cat base values at level 1', () => {
   })
 })
 
-describe('gate shooting', () => {
-  it('10_hits_raise_a_gate_by_1', () => {
-    expect(tuning.gate.hitsPerStep).toBe(10)
-  })
-})
-
 // Values docs/domain/ names as being in the tuning config.
 describe('weapon buffs', () => {
   it('multi_shot_spread_is_5_degrees', () => {
@@ -48,6 +42,21 @@ describe('barrels and walls', () => {
 
   it('wall_costs_10_cats', () => {
     expect(tuning.wall.catLoss).toBe(10)
+  })
+})
+
+describe('buff blocks', () => {
+  it('buff_block_is_1_unit_deep', () => {
+    expect(tuning.buffBlock.depth).toBe(1)
+  })
+
+  it('unbroken_buff_block_costs_10_cats', () => {
+    expect(tuning.buffBlock.catLoss).toBe(10)
+  })
+
+  // Fire rate in per cent of the base fire rate, as on a fire rate gate.
+  it('big_buff_values_are_plus_30_times_3_fire_rate_60_damage_3_bullet_2_range_30', () => {
+    expect(tuning.bigBuff).toEqual({ add: 30, multiply: 3, fireRate: 60, damage: 3, multiShot: 2, range: 30 })
   })
 })
 

@@ -1,49 +1,42 @@
 import {
-  CanvasTexture,
   Color,
   InstancedBufferAttribute,
   InstancedMesh,
   Matrix4,
   MeshBasicMaterial,
   PlaneGeometry,
-  SRGBColorSpace,
   Vector3,
   type Quaternion,
 } from 'three'
+import { renderConfig } from '../content/renderConfig'
 import { shownHp } from '../sim/hp'
+import { createCanvasTexture, cssColour } from './canvasTexture'
 
 const glyphWidth = 32
 const glyphHeight = 48
-const digitWidth = 0.4
-const digitHeight = 0.6
+const { digitWidth, digitHeight } = renderConfig.hpLabel
 const maxDigits = 3
 
 const matrix = new Matrix4()
 const position = new Vector3()
-const unitScale = new Vector3(1, 1, 1)
-const white = new Color(0xffffff)
+const scale = new Vector3()
+const textColour = new Color(renderConfig.hpLabel.text)
 
 // The digits 0–9 side by side on one texture; each digit quad shows the tenth of it its glyph attribute picks.
 export function createDigitMaterial(): MeshBasicMaterial {
-  const canvas = document.createElement('canvas')
-  canvas.width = glyphWidth * 10
-  canvas.height = glyphHeight
-  const context = canvas.getContext('2d')
-  if (context !== null) {
+  const texture = createCanvasTexture(glyphWidth * 10, glyphHeight, (context) => {
     context.font = `bold ${glyphHeight - 8}px system-ui, sans-serif`
     context.textAlign = 'center'
     context.textBaseline = 'middle'
     context.lineWidth = 6
-    context.strokeStyle = 'rgba(30, 30, 40, 0.9)'
-    context.fillStyle = '#ffffff'
+    context.strokeStyle = cssColour(renderConfig.hpLabel.outline)
+    context.fillStyle = cssColour(renderConfig.hpLabel.text)
     for (let digit = 0; digit < 10; digit++) {
       const x = glyphWidth * (digit + 0.5)
       context.strokeText(String(digit), x, glyphHeight / 2 + 2)
       context.fillText(String(digit), x, glyphHeight / 2 + 2)
     }
-  }
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
+  })
   const material = new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -69,7 +62,7 @@ export class HpLabels {
     this.geometry.setAttribute('glyph', this.glyphs)
     this.mesh = new InstancedMesh(this.geometry, material, capacity)
     // Colours are set up front, so the first coloured frame compiles no new shader.
-    for (let i = 0; i < capacity; i++) this.mesh.setColorAt(i, white)
+    for (let i = 0; i < capacity; i++) this.mesh.setColorAt(i, textColour)
     this.mesh.count = 0
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 1
@@ -79,8 +72,8 @@ export class HpLabels {
     this.mesh.count = 0
   }
 
-  // Shows hp rounded up, centred on (x, y, z) in world units.
-  add(hp: number, x: number, y: number, z: number, colour: Color): void {
+  // Shows hp rounded up, centred on (x, y, z) in world units, size times the normal digit size.
+  add(hp: number, x: number, y: number, z: number, colour: Color, size = 1): void {
     const shown = Math.min(shownHp(hp), 10 ** maxDigits - 1)
     const digits = shown >= 100 ? 3 : shown >= 10 ? 2 : 1
     let rest = shown
@@ -88,7 +81,7 @@ export class HpLabels {
       const index = this.mesh.count++
       this.glyphs.setX(index, rest % 10)
       rest = Math.floor(rest / 10)
-      matrix.compose(position.set(x + (i - (digits - 1) / 2) * digitWidth * 0.8, y, z), this.facing, unitScale)
+      matrix.compose(position.set(x + (i - (digits - 1) / 2) * digitWidth * 0.8 * size, y, z), this.facing, scale.setScalar(size))
       this.mesh.setMatrixAt(index, matrix)
       this.mesh.setColorAt(index, colour)
     }

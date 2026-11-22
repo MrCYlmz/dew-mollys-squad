@@ -34,23 +34,23 @@ export function copied(events: readonly GameEvent[]): GameEvent[] {
   return events.map((event) => ({ ...event }))
 }
 
+// The same gate in all three lanes, so the squad takes it wherever it steers.
+export function everyLane(gate: Gate): { left: Gate; centre: Gate; right: Gate } {
+  return { left: gate, centre: gate, right: gate }
+}
+
 // Rows of ×2 gates every 10 units from z = 10: a squad that takes all of them has 2^times cats.
 export function doublingRows(times: number): Level['events'] {
-  return Array.from({ length: times }, (_, index) => ({
-    type: 'gates' as const,
-    z: 10 * (index + 1),
-    left: { op: 'multiply' as const, value: 2 },
-    right: { op: 'multiply' as const, value: 2 },
-  }))
+  return Array.from({ length: times }, (_, index) => ({ type: 'gates' as const, z: 10 * (index + 1), ...everyLane({ op: 'multiply', value: 2 }) }))
 }
 
 export function steerTo(run: Run, x: number): void {
   run.step({ drag: x - run.state.squad.steeringPoint, left: false, right: false })
 }
 
-// `times` rows of the same gate on both sides, 5 units apart from z = start, so the squad takes the gate `times` times wherever it steers.
+// `times` rows of the same gate in every lane, 5 units apart from z = start, so the squad takes the gate `times` times wherever it steers.
 export function repeatedRows(gate: Gate, times: number, start = 5): Level['events'] {
-  return Array.from({ length: times }, (_, index) => ({ type: 'gates' as const, z: start + 5 * index, left: gate, right: gate }))
+  return Array.from({ length: times }, (_, index) => ({ type: 'gates' as const, z: start + 5 * index, ...everyLane(gate) }))
 }
 
 // A boss level ends with the boss event at z = length, the arena start.

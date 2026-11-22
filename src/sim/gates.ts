@@ -1,13 +1,32 @@
-import type { GateOp } from '../content/level'
+import type { GateOp, Lane } from '../content/level'
 import { tuning } from '../content/tuning'
 
-export type GateSide = 'left' | 'right'
 export type GateColour = 'blue' | 'red'
 
 export interface SignedGate {
   op: GateOp
-  // Signed for add and subtract: a subtract gate of −15 holds −15, and +1 once shot past 0.
+  // Signed for add and subtract: a subtract gate of −15 holds −15.
   value: number
+}
+
+// The track's three lanes are equally wide, so the borders lie at ± a third of the half width.
+export const laneBorder = tuning.track.halfWidth / 3
+
+// A centre exactly on a border is in the lane to its right.
+export function laneAt(x: number): Lane {
+  if (x < -laneBorder) return 'left'
+  return x < laneBorder ? 'centre' : 'right'
+}
+
+export function laneCentreX(lane: Lane): number {
+  switch (lane) {
+    case 'left':
+      return -2 * laneBorder
+    case 'centre':
+      return 0
+    case 'right':
+      return 2 * laneBorder
+  }
 }
 
 export function applyGate(squadCount: number, gate: SignedGate): number {
@@ -57,13 +76,12 @@ export function applyWeaponBuff(weapon: Weapon, gate: SignedGate): void {
   }
 }
 
-export function gateColour(gate: SignedGate): GateColour {
-  switch (gate.op) {
-    case 'add':
+export function gateColour(op: GateOp): GateColour {
+  switch (op) {
     case 'subtract':
-      return gate.value > 0 ? 'blue' : 'red'
     case 'divide':
       return 'red'
+    case 'add':
     case 'multiply':
     case 'fireRate':
     case 'damage':
@@ -71,8 +89,4 @@ export function gateColour(gate: SignedGate): GateColour {
     case 'range':
       return 'blue'
   }
-}
-
-export function gateSideAt(x: number): GateSide {
-  return x < 0 ? 'left' : 'right'
 }

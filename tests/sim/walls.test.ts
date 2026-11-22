@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent } from '../../src/sim/run'
-import { copied, levelOf, noSteering, repeatedRows, steerTo, stepUntil } from './runHarness'
+import { copied, everyLane, levelOf, noSteering, steerTo, stepUntil } from './runHarness'
 
-// A squad of exactly count cats: 1 cat lands fewer than 10 hits on the gate at z = 10, so it keeps its value.
+// A squad of exactly count cats.
 function squadOf(count: number): Level['events'] {
-  return [{ type: 'gates', z: 10, left: { op: 'add', value: count - 1 }, right: { op: 'add', value: count - 1 } }]
+  return [{ type: 'gates', z: 10, ...everyLane({ op: 'add', value: count - 1 }) }]
 }
 
 function runThrough(events: Level['events'], x: number, untilZ: number, level = 1) {
@@ -103,12 +103,11 @@ describe('wall', () => {
     // 31 cats, then a DMG +1 row every 0.1 units, so the squad takes at least one gate in every tick it touches the wall.
     const run = createRun({
       level: levelOf([
-        { type: 'gates', z: 0.5, left: { op: 'add', value: 30 }, right: { op: 'add', value: 30 } },
+        { type: 'gates', z: 0.5, ...everyLane({ op: 'add', value: 30 }) },
         ...Array.from({ length: 150 }, (_, index) => ({
           type: 'gates' as const,
           z: 1 + index / 10,
-          left: { op: 'damage' as const, value: 1 },
-          right: { op: 'damage' as const, value: 1 },
+          ...everyLane({ op: 'damage', value: 1 }),
         })),
         { type: 'wall', z: 10, x: 0, width: 10 },
       ]),
@@ -126,13 +125,26 @@ describe('wall', () => {
     expect(run.state.squad.count).toBe(21)
   })
 
+  it('single_cat_first_touches_a_wall_at_its_front_edge', () => {
+    // The cat's hit circle reaches z = 60 once the squad's centre is at 60 − 0.3; a tick moves it 8 / 60 units.
+    const run = createRun({ level: levelOf([{ type: 'wall', z: 60, x: 0, width: 10 }]), seed: 1 })
+    let zAtTheTouch: number | undefined
+
+    while (zAtTheTouch === undefined && run.state.squad.z < 62 && run.state.status === 'running') {
+      if (run.step(noSteering).some((event) => event.type === 'catsLost')) zAtTheTouch = run.state.squad.z
+    }
+
+    expect(zAtTheTouch).toBeGreaterThanOrEqual(60 - tuning.hitRadius.cat)
+    expect(zAtTheTouch).toBeLessThan(60 - tuning.hitRadius.cat + 8 / 60)
+  })
+
   it('wall_contact_in_the_gate_tick_applies_before_the_gate', () => {
     // A single cat touches the wall's front edge when the squad reaches z = 60.05, the same tick it takes
     // the +10 gate. Wall first: 1 − 10 leaves 0 and loses the run before the gate could add 10.
     const gateZ = 60.05
     const { run } = runThrough(
       [
-        { type: 'gates', z: gateZ, left: { op: 'add', value: 10 }, right: { op: 'add', value: 10 } },
+        { type: 'gates', z: gateZ, ...everyLane({ op: 'add', value: 10 }) },
         { type: 'wall', z: gateZ + tuning.hitRadius.cat, x: 0, width: 10 },
       ],
       0,
@@ -166,25 +178,6 @@ describe('yarn balls and walls', () => {
 
     expect(hitBehindTheWall).toBe(false)
     expect(hitInFrontOfTheWall).toBe(true)
-  })
-
-  it('yarn_ball_stops_at_a_wall_in_front_of_a_gate_and_the_wall_stays', () => {
-    // Without the wall, 8 cats would land about 8 × 2 × 3 = 48 hits on the gate from z = 25 to 48
-    const run = createRun({
-      level: levelOf([
-        ...repeatedRows({ op: 'multiply', value: 2 }, 3),
-        { type: 'wall', z: 50, x: -2.5, width: 5 },
-        { type: 'gates', z: 55, left: { op: 'subtract', value: 15 }, right: { op: 'add', value: 5 } },
-      ]),
-      seed: 1,
-    })
-    steerTo(run, -2.5)
-
-    stepUntil(run, (state) => state.squad.z > 48, 6000)
-
-    expect(run.state.squad.count).toBe(8)
-    expect(run.state.gateRows[3].left.value).toBe(-15)
-    expect(run.state.walls).toEqual([expect.objectContaining({ x: -2.5, z: 50, width: 5 })])
   })
 
   // One cat on x = 0 fires straight ahead past a wall that ends 0.4 to the side, out of the cat's reach too.
@@ -228,8 +221,8 @@ describe('yarn balls around a wall', () => {
     const wallZs = [30, 40.4, 50.8]
     const run = createRun({
       level: levelOf([
-        ...[1, 2, 3, 4].map((z) => ({ type: 'gates' as const, z, left: { op: 'multiShot' as const, value: 1 }, right: { op: 'multiShot' as const, value: 1 } })),
-        ...[5, 6, 7].map((z) => ({ type: 'gates' as const, z, left: { op: 'fireRate' as const, value: 20 }, right: { op: 'fireRate' as const, value: 20 } })),
+        ...[1, 2, 3, 4].map((z) => ({ type: 'gates' as const, z, ...everyLane({ op: 'multiShot', value: 1 }) })),
+        ...[5, 6, 7].map((z) => ({ type: 'gates' as const, z, ...everyLane({ op: 'fireRate', value: 20 }) })),
         ...wallZs.map((z) => ({ type: 'wall' as const, z, x: 0, width: 2 })),
       ]),
       seed: 1,
@@ -282,10 +275,10 @@ describe('yarn balls around a wall', () => {
 // One cat with 2 fire rate gates, so its yarn balls meet the wall at many offsets within a tick, straight or in a fan of 2.
 // The wall spans the whole track at z = 20; every check ends before the cat reaches it.
 describe('yarn balls reaching a wall and a barrel in the same tick', () => {
-  const fireRateRows: Level['events'] = [1, 2].map((z) => ({ type: 'gates', z, left: { op: 'fireRate', value: 20 }, right: { op: 'fireRate', value: 20 } }))
+  const fireRateRows: Level['events'] = [1, 2].map((z) => ({ type: 'gates', z, ...everyLane({ op: 'fireRate', value: 20 }) }))
   const shots: [string, Level['events']][] = [
     ['straight', fireRateRows],
-    ['in_a_fan', [{ type: 'gates', z: 0.5, left: { op: 'multiShot', value: 1 }, right: { op: 'multiShot', value: 1 } }, ...fireRateRows]],
+    ['in_a_fan', [{ type: 'gates', z: 0.5, ...everyLane({ op: 'multiShot', value: 1 }) }, ...fireRateRows]],
   ]
 
   // Three barrels side by side, close enough that every yarn ball of the fan meets one of them.

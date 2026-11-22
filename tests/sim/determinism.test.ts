@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type RunState, type SteerInput } from '../../src/sim/run'
-import { stepUntil } from './runHarness'
+import { everyLane, stepUntil } from './runHarness'
 
 const busyLevel: Level = {
   id: 'busy-level',
@@ -15,13 +15,15 @@ const busyLevel: Level = {
     { type: 'wave', z: 130, enemy: 'chihuahua', pattern: 'block', columns: 5, rows: 4, x: 0, spacing: 1.5 },
     { type: 'gates', z: 150, left: { op: 'multiShot', value: 1 }, right: { op: 'add', value: 5 } },
     { type: 'wall', z: 165, x: 3, width: 4 },
+    { type: 'buffBlock', z: 170, lane: 'left', hp: 20, buff: 'multiply' },
     { type: 'wave', z: 180, enemy: 'bulldog', pattern: 'column', count: 3, x: -3, spacing: 2 },
     { type: 'gates', z: 200, left: { op: 'add', value: 20 }, right: { op: 'fireRate', value: 20 } },
     { type: 'wave', z: 230, enemy: 'shieldDog', pattern: 'flank', count: 2, spacing: 2 },
     { type: 'gates', z: 250, left: { op: 'damage', value: 1 }, right: { op: 'range', value: 10 } },
+    { type: 'buffBlock', z: 260, lane: 'centre', hp: 15, buff: 'damage' },
     { type: 'barrel', z: 270, x: 2 },
     { type: 'wave', z: 280, enemy: 'puppy', pattern: 'line', count: 8 },
-    { type: 'gates', z: 300, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+    { type: 'gates', z: 300, ...everyLane({ op: 'multiply', value: 2 }) },
   ],
 }
 
@@ -33,9 +35,10 @@ const megaDustbotLevel: Level = {
   expectedSquadAtBoss: 80,
   // Both gates of the first two rows are good, so the squad reaches the arena whichever way the input steers.
   events: [
-    { type: 'gates', z: 20, left: { op: 'add', value: 20 }, right: { op: 'add', value: 20 } },
-    { type: 'gates', z: 40, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+    { type: 'gates', z: 20, ...everyLane({ op: 'add', value: 20 }) },
+    { type: 'gates', z: 40, ...everyLane({ op: 'multiply', value: 2 }) },
     { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
+    { type: 'buffBlock', z: 100, lane: 'centre', hp: 10, buff: 'add' },
     { type: 'gates', z: 120, left: { op: 'multiply', value: 2 }, right: { op: 'add', value: 10 } },
     { type: 'wave', z: 290, enemy: 'bulldog', pattern: 'column', count: 3, x: 2, spacing: 6 },
     { type: 'boss', z: 300, boss: 'megaDustbot' },
@@ -59,7 +62,9 @@ function snapshot(state: RunState) {
     barrels: state.barrels.map((barrel) => ({ ...barrel })),
     walls: state.walls.map((wall) => ({ ...wall })),
     weapon: { ...state.weapon },
-    gateRows: state.gateRows.map((row) => ({ taken: row.taken, left: { ...row.left }, right: { ...row.right } })),
+    gateRows: state.gateRows.map((row) => ({ taken: row.taken, left: { ...row.left }, centre: { ...row.centre }, right: { ...row.right } })),
+    buffBlocks: state.buffBlocks.map((buffBlock) => ({ ...buffBlock })),
+    bigBuffs: state.bigBuffs.map((bigBuff) => ({ ...bigBuff })),
   }
 }
 

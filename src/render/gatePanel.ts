@@ -1,76 +1,90 @@
-import { CanvasTexture, Mesh, MeshBasicMaterial, SRGBColorSpace, type PlaneGeometry } from 'three'
+import { MeshBasicMaterial } from 'three'
+import type { BigBuff, GateOp } from '../content/level'
+import { renderConfig } from '../content/renderConfig'
 import { strings } from '../content/strings'
+import { tuning } from '../content/tuning'
 import type { GateState } from '../sim/run'
+import { createCanvasTexture, cssColour } from './canvasTexture'
 
-const panelColours = { blue: 'rgba(40, 130, 255, 0.7)', red: 'rgba(240, 60, 60, 0.7)' }
+const panel = renderConfig.panel
+const panelColours = { blue: renderConfig.gate.good, red: renderConfig.gate.bad }
+// Matches the panel's shape on the track, so labels are not stretched.
+const canvasWidth = 256
+const canvasHeight = 150
+const glowBlur = 12
 
-function gateLabel(gate: GateState): string {
-  switch (gate.op) {
+// value is signed for add and subtract, as in GateState.
+function gateLabel(op: GateOp, value: number): string {
+  switch (op) {
     case 'add':
     case 'subtract':
-      if (gate.value > 0) return `${strings.gatePlus}${gate.value}`
-      if (gate.value < 0) return `${strings.gateMinus}${-gate.value}`
-      return String(gate.value)
+      return value < 0 ? `${strings.gateMinus}${-value}` : `${strings.gatePlus}${value}`
     case 'multiply':
-      return `${strings.gateTimes}${gate.value}`
+      return `${strings.gateTimes}${value}`
     case 'divide':
-      return `${strings.gateDivide}${gate.value}`
+      return `${strings.gateDivide}${value}`
     case 'fireRate':
-      return strings.gateFireRate.replace('{value}', String(gate.value))
+      return strings.gateFireRate.replace('{value}', String(value))
     case 'damage':
-      return strings.gateDamage.replace('{value}', String(gate.value))
+      return strings.gateDamage.replace('{value}', String(value))
     case 'multiShot':
-      return strings.gateMultiShot.replace('{value}', String(gate.value))
+      return strings.gateMultiShot.replace('{value}', String(value))
     case 'range':
-      return strings.gateRange.replace('{value}', String(gate.value))
+      return strings.gateRange.replace('{value}', String(value))
   }
 }
 
-// One gate of a gate row: a see-through panel with its value, redrawn only when the value changes.
-export class GatePanel {
-  readonly mesh: Mesh
-  private readonly canvas = document.createElement('canvas')
-  private readonly texture: CanvasTexture
-  private readonly material: MeshBasicMaterial
-  private shownValue = Number.NaN
-
-  constructor(geometry: PlaneGeometry) {
-    this.canvas.width = 256
-    this.canvas.height = 128
-    this.texture = new CanvasTexture(this.canvas)
-    this.texture.colorSpace = SRGBColorSpace
-    this.material = new MeshBasicMaterial({ map: this.texture, transparent: true, depthWrite: false })
-    this.mesh = new Mesh(geometry, this.material)
-  }
-
-  show(gate: GateState): void {
-    if (gate.value === this.shownValue) return
-    this.shownValue = gate.value
-    const context = this.canvas.getContext('2d')
-    if (context === null) return
-    const { width, height } = this.canvas
-    context.clearRect(0, 0, width, height)
-    context.fillStyle = panelColours[gate.colour]
+// A see-through glowing panel with its label in bold; dispose of it with disposePanelMaterial.
+function createPanelMaterial(label: string, fill: number): MeshBasicMaterial {
+  const texture = createCanvasTexture(canvasWidth, canvasHeight, (context) => {
+    const inset = glowBlur
+    const width = canvasWidth - 2 * inset
+    const height = canvasHeight - 2 * inset
+    // Lighter at the top, so the panel reads as lit glass.
+    const gradient = context.createLinearGradient(0, inset, 0, inset + height)
+    gradient.addColorStop(0, cssColour(panel.border))
+    gradient.addColorStop(0.35, cssColour(fill))
+    gradient.addColorStop(1, cssColour(fill))
+    context.shadowColor = cssColour(fill)
+    context.shadowBlur = glowBlur
+    context.globalAlpha = panel.opacity
+    context.fillStyle = gradient
     context.beginPath()
-    context.roundRect(4, 4, width - 8, height - 8, 16)
+    context.roundRect(inset, inset, width, height, 18)
     context.fill()
+    context.globalAlpha = 1
+    context.shadowColor = cssColour(panel.border)
     context.lineWidth = 6
-    context.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+    context.strokeStyle = cssColour(panel.border)
     context.stroke()
-    context.fillStyle = '#ffffff'
-    const label = gateLabel(gate)
-    context.font = 'bold 72px system-ui, sans-serif'
+    context.shadowBlur = 0
+    context.font = 'bold 76px system-ui, sans-serif'
     // Long labels such as FIRE RATE +20% are shrunk to fit the panel.
-    const fontSize = Math.min(72, Math.floor((72 * (width - 32)) / context.measureText(label).width))
+    const fontSize = Math.min(76, Math.floor((76 * (width - 24)) / context.measureText(label).width))
     context.font = `bold ${fontSize}px system-ui, sans-serif`
     context.textAlign = 'center'
     context.textBaseline = 'middle'
-    context.fillText(label, width / 2, height / 2 + 4)
-    this.texture.needsUpdate = true
-  }
+    context.lineJoin = 'round'
+    context.lineWidth = Math.max(fontSize / 8, 3)
+    context.strokeStyle = cssColour(panel.textOutline)
+    context.strokeText(label, canvasWidth / 2, canvasHeight / 2 + 4)
+    context.fillStyle = cssColour(panel.text)
+    context.fillText(label, canvasWidth / 2, canvasHeight / 2 + 4)
+  })
+  return new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
+}
 
-  dispose(): void {
-    this.texture.dispose()
-    this.material.dispose()
-  }
+// Gate values never change during a run, so a gate's panel is drawn once.
+export function createGatePanelMaterial(gate: GateState): MeshBasicMaterial {
+  return createPanelMaterial(gateLabel(gate.op, gate.value), panelColours[gate.colour])
+}
+
+// The label a buff block and its uncovered big buff show, such as ×3 or DMG +3.
+export function createBigBuffMaterial(buff: BigBuff): MeshBasicMaterial {
+  return createPanelMaterial(gateLabel(buff, tuning.bigBuff[buff]), renderConfig.bigBuff.label)
+}
+
+export function disposePanelMaterial(material: MeshBasicMaterial): void {
+  material.map?.dispose()
+  material.dispose()
 }

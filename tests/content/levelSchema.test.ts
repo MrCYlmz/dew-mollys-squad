@@ -7,12 +7,13 @@ const documentedLevel = {
   level: 1,
   length: 400,
   events: [
-    { type: 'gates', z: 40, left: { op: 'add', value: 10 }, right: { op: 'subtract', value: 15 } },
+    { type: 'gates', z: 40, left: { op: 'add', value: 10 }, centre: { op: 'multiply', value: 2 }, right: { op: 'subtract', value: 15 } },
     { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
     { type: 'gates', z: 90, left: { op: 'add', value: 10 }, right: { op: 'damage', value: 1 } },
     { type: 'barrel', z: 120, x: 1.5 },
+    { type: 'buffBlock', z: 120, lane: 'right', hp: 40, buff: 'multiply' },
     { type: 'wave', z: 130, enemy: 'puppy', pattern: 'block', columns: 5, rows: 4, x: 0, spacing: 1.5 },
-    { type: 'gates', z: 140, left: { op: 'fireRate', value: 20 }, right: { op: 'range', value: 10 } },
+    { type: 'gates', z: 140, centre: { op: 'fireRate', value: 20 } },
     { type: 'wall', z: 160, x: -2.5, width: 5 },
     { type: 'wave', z: 180, enemy: 'puppy', pattern: 'column', count: 8, x: -3, spacing: 2 },
     { type: 'wave', z: 230, enemy: 'puppy', pattern: 'flank', count: 4, spacing: 2 },
@@ -57,6 +58,14 @@ describe('level schema', () => {
     expect(levelSchema.safeParse(withEvent({ type: 'gates', z: 40, left: buff, right: { op: 'divide', value: 2 } })).success).toBe(true)
   })
 
+  it.each(['left', 'centre', 'right'])('accepts_a_gate_row_with_a_single_gate_in_the_%s_lane', (lane) => {
+    expect(levelSchema.safeParse(withEvent({ type: 'gates', z: 40, [lane]: { op: 'add', value: 1 } })).success).toBe(true)
+  })
+
+  it.each(['add', 'multiply', 'fireRate', 'damage', 'multiShot', 'range'])('accepts_a_buff_block_hiding_a_%s_big_buff', (buff) => {
+    expect(levelSchema.safeParse(withEvent({ type: 'buffBlock', z: 80, lane: 'left', hp: 0.5, buff })).success).toBe(true)
+  })
+
   it.each(['bulldog', 'shieldDog'])('accepts_a_wave_of_%s', (enemy) => {
     expect(levelSchema.safeParse(withEvent({ type: 'wave', z: 80, enemy, pattern: 'flank', count: 2, spacing: 1 })).success).toBe(true)
   })
@@ -89,6 +98,16 @@ describe('level schema', () => {
     ['with a multi-shot gate other than 1', withEvent({ type: 'gates', z: 40, left: { op: 'multiShot', value: 2 }, right: { op: 'add', value: 1 } })],
     ['with a range gate other than 10', withEvent({ type: 'gates', z: 40, left: { op: 'range', value: 5 }, right: { op: 'add', value: 1 } })],
     ['with an unknown gate op', withEvent({ type: 'gates', z: 40, left: { op: 'speed', value: 1 }, right: { op: 'add', value: 1 } })],
+    ['with a gate row without a gate', withEvent({ type: 'gates', z: 40 })],
+    ['with a gate in a lane the format does not define', withEvent({ type: 'gates', z: 40, middle: { op: 'add', value: 1 } })],
+    ['with a buff block in an unknown lane', withEvent({ type: 'buffBlock', z: 80, lane: 'middle', hp: 40, buff: 'add' })],
+    ['with a buff block missing its lane', withEvent({ type: 'buffBlock', z: 80, hp: 40, buff: 'add' })],
+    ['with a buff block of 0 hp', withEvent({ type: 'buffBlock', z: 80, lane: 'left', hp: 0, buff: 'add' })],
+    ['with a buff block missing its hp', withEvent({ type: 'buffBlock', z: 80, lane: 'left', buff: 'add' })],
+    ['with a buff block hiding a subtract', withEvent({ type: 'buffBlock', z: 80, lane: 'left', hp: 40, buff: 'subtract' })],
+    ['with a buff block hiding a divide', withEvent({ type: 'buffBlock', z: 80, lane: 'left', hp: 40, buff: 'divide' })],
+    ['with a buff block that states its buff value', withEvent({ type: 'buffBlock', z: 80, lane: 'left', hp: 40, buff: 'add', value: 30 })],
+    ['with a buff block at the finish line', withEvent({ type: 'buffBlock', z: 400, lane: 'left', hp: 40, buff: 'add' })],
     ['with an unknown enemy', withEvent({ type: 'wave', z: 80, enemy: 'cat', pattern: 'line', count: 1 })],
     ['with an unknown pattern', withEvent({ type: 'wave', z: 80, enemy: 'puppy', pattern: 'circle', count: 1 })],
     ['with an empty line', withEvent({ type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 0 })],
@@ -139,10 +158,11 @@ describe('boss level schema', () => {
       'with two bosses',
       bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'dustbot' }, { type: 'boss', z: 400, boss: 'megaDustbot' }] }),
     ],
-    ['with a gate row at the arena start', withEventsBeforeTheBoss({ type: 'gates', z: 400, left: { op: 'add', value: 1 }, right: { op: 'add', value: 1 } })],
+    ['with a gate row at the arena start', withEventsBeforeTheBoss({ type: 'gates', z: 400, centre: { op: 'add', value: 1 } })],
     ['with a wave at the arena start', withEventsBeforeTheBoss({ type: 'wave', z: 400, enemy: 'puppy', pattern: 'line', count: 1 })],
     ['with a barrel at the arena start', withEventsBeforeTheBoss({ type: 'barrel', z: 400, x: 0 })],
     ['with a wall at the arena start', withEventsBeforeTheBoss({ type: 'wall', z: 400, x: 0, width: 2 })],
+    ['with a buff block at the arena start', withEventsBeforeTheBoss({ type: 'buffBlock', z: 400, lane: 'centre', hp: 40, buff: 'add' })],
     [
       'with a wave past the arena start',
       bossLevelWith({

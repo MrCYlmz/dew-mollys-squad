@@ -16,12 +16,19 @@ const gate = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('range'), value: z.literal(10) }),
 ])
 
-const gateRow = z.strictObject({
-  type: z.literal('gates'),
-  z: z.number(),
-  left: gate,
-  right: gate,
-})
+const lane = z.enum(['left', 'centre', 'right'])
+
+const gateRow = z
+  .strictObject({
+    type: z.literal('gates'),
+    z: z.number(),
+    left: gate.optional(),
+    centre: gate.optional(),
+    right: gate.optional(),
+  })
+  .refine((row) => row.left !== undefined || row.centre !== undefined || row.right !== undefined, {
+    message: 'a gate row has at least one gate',
+  })
 
 const waveBase = {
   type: z.literal('wave'),
@@ -62,6 +69,14 @@ const wall = z
     message: 'the whole wall must lie on the track',
   })
 
+const buffBlock = z.strictObject({
+  type: z.literal('buffBlock'),
+  z: z.number(),
+  lane,
+  hp: z.number().positive(),
+  buff: z.enum(['add', 'multiply', 'fireRate', 'damage', 'multiShot', 'range']),
+})
+
 const boss = z.strictObject({
   type: z.literal('boss'),
   z: z.number(),
@@ -92,7 +107,7 @@ export const levelSchema = z
     length: z.number().min(300).max(600),
     placeholder: z.literal(true).optional(),
     expectedSquadAtBoss: z.int().min(1).optional(),
-    events: z.array(z.union([gateRow, wave, barrel, wall, boss])),
+    events: z.array(z.union([gateRow, wave, barrel, wall, buffBlock, boss])),
   })
   .superRefine((level, context) => {
     const hasBoss = level.events.some((event) => event.type === 'boss')

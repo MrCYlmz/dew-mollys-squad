@@ -1,7 +1,17 @@
-import type { BossKind, EnemyKind, GateOp, Level, WaveEvent } from '../content/level'
+import type { BigBuff, BossKind, EnemyKind, Gate, GateOp, Lane, Level, WaveEvent } from '../content/level'
 import { tuning } from '../content/tuning'
 import { drawnCats, formationOffsetX, formationOffsetZ, formationRadius } from './formation'
-import { applyGate, applyWeaponBuff, gateColour, gateSideAt, type GateColour, type GateSide, type Weapon } from './gates'
+import {
+  applyGate,
+  applyWeaponBuff,
+  gateColour,
+  laneAt,
+  laneBorder,
+  laneCentreX,
+  type GateColour,
+  type SignedGate,
+  type Weapon,
+} from './gates'
 import { Pool, Recycler } from './pool'
 import { createRng } from './rng'
 
@@ -56,6 +66,21 @@ export interface WallState {
   readonly width: number
 }
 
+export interface BuffBlockState {
+  readonly lane: Lane
+  // The front edge, facing the squad.
+  readonly z: number
+  readonly hp: number
+  readonly buff: BigBuff
+}
+
+// A big buff uncovered by a broken buff block, standing where the block's front edge was.
+export interface BigBuffState {
+  readonly lane: Lane
+  readonly z: number
+  readonly buff: BigBuff
+}
+
 export interface BossState {
   readonly kind: BossKind
   readonly x: number
@@ -88,11 +113,14 @@ export interface GateState {
   readonly colour: GateColour
 }
 
+// An empty lane holds null.
 export interface GateRowState {
   readonly z: number
-  readonly left: GateState
-  readonly right: GateState
-  readonly taken: GateSide | null
+  readonly left: GateState | null
+  readonly centre: GateState | null
+  readonly right: GateState | null
+  // Stays null when the squad passes the row in an empty lane.
+  readonly taken: Lane | null
 }
 
 export interface RunState {
@@ -107,6 +135,8 @@ export interface RunState {
   readonly enemies: readonly EnemyState[]
   readonly barrels: readonly BarrelState[]
   readonly walls: readonly WallState[]
+  readonly buffBlocks: readonly BuffBlockState[]
+  readonly bigBuffs: readonly BigBuffState[]
   readonly yarnBalls: readonly YarnBallState[]
   readonly gateRows: readonly GateRowState[]
   // Null until the squad reaches the boss arena, and in a level without a boss.
@@ -135,9 +165,21 @@ export interface CatsLostEvent {
 
 export interface GateTakenEvent {
   type: 'gateTaken'
-  side: GateSide
+  lane: Lane
   op: GateOp
   value: number
+  squadCount: number
+}
+
+export interface BuffBlockBrokenEvent {
+  type: 'buffBlockBroken'
+  lane: Lane
+  buff: BigBuff
+}
+
+export interface BigBuffCollectedEvent {
+  type: 'bigBuffCollected'
+  buff: BigBuff
   squadCount: number
 }
 
@@ -170,6 +212,8 @@ export type GameEvent =
   | BarrelDestroyedEvent
   | CatsLostEvent
   | GateTakenEvent
+  | BuffBlockBrokenEvent
+  | BigBuffCollectedEvent
   | BossEnteredEvent
   | BossHitEvent
   | BossDefeatedEvent
@@ -230,8 +274,25 @@ interface Boss {
   previousZ: number
   hp: number
   fullHp: number
-  // Time left until the next dust ball, for a boss that throws them.
-  throwCooldown: number
+  // Ticks since the boss entered, counting its entry tick as 0, for a boss that throws dust balls.
+  ticksInArena: number
+}
+
+interface BuffBlock {
+  lane: Lane
+  z: number
+  hp: number
+  buff: BigBuff
+  // Each block costs cats once.
+  touched: boolean
+}
+
+interface BigBuffPickup {
+  lane: Lane
+  z: number
+  buff: BigBuff
+  // Set once it has reached the squad's centre without being collected, so it is lost.
+  passed: boolean
 }
 
 interface DustBall {
@@ -261,18 +322,17 @@ interface GateCell {
   op: GateOp
   value: number
   colour: GateColour
-  // Hits taken towards the next step.
-  hits: number
 }
 
 interface GateRow {
   z: number
-  left: GateCell
-  right: GateCell
-  taken: GateSide | null
+  left: GateCell | null
+  centre: GateCell | null
+  right: GateCell | null
+  taken: Lane | null
 }
 
-type Target = 'none' | 'gate' | 'wall' | 'enemy' | 'barrel' | 'boss'
+type Target = 'none' | 'wall' | 'buffBlock' | 'enemy' | 'barrel'
 
 const dt = 1 / tuning.tickRate
 const halfWidth = tuning.track.halfWidth
@@ -288,6 +348,8 @@ const dustBallContactReach = catRadius + tuning.hitRadius.dustBall
 const bossHitEvent: BossHitEvent = { type: 'bossHit' }
 const dustBallThrownEvent: DustBallThrownEvent = { type: 'dustBallThrown' }
 const dustBallHitEvent: DustBallHitEvent = { type: 'dustBallHit' }
+// The gate a collected big buff acts as, reused for every collection.
+const bigBuffGate: SignedGate = { op: 'add', value: 0 }
 
 // Boss HP is the expected squad at boss's damage per second at the base weapon values, times the boss HP time.
 function bossHp(expectedSquadAtBoss: number): number {
@@ -298,9 +360,9 @@ function clampToTrack(x: number): number {
   return Math.min(Math.max(x, -halfWidth), halfWidth)
 }
 
-function gateCell(op: GateOp, unsignedValue: number): GateCell {
-  const value = op === 'subtract' ? -unsignedValue : unsignedValue
-  return { op, value, colour: gateColour({ op, value }), hits: 0 }
+function gateCell(gate: Gate | undefined): GateCell | null {
+  if (gate === undefined) return null
+  return { op: gate.op, value: gate.op === 'subtract' ? -gate.value : gate.value, colour: gateColour(gate.op) }
 }
 
 // Share of the path from (x, z) by (dx, dz) at which a point first comes within reach of the centre, or Infinity if it never does.
@@ -351,6 +413,8 @@ class RunSimulation implements Run {
   private readonly enemies: Pool<Enemy>
   private readonly barrels: Pool<Barrel>
   private readonly walls: Pool<Wall>
+  private readonly buffBlocks: Pool<BuffBlock>
+  private readonly bigBuffs: Pool<BigBuffPickup>
   private readonly yarnBalls: Pool<YarnBall>
   private readonly dustBalls: Pool<DustBall>
   // Created with the run and shown in the state once it enters the arena.
@@ -371,11 +435,20 @@ class RunSimulation implements Run {
   private readonly catsLostEvents = new Recycler<CatsLostEvent>(() => ({ type: 'catsLost', count: 0 }))
   private readonly gateTakenEvents = new Recycler<GateTakenEvent>(() => ({
     type: 'gateTaken',
-    side: 'left',
+    lane: 'left',
     op: 'add',
     value: 0,
     squadCount: 0,
   }))
+  private readonly buffBlockBrokenEvents = new Recycler<BuffBlockBrokenEvent>(() => ({ type: 'buffBlockBroken', lane: 'left', buff: 'add' }))
+  private readonly bigBuffCollectedEvents = new Recycler<BigBuffCollectedEvent>(() => ({
+    type: 'bigBuffCollected',
+    buff: 'add',
+    squadCount: 0,
+  }))
+  // A run has at most one boss, so it enters and is defeated at most once.
+  private readonly bossEnteredEvent: BossEnteredEvent = { type: 'bossEntered', boss: 'dustbot' }
+  private readonly bossDefeatedEvent: BossDefeatedEvent = { type: 'bossDefeated', boss: 'dustbot' }
   private readonly random: () => number
   // Time left until each cat's next shot.
   private readonly catCooldowns = new Float64Array(tuning.squad.maxCount)
@@ -385,7 +458,7 @@ class RunSimulation implements Run {
   private nextWave = 0
   private nextGateRow = 0
 
-  readonly state: RunState & { status: RunStatus; lossCause: LossCause | null; cats: readonly CatState[]; boss: BossState | null }
+  readonly state: RunState & { status: RunStatus; lossCause: LossCause | null; cats: readonly CatState[]; boss: Boss | null }
 
   constructor(level: Level, seed: number) {
     this.random = createRng(seed)
@@ -425,6 +498,27 @@ class RunSimulation implements Run {
         wall.touched = false
       },
     )
+    const buffBlockCount = level.events.filter((event) => event.type === 'buffBlock').length
+    this.buffBlocks = new Pool<BuffBlock>(
+      buffBlockCount,
+      () => ({ lane: 'left', z: 0, hp: 0, buff: 'add', touched: false }),
+      (buffBlock) => {
+        buffBlock.lane = 'left'
+        buffBlock.z = buffBlock.hp = 0
+        buffBlock.buff = 'add'
+        buffBlock.touched = false
+      },
+    )
+    this.bigBuffs = new Pool<BigBuffPickup>(
+      buffBlockCount,
+      () => ({ lane: 'left', z: 0, buff: 'add', passed: false }),
+      (bigBuff) => {
+        bigBuff.lane = 'left'
+        bigBuff.z = 0
+        bigBuff.buff = 'add'
+        bigBuff.passed = false
+      },
+    )
     this.dustBalls = new Pool<DustBall>(
       tuning.limits.dustBalls,
       () => ({ x: 0, z: 0, previousX: 0, previousZ: 0, directionX: 0, directionZ: 0 }),
@@ -437,12 +531,7 @@ class RunSimulation implements Run {
     for (const event of level.events) {
       switch (event.type) {
         case 'gates':
-          this.gateRows.push({
-            z: event.z,
-            left: gateCell(event.left.op, event.left.value),
-            right: gateCell(event.right.op, event.right.value),
-            taken: null,
-          })
+          this.gateRows.push({ z: event.z, left: gateCell(event.left), centre: gateCell(event.centre), right: gateCell(event.right), taken: null })
           break
         case 'wave':
           this.waves.push(event)
@@ -453,10 +542,13 @@ class RunSimulation implements Run {
         case 'wall':
           this.placeWall(event.x, event.z, event.width)
           break
+        case 'buffBlock':
+          this.placeBuffBlock(event.lane, event.z, event.hp, event.buff)
+          break
         case 'boss': {
-          // The level schema test requires expectedSquadAtBoss in every level with a boss.
-          const hp = bossHp(level.expectedSquadAtBoss ?? 0)
-          this.boss = { kind: event.boss, x: 0, z: 0, previousX: 0, previousZ: 0, hp, fullHp: hp, throwCooldown: 0 }
+          if (level.expectedSquadAtBoss === undefined) throw new Error(`Level ${level.id} has a boss but no expectedSquadAtBoss`)
+          const hp = bossHp(level.expectedSquadAtBoss)
+          this.boss = { kind: event.boss, x: 0, z: 0, previousX: 0, previousZ: 0, hp, fullHp: hp, ticksInArena: 0 }
           break
         }
       }
@@ -471,6 +563,8 @@ class RunSimulation implements Run {
       enemies: this.enemies.active,
       barrels: this.barrels.active,
       walls: this.walls.active,
+      buffBlocks: this.buffBlocks.active,
+      bigBuffs: this.bigBuffs.active,
       yarnBalls: this.yarnBalls.active,
       gateRows: this.gateRows,
       boss: null,
@@ -485,6 +579,8 @@ class RunSimulation implements Run {
     this.barrelDestroyedEvents.reset()
     this.catsLostEvents.reset()
     this.gateTakenEvents.reset()
+    this.buffBlockBrokenEvents.reset()
+    this.bigBuffCollectedEvents.reset()
     if (this.state.status !== 'running') return this.events
 
     this.moveSquad(input)
@@ -495,6 +591,7 @@ class RunSimulation implements Run {
     this.moveDustBalls()
     if (this.resolveCollisions()) return this.events
     if (this.passGates()) return this.events
+    this.reachBigBuffs()
     this.moveEnemies()
     this.moveBoss()
     this.removeObjectsBehind()
@@ -502,7 +599,6 @@ class RunSimulation implements Run {
     return this.events
   }
 
-  // The pools hold one place per barrel and wall of the level.
   private placeBarrel(x: number, z: number): void {
     const barrel = this.barrels.acquire()
     if (barrel === undefined) return
@@ -517,6 +613,15 @@ class RunSimulation implements Run {
     wall.x = x
     wall.z = z
     wall.width = width
+  }
+
+  private placeBuffBlock(lane: Lane, z: number, hp: number, buff: BigBuff): void {
+    const buffBlock = this.buffBlocks.acquire()
+    if (buffBlock === undefined) return
+    buffBlock.lane = lane
+    buffBlock.z = z
+    buffBlock.hp = hp * this.enemyHpFactor
+    buffBlock.buff = buff
   }
 
   private moveSquad(input: SteerInput): void {
@@ -556,9 +661,10 @@ class RunSimulation implements Run {
     if (boss === null || this.state.boss !== null || this.squad.z < this.state.level.length) return
     boss.x = boss.previousX = 0
     boss.z = boss.previousZ = this.state.level.length + tuning.boss.startDistance
-    boss.throwCooldown = tuning.dustBall.interval
+    boss.ticksInArena = 0
     this.state.boss = boss
-    this.events.push({ type: 'bossEntered', boss: boss.kind })
+    this.bossEnteredEvent.boss = boss.kind
+    this.events.push(this.bossEnteredEvent)
   }
 
   // Rounds half up.
@@ -676,10 +782,11 @@ class RunSimulation implements Run {
       if (this.hitFirstTarget(yarnBalls[i]) || yarnBalls[i].distance >= this.weapon.range) this.yarnBalls.release(i)
       if (this.state.status === 'won') return true
     }
-    return this.resolveContacts() || this.resolveWalls() || this.resolveDustBalls() || this.resolveBossContact()
+    return this.resolveContacts() || this.resolveWalls() || this.resolveBuffBlocks() || this.resolveDustBalls() || this.resolveBossContact()
   }
 
-  // A yarn ball sweeps from its previous to its current place; it hits whichever enemy, barrel, wall or gate lies first along that path.
+  // A yarn ball sweeps from its previous to its current place; it hits whichever enemy, barrel, wall, buff block or boss lies first
+  // along that path, and flies through gates.
   private hitFirstTarget(yarnBall: YarnBall): boolean {
     const startX = yarnBall.previousX
     const startZ = yarnBall.previousZ
@@ -688,22 +795,6 @@ class RunSimulation implements Run {
     let hitShare = Infinity
     let target: Target = 'none'
     let hitIndex = -1
-    let hitGate: GateCell | null = null
-
-    // Rows the squad has not reached yet, nearest first; a fanned yarn ball that passed one beyond the edge may come back on track before the next.
-    for (let i = this.nextGateRow; i < this.gateRows.length && this.gateRows[i].z <= yarnBall.z; i++) {
-      const row = this.gateRows[i]
-      if (row.z <= startZ) continue
-      const share = (row.z - startZ) / dz
-      const crossingX = startX + share * dx
-      // A gate spans its half of the track; yarn balls beyond the edge pass it.
-      if (Math.abs(crossingX) <= halfWidth) {
-        hitShare = share
-        target = 'gate'
-        hitGate = row[gateSideAt(crossingX)]
-        break
-      }
-    }
 
     const walls = this.walls.active
     for (let i = 0; i < walls.length; i++) {
@@ -713,6 +804,27 @@ class RunSimulation implements Run {
       if (share < hitShare) {
         hitShare = share
         target = 'wall'
+      }
+    }
+
+    const buffBlocks = this.buffBlocks.active
+    for (let i = 0; i < buffBlocks.length; i++) {
+      const buffBlock = buffBlocks[i]
+      const centreX = laneCentreX(buffBlock.lane)
+      const share = sweepRectangle(
+        startX,
+        startZ,
+        dx,
+        dz,
+        centreX - laneBorder,
+        centreX + laneBorder,
+        buffBlock.z,
+        buffBlock.z + tuning.buffBlock.depth,
+      )
+      if (share < hitShare) {
+        hitShare = share
+        target = 'buffBlock'
+        hitIndex = i
       }
     }
 
@@ -737,17 +849,20 @@ class RunSimulation implements Run {
       }
     }
 
+    const damage = this.weapon.damage * yarnBall.cats
     const boss = this.state.boss
-    if (boss !== null) {
-      const share = sweepCircle(startX, startZ, dx, dz, boss.x, boss.z, tuning.hitRadius.yarnBall + tuning.hitRadius[boss.kind])
-      if (share < hitShare) target = 'boss'
+    if (boss !== null && sweepCircle(startX, startZ, dx, dz, boss.x, boss.z, tuning.hitRadius.yarnBall + tuning.hitRadius[boss.kind]) < hitShare) {
+      this.damageBoss(boss, damage)
+      return true
     }
 
-    const damage = this.weapon.damage * yarnBall.cats
     switch (target) {
       case 'none':
         return false
       case 'wall':
+        return true
+      case 'buffBlock':
+        this.damageBuffBlock(hitIndex, damage)
         return true
       case 'enemy':
         this.damageEnemy(hitIndex, damage, 'shot')
@@ -758,19 +873,27 @@ class RunSimulation implements Run {
         if (barrel.hp <= 0) this.destroyBarrel(hitIndex)
         return true
       }
-      case 'boss':
-        if (this.boss !== null) this.damageBoss(this.boss, damage)
-        return true
-      case 'gate':
-        if (hitGate !== null && (hitGate.op === 'add' || hitGate.op === 'subtract')) {
-          hitGate.hits += yarnBall.cats
-          const steps = Math.floor(hitGate.hits / tuning.gate.hitsPerStep)
-          hitGate.hits -= steps * tuning.gate.hitsPerStep
-          hitGate.value += steps
-          hitGate.colour = gateColour(hitGate)
-        }
-        return true
     }
+  }
+
+  // A broken block uncovers its big buff where its front edge was.
+  private damageBuffBlock(index: number, damage: number): void {
+    const buffBlock = this.buffBlocks.active[index]
+    buffBlock.hp -= damage
+    if (buffBlock.hp > 0) return
+    const bigBuff = this.bigBuffs.acquire()
+    if (bigBuff !== undefined) {
+      bigBuff.lane = buffBlock.lane
+      bigBuff.z = buffBlock.z
+      bigBuff.buff = buffBlock.buff
+      // Uncovered only after it reached the squad's centre in an earlier tick, so it is lost.
+      bigBuff.passed = this.squad.previousZ >= buffBlock.z
+    }
+    const event = this.buffBlockBrokenEvents.next()
+    event.lane = buffBlock.lane
+    event.buff = buffBlock.buff
+    this.events.push(event)
+    this.buffBlocks.release(index)
   }
 
   // The shield takes damage first; what it cannot take goes on to the body.
@@ -788,7 +911,8 @@ class RunSimulation implements Run {
     boss.hp -= damage
     this.events.push(bossHitEvent)
     if (boss.hp > 0) return
-    this.events.push({ type: 'bossDefeated', boss: boss.kind })
+    this.bossDefeatedEvent.boss = boss.kind
+    this.events.push(this.bossDefeatedEvent)
     this.state.status = 'won'
   }
 
@@ -862,18 +986,30 @@ class RunSimulation implements Run {
   // Returns true when the run is lost.
   private resolveWalls(): boolean {
     for (const wall of this.walls.active) {
-      if (wall.touched || !this.catTouchesWall(wall)) continue
+      const halfWallWidth = wall.width / 2
+      if (wall.touched || !this.catTouchesRectangle(wall.x - halfWallWidth, wall.x + halfWallWidth, wall.z, wall.z + tuning.wall.depth)) continue
       wall.touched = true
       if (this.loseCats(tuning.wall.catLoss)) return true
     }
     return false
   }
 
-  private catTouchesWall(wall: Wall): boolean {
-    const halfWallWidth = wall.width / 2
+  // Returns true when the run is lost.
+  private resolveBuffBlocks(): boolean {
+    for (const buffBlock of this.buffBlocks.active) {
+      if (buffBlock.touched) continue
+      const centreX = laneCentreX(buffBlock.lane)
+      if (!this.catTouchesRectangle(centreX - laneBorder, centreX + laneBorder, buffBlock.z, buffBlock.z + tuning.buffBlock.depth)) continue
+      buffBlock.touched = true
+      if (this.loseCats(tuning.buffBlock.catLoss)) return true
+    }
+    return false
+  }
+
+  private catTouchesRectangle(minX: number, maxX: number, minZ: number, maxZ: number): boolean {
     for (const cat of this.state.cats) {
-      const dx = cat.x - Math.min(Math.max(cat.x, wall.x - halfWallWidth), wall.x + halfWallWidth)
-      const dz = cat.z - Math.min(Math.max(cat.z, wall.z), wall.z + tuning.wall.depth)
+      const dx = cat.x - Math.min(Math.max(cat.x, minX), maxX)
+      const dz = cat.z - Math.min(Math.max(cat.z, minZ), maxZ)
       if (dx * dx + dz * dz <= catRadius * catRadius) return true
     }
     return false
@@ -898,30 +1034,54 @@ class RunSimulation implements Run {
   // Returns true when the run is lost.
   private passGates(): boolean {
     const squad = this.squad
-    let row = this.gateRows[this.nextGateRow]
-    while (row !== undefined && squad.z >= row.z) {
-      const side = gateSideAt(squad.x)
-      const gate = row[side]
+    for (let row = this.gateRows[this.nextGateRow]; row !== undefined && squad.z >= row.z; row = this.gateRows[this.nextGateRow]) {
+      this.nextGateRow++
+      const lane = laneAt(squad.x)
+      const gate = row[lane]
+      if (gate === null) continue
+      row.taken = lane
       const countBefore = squad.count
       squad.count = applyGate(squad.count, gate)
       applyWeaponBuff(this.weapon, gate)
-      row.taken = side
       const event = this.gateTakenEvents.next()
-      event.side = side
+      event.lane = lane
       event.op = gate.op
       event.value = gate.value
       event.squadCount = squad.count
       this.events.push(event)
       if (squad.count < countBefore) this.pushCatsLost(countBefore - squad.count)
       this.placeCats()
-      this.nextGateRow++
       if (squad.count === 0) {
         this.lose('outOfCats')
         return true
       }
-      row = this.gateRows[this.nextGateRow]
     }
     return false
+  }
+
+  // A big buff reaching the squad's centre is collected when the squad's centre is in its lane, and lost otherwise.
+  // Big buffs only add, so collecting one never loses the run.
+  private reachBigBuffs(): void {
+    const squad = this.squad
+    const bigBuffs = this.bigBuffs.active
+    for (let i = bigBuffs.length - 1; i >= 0; i--) {
+      const bigBuff = bigBuffs[i]
+      if (bigBuff.passed || squad.z < bigBuff.z) continue
+      if (laneAt(squad.x) !== bigBuff.lane) {
+        bigBuff.passed = true
+        continue
+      }
+      bigBuffGate.op = bigBuff.buff
+      bigBuffGate.value = tuning.bigBuff[bigBuff.buff]
+      squad.count = applyGate(squad.count, bigBuffGate)
+      applyWeaponBuff(this.weapon, bigBuffGate)
+      const event = this.bigBuffCollectedEvents.next()
+      event.buff = bigBuff.buff
+      event.squadCount = squad.count
+      this.events.push(event)
+      this.placeCats()
+      this.bigBuffs.release(i)
+    }
   }
 
   private pushEnemyKilled(cause: EnemyKilledEvent['cause'], enemy: Enemy): void {
@@ -964,8 +1124,8 @@ class RunSimulation implements Run {
   }
 
   private moveBoss(): void {
-    const boss = this.boss
-    if (boss === null || this.state.boss === null) return
+    const boss = this.state.boss
+    if (boss === null) return
     boss.previousX = boss.x
     boss.previousZ = boss.z
     // The boss reaches the squad before it could reach the squad's centre, so the distance is never 0.
@@ -975,10 +1135,9 @@ class RunSimulation implements Run {
     boss.x += toSquadX * walkStep
     boss.z += toSquadZ * walkStep
     if (boss.kind !== 'megaDustbot') return
-    boss.throwCooldown -= dt
-    if (boss.throwCooldown > 0) return
-    boss.throwCooldown += tuning.dustBall.interval
-    this.throwDustBall(boss)
+    const throwTicks = Math.round(tuning.dustBall.interval * tuning.tickRate)
+    if (boss.ticksInArena > 0 && boss.ticksInArena % throwTicks === 0) this.throwDustBall(boss)
+    boss.ticksInArena++
   }
 
   private throwDustBall(boss: Boss): void {
@@ -1007,6 +1166,14 @@ class RunSimulation implements Run {
     const walls = this.walls.active
     for (let i = walls.length - 1; i >= 0; i--) {
       if (walls[i].z + tuning.wall.depth < lastCatZ - catRadius) this.walls.release(i)
+    }
+    const buffBlocks = this.buffBlocks.active
+    for (let i = buffBlocks.length - 1; i >= 0; i--) {
+      if (buffBlocks[i].z + tuning.buffBlock.depth < lastCatZ - catRadius) this.buffBlocks.release(i)
+    }
+    const bigBuffs = this.bigBuffs.active
+    for (let i = bigBuffs.length - 1; i >= 0; i--) {
+      if (bigBuffs[i].z < lastCatZ) this.bigBuffs.release(i)
     }
   }
 

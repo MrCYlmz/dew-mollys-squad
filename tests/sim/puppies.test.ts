@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type GameEvent } from '../../src/sim/run'
 import { tuning } from '../../src/content/tuning'
-import { doublingRows, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
+import { doublingRows, everyLane, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type WaveEvent = Extract<Level['events'][number], { type: 'wave' }>
 type Position = { x: number; z: number }
@@ -184,9 +184,9 @@ describe('puppy contact', () => {
     const double = { op: 'multiply', value: 2 } as const
     const run = createRun({
       level: levelOf([
-        { type: 'gates', z: 10, left: double, right: double },
-        { type: 'gates', z: 20, left: double, right: double },
-        { type: 'gates', z: 30, left: double, right: double },
+        { type: 'gates', z: 10, ...everyLane(double) },
+        { type: 'gates', z: 20, ...everyLane(double) },
+        { type: 'gates', z: 30, ...everyLane(double) },
         { type: 'wave', z: 100, enemy: 'puppy', pattern: 'column', count: 80, x: -2.5, spacing: 0.25 },
       ]),
       seed: 1,
@@ -263,7 +263,7 @@ describe('past the last cat', () => {
     const run = createRun({
       level: levelOf([
         ...doublingRows(6),
-        { type: 'gates', z: 80, left: { op: 'divide', value: 2 }, right: { op: 'divide', value: 2 } },
+        { type: 'gates', z: 80, ...everyLane({ op: 'divide', value: 2 }) },
         { type: 'wave', z: 150, enemy: 'puppy', pattern: 'block', columns: 5, rows: 20, x: 0, spacing: 0.5 },
       ]),
       seed: 1,

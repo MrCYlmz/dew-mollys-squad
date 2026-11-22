@@ -50,7 +50,8 @@ export class Game {
     canvas: HTMLCanvasElement,
     gameElement: HTMLElement,
   ) {
-    this.renderer = new GameRenderer(canvas)
+    // Until the settings screen offers the choice, the game draws at high graphics quality.
+    this.renderer = new GameRenderer(canvas, 'high')
     this.input = createInput(gameElement, () => this.pause())
     this.stopWatchingFocus = watchFocus(() => this.pause())
     this.resizeObserver = new ResizeObserver(() => this.resize(gameElement))
@@ -155,6 +156,8 @@ export class Game {
       for (const event of this.run.step(this.steerInput)) {
         if (event.type === 'catsLost') this.renderer.scatterCats(event.count)
         else if (event.type === 'bossHit') this.renderer.flashBoss()
+        else if (event.type === 'enemyKilled') this.renderer.showKill(event.x, event.z)
+        else if (event.type === 'barrelDestroyed') this.renderer.showBarrelSplash(event.x, event.z)
       }
       if (state.status !== 'running') break
     }

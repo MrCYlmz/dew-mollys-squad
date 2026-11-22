@@ -6,6 +6,8 @@ export type WeaponBuffOp = 'fireRate' | 'damage' | 'multiShot' | 'range'
 
 export type EnemyKind = 'puppy' | 'chihuahua' | 'bulldog' | 'shieldDog'
 
+export type BossKind = 'dustbot' | 'megaDustbot'
+
 export interface Gate {
   op: GateOp
   // Unsigned in the level file; a subtract gate of value 15 is shown as −15. A fire rate gate's value is in per cent.
@@ -68,7 +70,14 @@ export interface WallEvent {
   width: number
 }
 
-export type LevelEvent = GateRowEvent | WaveEvent | BarrelEvent | WallEvent
+export interface BossEvent {
+  type: 'boss'
+  // The arena start, equal to the level's length.
+  z: number
+  boss: BossKind
+}
+
+export type LevelEvent = GateRowEvent | WaveEvent | BarrelEvent | WallEvent | BossEvent
 
 export interface Level {
   id: string
@@ -76,5 +85,7 @@ export interface Level {
   level: number
   length: number
   placeholder?: true
+  // Required in a level with a boss, whose HP it sets, and absent otherwise.
+  expectedSquadAtBoss?: number
   events: LevelEvent[]
 }

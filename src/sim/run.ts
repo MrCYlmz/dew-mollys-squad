@@ -1,4 +1,4 @@
-import type { EnemyKind, GateOp, Level, WaveEvent } from '../content/level'
+import type { BossKind, EnemyKind, GateOp, Level, WaveEvent } from '../content/level'
 import { tuning } from '../content/tuning'
 import { drawnCats, formationOffsetX, formationOffsetZ, formationRadius } from './formation'
 import { applyGate, applyWeaponBuff, gateColour, gateSideAt, type GateColour, type GateSide, type Weapon } from './gates'
@@ -54,6 +54,23 @@ export interface WallState {
   readonly width: number
 }
 
+export interface BossState {
+  readonly kind: BossKind
+  readonly x: number
+  readonly z: number
+  readonly previousX: number
+  readonly previousZ: number
+  readonly hp: number
+  readonly fullHp: number
+}
+
+export interface DustBallState {
+  readonly x: number
+  readonly z: number
+  readonly previousX: number
+  readonly previousZ: number
+}
+
 export type WeaponState = Readonly<Weapon>
 
 export interface YarnBallState {
@@ -88,6 +105,9 @@ export interface RunState {
   readonly walls: readonly WallState[]
   readonly yarnBalls: readonly YarnBallState[]
   readonly gateRows: readonly GateRowState[]
+  // Null until the squad reaches the boss arena, and in a level without a boss.
+  readonly boss: BossState | null
+  readonly dustBalls: readonly DustBallState[]
 }
 
 export interface EnemyKilledEvent {
@@ -117,7 +137,40 @@ export interface GateTakenEvent {
   squadCount: number
 }
 
-export type GameEvent = EnemyKilledEvent | BarrelDestroyedEvent | CatsLostEvent | GateTakenEvent
+export interface BossEnteredEvent {
+  type: 'bossEntered'
+  boss: BossKind
+}
+
+// One per yarn ball that hits the boss.
+export interface BossHitEvent {
+  type: 'bossHit'
+}
+
+export interface BossDefeatedEvent {
+  type: 'bossDefeated'
+  boss: BossKind
+}
+
+export interface DustBallThrownEvent {
+  type: 'dustBallThrown'
+}
+
+// The cats it costs come as a catsLost event in the same tick.
+export interface DustBallHitEvent {
+  type: 'dustBallHit'
+}
+
+export type GameEvent =
+  | EnemyKilledEvent
+  | BarrelDestroyedEvent
+  | CatsLostEvent
+  | GateTakenEvent
+  | BossEnteredEvent
+  | BossHitEvent
+  | BossDefeatedEvent
+  | DustBallThrownEvent
+  | DustBallHitEvent
 
 export interface Run {
   readonly state: RunState
@@ -165,6 +218,28 @@ interface Wall {
   touched: boolean
 }
 
+interface Boss {
+  kind: BossKind
+  x: number
+  z: number
+  previousX: number
+  previousZ: number
+  hp: number
+  fullHp: number
+  // Time left until the next dust ball, for a boss that throws them.
+  throwCooldown: number
+}
+
+interface DustBall {
+  x: number
+  z: number
+  previousX: number
+  previousZ: number
+  // The unit direction of flight, fixed when thrown.
+  directionX: number
+  directionZ: number
+}
+
 interface YarnBall {
   x: number
   z: number
@@ -193,7 +268,7 @@ interface GateRow {
   taken: GateSide | null
 }
 
-type Target = 'none' | 'gate' | 'wall' | 'enemy' | 'barrel'
+type Target = 'none' | 'gate' | 'wall' | 'enemy' | 'barrel' | 'boss'
 
 const dt = 1 / tuning.tickRate
 const halfWidth = tuning.track.halfWidth
@@ -204,6 +279,16 @@ const multiShotSpread = (tuning.cat.multiShotSpread * Math.PI) / 180
 const barrelShotReach = tuning.hitRadius.yarnBall + tuning.hitRadius.barrel
 const barrelContactReach = tuning.hitRadius.cat + tuning.hitRadius.barrel
 const catRadius = tuning.hitRadius.cat
+const dustBallStep = tuning.dustBall.speed * dt
+const dustBallContactReach = catRadius + tuning.hitRadius.dustBall
+const bossHitEvent: BossHitEvent = { type: 'bossHit' }
+const dustBallThrownEvent: DustBallThrownEvent = { type: 'dustBallThrown' }
+const dustBallHitEvent: DustBallHitEvent = { type: 'dustBallHit' }
+
+// Boss HP is the expected squad at boss's damage per second at the base weapon values, times the boss HP time.
+function bossHp(expectedSquadAtBoss: number): number {
+  return expectedSquadAtBoss * tuning.cat.fireRate * tuning.cat.damage * tuning.cat.yarnBallsPerShot * tuning.boss.hpTime
+}
 
 function clampToTrack(x: number): number {
   return Math.min(Math.max(x, -halfWidth), halfWidth)
@@ -263,6 +348,9 @@ class RunSimulation implements Run {
   private readonly barrels: Pool<Barrel>
   private readonly walls: Pool<Wall>
   private readonly yarnBalls: Pool<YarnBall>
+  private readonly dustBalls: Pool<DustBall>
+  // Created with the run and shown in the state once it enters the arena.
+  private readonly boss: Boss | null = null
   private readonly gateRows: GateRow[]
   private readonly waves: WaveEvent[]
   private readonly enemyHpFactor: number
@@ -293,7 +381,7 @@ class RunSimulation implements Run {
   private nextWave = 0
   private nextGateRow = 0
 
-  readonly state: RunState & { status: RunStatus; cats: readonly CatState[] }
+  readonly state: RunState & { status: RunStatus; cats: readonly CatState[]; boss: BossState | null }
 
   constructor(level: Level, seed: number) {
     this.random = createRng(seed)
@@ -333,6 +421,13 @@ class RunSimulation implements Run {
         wall.touched = false
       },
     )
+    this.dustBalls = new Pool<DustBall>(
+      tuning.limits.dustBalls,
+      () => ({ x: 0, z: 0, previousX: 0, previousZ: 0, directionX: 0, directionZ: 0 }),
+      (dustBall) => {
+        dustBall.x = dustBall.z = dustBall.previousX = dustBall.previousZ = dustBall.directionX = dustBall.directionZ = 0
+      },
+    )
     this.gateRows = []
     this.waves = []
     for (const event of level.events) {
@@ -354,6 +449,12 @@ class RunSimulation implements Run {
         case 'wall':
           this.placeWall(event.x, event.z, event.width)
           break
+        case 'boss': {
+          // The level schema test requires expectedSquadAtBoss in every level with a boss.
+          const hp = bossHp(level.expectedSquadAtBoss ?? 0)
+          this.boss = { kind: event.boss, x: 0, z: 0, previousX: 0, previousZ: 0, hp, fullHp: hp, throwCooldown: 0 }
+          break
+        }
       }
     }
     this.state = {
@@ -367,6 +468,8 @@ class RunSimulation implements Run {
       walls: this.walls.active,
       yarnBalls: this.yarnBalls.active,
       gateRows: this.gateRows,
+      boss: null,
+      dustBalls: this.dustBalls.active,
     }
     this.placeCats()
   }
@@ -381,13 +484,16 @@ class RunSimulation implements Run {
 
     this.moveSquad(input)
     this.spawnWaves()
+    this.enterBoss()
     this.shoot()
     this.moveYarnBalls()
+    this.moveDustBalls()
     if (this.resolveCollisions()) return this.events
     if (this.passGates()) return this.events
     this.moveEnemies()
-    this.removeBarrelsAndWallsBehind()
-    if (this.squad.z >= this.state.level.length) this.state.status = 'won'
+    this.moveBoss()
+    this.removeObjectsBehind()
+    if (this.boss === null && this.squad.z >= this.state.level.length) this.state.status = 'won'
     return this.events
   }
 
@@ -418,6 +524,8 @@ class RunSimulation implements Run {
     squad.previousZ = squad.z
     squad.x += (squad.steeringPoint - squad.x) * followFactor
     squad.z += tuning.squad.forwardSpeed * dt
+    // In a boss level the squad stops at the arena start.
+    if (this.boss !== null) squad.z = Math.min(squad.z, this.state.level.length)
     this.placeCats()
   }
 
@@ -436,6 +544,16 @@ class RunSimulation implements Run {
       this.spawnWave(this.waves[this.nextWave])
       this.nextWave++
     }
+  }
+
+  private enterBoss(): void {
+    const boss = this.boss
+    if (boss === null || this.state.boss !== null || this.squad.z < this.state.level.length) return
+    boss.x = boss.previousX = 0
+    boss.z = boss.previousZ = this.state.level.length + tuning.boss.startDistance
+    boss.throwCooldown = tuning.dustBall.interval
+    this.state.boss = boss
+    this.events.push({ type: 'bossEntered', boss: boss.kind })
   }
 
   // Rounds half up.
@@ -537,13 +655,23 @@ class RunSimulation implements Run {
     }
   }
 
-  // Returns true when the run is lost.
+  private moveDustBalls(): void {
+    for (const dustBall of this.dustBalls.active) {
+      dustBall.previousX = dustBall.x
+      dustBall.previousZ = dustBall.z
+      dustBall.x += dustBall.directionX * dustBallStep
+      dustBall.z += dustBall.directionZ * dustBallStep
+    }
+  }
+
+  // Returns true when the run is won or lost. Yarn ball hits come first, so a yarn ball that defeats the boss wins over any contact in the same tick.
   private resolveCollisions(): boolean {
     const yarnBalls = this.yarnBalls.active
     for (let i = yarnBalls.length - 1; i >= 0; i--) {
       if (this.hitFirstTarget(yarnBalls[i]) || yarnBalls[i].distance >= this.weapon.range) this.yarnBalls.release(i)
+      if (this.state.status === 'won') return true
     }
-    return this.resolveContacts() || this.resolveWalls()
+    return this.resolveContacts() || this.resolveWalls() || this.resolveDustBalls() || this.resolveBossContact()
   }
 
   // A yarn ball sweeps from its previous to its current place; it hits whichever enemy, barrel, wall or gate lies first along that path.
@@ -604,6 +732,12 @@ class RunSimulation implements Run {
       }
     }
 
+    const boss = this.state.boss
+    if (boss !== null) {
+      const share = sweepCircle(startX, startZ, dx, dz, boss.x, boss.z, tuning.hitRadius.yarnBall + tuning.hitRadius[boss.kind])
+      if (share < hitShare) target = 'boss'
+    }
+
     const damage = this.weapon.damage * yarnBall.cats
     switch (target) {
       case 'none':
@@ -619,6 +753,9 @@ class RunSimulation implements Run {
         if (barrel.hp <= 0) this.destroyBarrel(hitIndex)
         return true
       }
+      case 'boss':
+        if (this.boss !== null) this.damageBoss(this.boss, damage)
+        return true
       case 'gate':
         if (hitGate !== null && (hitGate.op === 'add' || hitGate.op === 'subtract')) {
           hitGate.hits += yarnBall.cats
@@ -640,6 +777,14 @@ class RunSimulation implements Run {
     if (enemy.hp > 0) return
     this.pushEnemyKilled(cause, enemy)
     this.enemies.release(index)
+  }
+
+  private damageBoss(boss: Boss, damage: number): void {
+    boss.hp -= damage
+    this.events.push(bossHitEvent)
+    if (boss.hp > 0) return
+    this.events.push({ type: 'bossDefeated', boss: boss.kind })
+    this.state.status = 'won'
   }
 
   private destroyBarrel(index: number): void {
@@ -673,17 +818,40 @@ class RunSimulation implements Run {
   }
 
   private touchesSquad(enemy: Enemy): boolean {
-    const contactReach = catRadius + tuning.hitRadius[enemy.kind]
+    return this.withinReachOfACat(enemy.x, enemy.z, catRadius + tuning.hitRadius[enemy.kind])
+  }
+
+  private withinReachOfACat(x: number, z: number, contactReach: number): boolean {
     const squadReach = formationRadius(this.squad.count) + contactReach
-    const dx = enemy.x - this.squad.x
-    const dz = enemy.z - this.squad.z
+    const dx = x - this.squad.x
+    const dz = z - this.squad.z
     if (dx * dx + dz * dz > squadReach * squadReach) return false
     for (const cat of this.state.cats) {
-      const catDx = enemy.x - cat.x
-      const catDz = enemy.z - cat.z
+      const catDx = x - cat.x
+      const catDz = z - cat.z
       if (catDx * catDx + catDz * catDz <= contactReach * contactReach) return true
     }
     return false
+  }
+
+  // Returns true when the run is lost.
+  private resolveDustBalls(): boolean {
+    const dustBalls = this.dustBalls.active
+    for (let i = dustBalls.length - 1; i >= 0; i--) {
+      if (!this.withinReachOfACat(dustBalls[i].x, dustBalls[i].z, dustBallContactReach)) continue
+      this.dustBalls.release(i)
+      this.events.push(dustBallHitEvent)
+      if (this.loseCats(tuning.dustBall.catLoss)) return true
+    }
+    return false
+  }
+
+  // Returns true when the run is lost.
+  private resolveBossContact(): boolean {
+    const boss = this.state.boss
+    if (boss === null || !this.withinReachOfACat(boss.x, boss.z, catRadius + tuning.hitRadius[boss.kind])) return false
+    this.state.status = 'lost'
+    return true
   }
 
   // Returns true when the run is lost.
@@ -785,8 +953,43 @@ class RunSimulation implements Run {
     }
   }
 
-  private removeBarrelsAndWallsBehind(): void {
+  private moveBoss(): void {
+    const boss = this.boss
+    if (boss === null || this.state.boss === null) return
+    boss.previousX = boss.x
+    boss.previousZ = boss.z
+    // The boss reaches the squad before it could reach the squad's centre, so the distance is never 0.
+    const toSquadX = this.squad.x - boss.x
+    const toSquadZ = this.squad.z - boss.z
+    const walkStep = (tuning.bosses[boss.kind].walkSpeed * dt) / Math.hypot(toSquadX, toSquadZ)
+    boss.x += toSquadX * walkStep
+    boss.z += toSquadZ * walkStep
+    if (boss.kind !== 'megaDustbot') return
+    boss.throwCooldown -= dt
+    if (boss.throwCooldown > 0) return
+    boss.throwCooldown += tuning.dustBall.interval
+    this.throwDustBall(boss)
+  }
+
+  private throwDustBall(boss: Boss): void {
+    const dustBall = this.dustBalls.acquire()
+    if (dustBall === undefined) return
+    const toSquadX = this.squad.x - boss.x
+    const toSquadZ = this.squad.z - boss.z
+    const toSquad = Math.hypot(toSquadX, toSquadZ)
+    dustBall.x = dustBall.previousX = boss.x
+    dustBall.z = dustBall.previousZ = boss.z
+    dustBall.directionX = toSquadX / toSquad
+    dustBall.directionZ = toSquadZ / toSquad
+    this.events.push(dustBallThrownEvent)
+  }
+
+  private removeObjectsBehind(): void {
     const lastCatZ = this.lastCatZ()
+    const dustBalls = this.dustBalls.active
+    for (let i = dustBalls.length - 1; i >= 0; i--) {
+      if (dustBalls[i].z < lastCatZ - dustBallContactReach) this.dustBalls.release(i)
+    }
     const barrels = this.barrels.active
     for (let i = barrels.length - 1; i >= 0; i--) {
       if (barrels[i].z < lastCatZ - barrelContactReach) this.barrels.release(i)

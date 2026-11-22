@@ -61,6 +61,23 @@ export const tuning = {
   wave: {
     spawnDistance: 40,
   },
+  // Walk speed in units/s.
+  bosses: {
+    dustbot: { walkSpeed: 1.5 },
+    megaDustbot: { walkSpeed: 1.5 },
+  },
+  boss: {
+    // Seconds the expected squad at boss needs to defeat the boss at the base weapon values.
+    hpTime: 8,
+    // How far beyond the arena start the boss enters.
+    startDistance: 35,
+  },
+  // Interval in seconds, speed in units/s, cat loss in cats.
+  dustBall: {
+    interval: 3,
+    speed: 10,
+    catLoss: 3,
+  },
   hitRadius: {
     cat: 0.3,
     yarnBall: 0.12,
@@ -69,11 +86,16 @@ export const tuning = {
     bulldog: 0.6,
     shieldDog: 0.45,
     barrel: 0.45,
+    dustbot: 2,
+    megaDustbot: 2.5,
+    dustBall: 0.5,
   },
   // Most yarn balls in flight; above it, one yarn ball stands for several cats.
   yarnBallCap: 400,
   // Most enemies alive at once, from the playbook's performance budget.
   limits: {
     enemies: 150,
+    // A dust ball reaches the squad in about 3.5 s, so at most two fly at once at one every 3 s.
+    dustBalls: 4,
   },
 }

@@ -49,9 +49,9 @@ const scatterLifetime = 1.2
 const gravity = 14
 const wallHeight = 1.2
 // Height of an enemy's HP number above the ground.
-const hpLabelHeight: Record<EnemyKind, number> = { puppy: 1.05, chihuahua: 0.95, bulldog: 1.4, shieldDog: 1.1 }
-const shieldLabelRise = 0.36
-const barrelLabelHeight = 1.15
+const hpLabelHeight: Record<EnemyKind, number> = { puppy: 1.15, chihuahua: 1.05, bulldog: 1.55, shieldDog: 1.2 }
+const shieldLabelRise = 0.6
+const barrelLabelHeight = 1.3
 const bodyHpColour = new Color(0xffffff)
 const shieldHpColour = new Color(0x8fd0ff)
 const barrelHpColour = new Color(0xd6ecff)
@@ -195,6 +195,8 @@ export class GameRenderer {
 
     this.catsToScatter = 0
     this.scatter.count = 0
+    // Walls, barrels and some enemies first come into view during the run; compiling now keeps that from stalling a frame.
+    this.renderer.compile(this.scene, this.camera)
   }
 
   scatterCats(count: number): void {

@@ -13,8 +13,8 @@ import {
 
 const glyphWidth = 32
 const glyphHeight = 48
-const digitWidth = 0.22
-const digitHeight = 0.33
+const digitWidth = 0.4
+const digitHeight = 0.6
 const maxDigits = 3
 // HP after level scaling is a fraction, and float error can push a whole number just above itself, such as 27.000000000000004.
 const wholeNumberTolerance = 1e-9

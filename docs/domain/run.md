@@ -4,8 +4,8 @@ Terms as in the [glossary](glossary.md).
 
 ## Movement
 
-- The squad holds a fixed place on screen and does not visibly run forward. The road and everything on it (gate rows, enemies, barrels, walls and buff blocks) come toward the squad at the run speed, a constant 8 units/s. The player controls only the steering point.
-- Every rule is measured in distance travelled, as if the squad ran down a still road: the squad's distance travelled grows by 8 units/s, z is a place along the road measured from the start, and something standing still at z reaches the squad's centre when the distance travelled is z. Example: the squad meets a gate row at z = 40 after 5 s.
+- The squad holds a fixed place on screen and does not visibly run forward. The road and everything on it (gate rows, enemies, barrels, walls and buff blocks) come toward the squad at the run speed, a constant 12 units/s (in the tuning config). The player controls only the steering point.
+- Every rule is measured in distance travelled, as if the squad ran down a still road: the squad's distance travelled grows by 12 units/s, z is a place along the road measured from the start, and something standing still at z reaches the squad's centre when the distance travelled is z. Example: the squad meets a gate row at z = 60 after 5 s.
 - The camera does not move forward. It frames the squad and the road ahead of it.
 - The steering point is clamped to the track edges: x stays within −5..5.
 - The squad follows the steering point smoothly, closing the gap in about 80 ms, so it is responsive but not twitchy.
@@ -132,8 +132,9 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 - Every enemy chases the squad's centre, in any lane, from its first tick, following the squad as it steers:
   - Along the road it runs toward the squad's centre at its own speed. An enemy ahead of the centre or level with it runs toward the squad; one behind the centre runs back toward it.
   - Across the track it moves toward the squad's centre x at up to 6 units/s (the enemy chase speed, in the tuning config, the same for every kind). When the squad's centre x is closer than one tick's move, the enemy stops exactly at it and does not overshoot. So it never leaves the track, because the squad's centre is always on it.
-- The road brings an enemy toward the squad as well, at the run speed, so an enemy ahead of the squad closes in at the run speed plus its own speed, wherever it is across the track. Example: a puppy closes in at 8 + 4 = 12 units/s. In the boss arena, where the road has stopped, it closes in at its own speed.
-- Example: a puppy appears 40 units ahead at the left lane centre (x = −10/3) while the squad stays at the right lane centre (x = 10/3). It crosses the 20/3 units in about 1.1 s at 6 units/s and then runs at the squad's x, reaching the squad about 3.3 s after it appeared, if it is not shot. Steering away does not escape it, because the squad cannot leave the track.
+- The road brings an enemy toward the squad as well, at the run speed, so an enemy ahead of the squad closes in at the run speed plus its own speed, wherever it is across the track. Example: a puppy closes in at 12 + 4 = 16 units/s. In the boss arena, where the road has stopped, it closes in at its own speed.
+- Example: a puppy appears 40 units ahead at the left lane centre (x = −10/3) while the squad stays at the right lane centre (x = 10/3). It crosses the 20/3 units in about 1.1 s at 6 units/s and then runs at the squad's x, reaching the squad about 2.5 s after it appeared, if it is not shot. Steering away does not escape it, because the squad cannot leave the track.
+- Every kind reaches a squad anywhere on the track from the spawn distance: the chihuahua, the fastest, closes the 40 units in 40 ÷ (12 + 9) ≈ 1.9 s, and in that time moves up to 6 × 1.9 ≈ 11.4 units across, more than the 10 units of the whole track. Slower kinds take longer along the road and so have more time to cross.
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage, whatever HP it has left. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - An enemy that gets past the squad disappears behind it and does no damage.
 - An enemy is past the squad only once it is past the squad's last cat. Until then, an enemy touching any cat, even one inside the cluster, costs cats.

@@ -11,7 +11,7 @@ Terms as in the [glossary](glossary.md).
 - On top of the waves, an endless enemy stream sends one enemy every few seconds for the whole level (see [stream](#stream)). Its interval is the level's main difficulty setting: a shorter interval makes the level harder.
 - Barrels, coins, walls and buff blocks sit on the track: barrels to shoot, coins to collect, walls to steer around, buff blocks to shoot open for a big buff.
 - Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins, barrels or buff blocks.
-- A level takes 60–120 s to play.
+- The road of a level takes 25–50 s at the run speed (300–600 units at 12 units/s), plus the boss fight in a boss level.
 
 ## Level order
 

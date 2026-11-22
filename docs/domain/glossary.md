@@ -7,7 +7,7 @@ One term per concept. Code, tests and docs use these words exactly.
 | Run | One attempt at one level, from the first tap to win or loss. |
 | Track | The straight road a run takes place on, 10 units wide and 300–600 units long, with three lanes. |
 | Lane | One of the three equal strips of the track: left, centre or right. Gates and buff blocks are placed by lane; steering is free. |
-| Run speed | The 8 units/s at which the road and everything on it comes toward the squad. |
+| Run speed | The 12 units/s at which the road and everything on it comes toward the squad. |
 | Distance travelled | How far the road has carried the squad from the start, in units. Every z is measured in it. |
 | Squad | The group of cats the player steers. It holds a fixed place on screen while the road comes at it. |
 | Cat | One member of the squad. Every cat fires. |

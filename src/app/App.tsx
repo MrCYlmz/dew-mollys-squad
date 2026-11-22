@@ -19,15 +19,15 @@ export function App({ game }: AppProps) {
   return (
     <>
       {inRun && <SquadCountLabel count={view.squadCount} ref={game.setSquadLabel} />}
-      {inRun && <Hud progress={view.progress} onPause={() => game.pause()} />}
+      {inRun && <Hud progress={view.progress} boss={view.boss} onPause={() => game.pause()} />}
       {view.screen === 'title' && <TitleScreen onPlay={() => game.play()} />}
       {view.screen === 'paused' && (
         <PauseScreen onResume={() => game.resume()} onRestart={() => game.restart()} onQuit={() => game.quitToTitle()} />
       )}
       {view.screen === 'victory' && (
-        <VictoryScreen catsLeft={view.squadCount} onPlayAgain={() => game.restart()} onBackToTitle={() => game.quitToTitle()} />
+        <VictoryScreen catsLeft={view.squadCount} onNextLevel={() => game.nextLevel()} onBackToTitle={() => game.quitToTitle()} />
       )}
-      {view.screen === 'defeat' && <DefeatScreen distanceReached={view.distanceReached} onRetry={() => game.restart()} />}
+      {view.screen === 'defeat' && <DefeatScreen distanceReached={view.distanceReached} caughtBy={view.caughtBy} onRetry={() => game.restart()} />}
     </>
   )
 }

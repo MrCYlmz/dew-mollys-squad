@@ -37,7 +37,7 @@ One input steers. Firing is always on.
 
 - Every cat fires yarn balls straight ahead, all the time.
 - Each yarn ball travels up to the squad's range, measured along its path.
-- A yarn ball stops at the first enemy, barrel, wall or gate it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range. A wall takes no damage.
+- A yarn ball stops at the first enemy, barrel, wall, gate or boss it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range. A wall takes no damage.
 - A yarn ball that is beyond the track edge (x below −5 or above 5) when it reaches a gate row passes the row without hitting either gate. Example: a cat at x = 5.2 at the edge of a wide squad fires past the gates.
 
 Base values at level 1, before weapon buffs and upgrades:
@@ -58,9 +58,9 @@ Never more than 400 yarn balls are in flight (the yarn ball cap, in the tuning c
 
 - If every cat fired its own yarn balls, the squad would have squad count × fire rate × yarn balls per shot × range ÷ yarn ball speed yarn balls in flight, using the current, buffed values.
 - When that is above the cap, each yarn ball stands for N cats: N is that number divided by the cap, rounded up. The squad then fires N times fewer yarn balls.
-- A yarn ball standing for N cats deals N × damage, and counts as N hits on an add or subtract gate. It still stops at the first enemy, barrel, wall or gate it hits.
+- A yarn ball standing for N cats deals N × damage, and counts as N hits on an add or subtract gate. It still stops at the first enemy, barrel, wall, gate or boss it hits.
 - At or below the cap, N is 1 and every cat fires its own yarn balls.
-- Results are about equal, not exactly equal: when a yarn ball standing for N cats kills an enemy or destroys a barrel with less HP than its damage, the spare damage is lost, where N separate yarn balls would have gone on to the next target. Example: a yarn ball dealing 2 damage that hits a puppy with 1 HP left kills it, and the second point of damage is lost. This only happens above the cap, so with squads above about 200 at the base values.
+- Results are about equal, not exactly equal: when a yarn ball standing for N cats kills an enemy, destroys a barrel or defeats the boss with less HP than its damage, the spare damage is lost, where N separate yarn balls would have gone on to the next target. Example: a yarn ball dealing 2 damage that hits a puppy with 1 HP left kills it, and the second point of damage is lost. This only happens above the cap, so with squads above about 200 at the base values.
 
 Examples at the base values (2 yarn balls/s, range 30, speed 30, so each yarn ball flies 1 s): a squad of 200 would have 400 in flight, so N is 1. A squad of 300 would have 600, so N is 2: each yarn ball deals 2 damage, and about 300 are in flight. A squad of 999 would have 1,998, so N is 5, and about 400 are in flight. A squad of 100 with one +1 BULLET gate fires 2 yarn balls per shot, so it would have 400 in flight, and N is still 1.
 
@@ -160,11 +160,59 @@ Where each pattern places its enemies is set in the [level file](levels.md#wave)
 
 ## Boss
 
-- The boss is a giant robot vacuum cleaner with a big HP bar.
-- At the boss arena the squad stops moving forward. The boss walks toward the squad at 1.5 units/s.
+A boss level ends in a boss arena instead of a finish line (see the [level file](levels.md#boss)). Bosses are giant robot vacuum cleaners.
+
+| Boss | World 1 level | Hit radius (units) | Walk speed (units/s) | Throws dust balls |
+| --- | --- | --- | --- | --- |
+| Dustbot | 5 | 2 | 1.5 | No |
+| Mega Dustbot (the world boss) | 10 | 2.5 | 1.5 | Yes |
+
+The hit radii and walk speeds are in the tuning config.
+
+### The boss arena
+
+- The boss arena starts at the level's `length`. When the squad's centre reaches it, the squad stops moving forward and stays at z = `length`. Steering still works as before, within x −5..5, and every cat keeps firing straight ahead.
+- At that moment the boss enters: it appears at x = 0, 35 units (the boss start distance, in the tuning config) beyond the arena start, so at z = `length` + 35.
+- From then on the boss walks straight toward the squad's centre at its walk speed, following the squad as it steers.
+- A big HP bar shows the boss's HP while it is in the arena.
+- Enemies still alive when the squad reaches the arena keep coming and work as before. Enemies and the boss do not stop each other.
+
+### Boss HP
+
+- The boss's HP is worked out from the level's expected squad at boss when it enters, as set by [balancing](levels.md#balancing). It is not written in the level file and does not scale with the level number.
+- HP is kept as is, without rounding; the HP bar shows the HP left out of the full HP.
+
+### Hitting the boss
+
+- The boss stops yarn balls like an enemy: a yarn ball that touches it deals its damage, as many times over as the cats it stands for, and disappears.
+- A yarn ball touches the boss when their centres are within the yarn ball's hit radius plus the boss's hit radius, measured on the ground plane.
+- Barrel splashes do not damage the boss.
+- The boss is defeated when its HP reaches 0 or less. Then the run is won, whatever enemies or dust balls are left.
+
+### The boss touching the squad
+
+- The boss touches the squad when its centre is within its hit radius plus a cat's hit radius of any cat, as an enemy does.
 - If the boss touches the squad, the run is lost, whatever the squad count.
-- Some bosses throw projectiles that each remove 2–5 cats.
-- Boss HP is set by [balancing](levels.md#balancing).
+
+### Dust balls
+
+Only the Mega Dustbot throws dust balls.
+
+| Value | Base |
+| --- | --- |
+| Dust ball interval | One every 3 s |
+| Dust ball speed | 10 units/s |
+| Dust ball cat loss | 3 cats |
+| Dust ball hit radius | 0.5 units |
+
+These values are in the tuning config.
+
+- The Mega Dustbot throws its first dust ball 3 s (the dust ball interval) after it enters, and one more every 3 s while the run goes on.
+- A dust ball leaves from the boss's centre and flies in a straight line toward where the squad's centre was when it was thrown. It does not follow the squad, so steering away dodges it. It flies on past that point at the same speed and direction.
+- A dust ball touches the squad when its centre is within its hit radius plus a cat's hit radius of any cat. Then the squad loses 3 cats (the dust ball cat loss), down to 0, which loses the run, and the dust ball disappears. Cats lost to a dust ball scatter off-screen unhurt.
+- Nothing else stops a dust ball: yarn balls, enemies, barrels and walls do not, and it does not stop yarn balls.
+- A dust ball that is past the squad's last cat disappears.
+- Example: the squad stands at x = 0 when a dust ball is thrown from 30 units ahead. It arrives about 3 s later at x = 0; a squad that has steered 2 units aside by then is missed.
 
 ## Coins
 
@@ -172,8 +220,9 @@ Where each pattern places its enemies is set in the [level file](levels.md#wave)
 
 ## Win and loss
 
-- A run is won when the boss is defeated, or, in a level without a boss, when the squad crosses the finish line.
+- A run is won when the boss is defeated, or, in a level without a boss, when the squad's centre reaches the finish line.
 - A run is lost when the squad count reaches 0, or when the boss touches the squad.
+- The run ends at its first win or loss in the playbook's tick order. Yarn ball hits come before contacts with the squad, so a yarn ball that defeats the boss wins the run even if the boss or a dust ball would touch the squad in the same tick.
 - A won run earns 1–3 stars based on the squad count left.
 - After a loss, one tap restarts the level instantly, with no loading screen.
 - After a win, the player goes to the victory screen, then upgrades and the next level.

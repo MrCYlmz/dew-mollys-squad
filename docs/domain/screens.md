@@ -4,7 +4,12 @@ Terms as in the [glossary](glossary.md). The screens lie over the game view.
 
 ## Flow
 
-Boot → Title → Playing ⇄ Paused → Victory or Defeat → Title. From the title, the player can open upgrades and settings.
+Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the player can open upgrades and settings.
+
+- Title → Playing starts the first level in [level order](levels.md#level-order).
+- Victory → Playing starts the next level in level order. After the last level, Victory goes back to the Title.
+- Defeat → Playing retries the same level.
+- Pause's quit goes back to the Title.
 
 ## Screens
 
@@ -18,6 +23,7 @@ Boot → Title → Playing ⇄ Paused → Victory or Defeat → Title. From the 
 | Defeat | Distance reached, tip text | Retry, one tap, instant |
 
 - The first level starts with one tap from the title screen.
+- The Defeat screen names why the run was lost: "Out of cats" when the squad count reached 0, or the boss that touched the squad, such as "Caught by the Dustbot".
 - HUD: nothing important in the bottom 20% of the screen, where the finger is.
 - HUD and screens respect the phone's safe areas (notch, rounded corners).
 

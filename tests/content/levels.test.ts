@@ -94,3 +94,26 @@ describe('placeholder levels', () => {
     expect(types).toContain('wall')
   })
 })
+
+describe('boss levels', () => {
+  const allLevels = levelFileNames.map((fileName) => readLevel(fileName) as LevelFile)
+
+  it('a_placeholder_dustbot_level_with_level_number_5_exists', () => {
+    const dustbotLevels = allLevels.filter(
+      (level) => level.level === 5 && level.placeholder === true && level.events.at(-1)?.type === 'boss',
+    )
+
+    expect(dustbotLevels).toHaveLength(1)
+    expect(dustbotLevels[0].events.at(-1)).toEqual({ type: 'boss', z: dustbotLevels[0].length, boss: 'dustbot' })
+  })
+
+  // Only levels 5 and 10 of world 1 have a boss, and only level 10's is the Mega Dustbot.
+  it('bosses_stand_only_on_levels_5_and_10', () => {
+    for (const level of allLevels) {
+      const bosses = level.events.flatMap((event) => (event.type === 'boss' ? [event.boss] : []))
+      if (level.level === 5) expect(bosses).toEqual(['dustbot'])
+      else if (level.level === 10) expect(bosses).toEqual(['megaDustbot'])
+      else expect(bosses).toEqual([])
+    }
+  })
+})

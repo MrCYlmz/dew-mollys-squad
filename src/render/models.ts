@@ -134,3 +134,44 @@ export function createBarrelGeometry(): BufferGeometry {
     { geometry: new CylinderGeometry(0.36, 0.36, 0.02, 14), colour: 0x9fd8ff, position: [0, 0.76, 0] },
   ])
 }
+
+const dustbotGrey = 0xb8c0c8
+const dustbotDark = 0x3c4248
+const dustbotRed = 0xe63946
+
+// A round robot vacuum, 4 units across. Faces +z, towards the squad.
+export function createDustbotGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new CylinderGeometry(2, 2, 0.7, 28), colour: dustbotGrey, position: [0, 0.45, 0] },
+    { geometry: new CylinderGeometry(2.05, 2.05, 0.25, 28), colour: dustbotDark, position: [0, 0.2, 0] },
+    { geometry: new SphereGeometry(0.9, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), colour: dustbotDark, position: [0, 0.8, -0.3] },
+    { geometry: new SphereGeometry(0.22, 10, 8), colour: dustbotRed, position: [-0.6, 0.85, 1.75] },
+    { geometry: new SphereGeometry(0.22, 10, 8), colour: dustbotRed, position: [0.6, 0.85, 1.75] },
+    { geometry: new BoxGeometry(2.2, 0.18, 0.3), colour: dustbotDark, position: [0, 0.3, 1.9] },
+  ])
+}
+
+const megaDustbotBody = 0x4b5563
+const megaDustbotTrim = 0xffb703
+
+// The world boss, 5 units across and darker, with a dust bin on top. Faces +z, towards the squad.
+export function createMegaDustbotGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new CylinderGeometry(2.5, 2.5, 0.9, 32), colour: megaDustbotBody, position: [0, 0.55, 0] },
+    { geometry: new CylinderGeometry(2.56, 2.56, 0.3, 32), colour: megaDustbotTrim, position: [0, 0.22, 0] },
+    { geometry: new CylinderGeometry(1, 1.2, 1.3, 20), colour: dustbotGrey, position: [0, 1.6, -0.4] },
+    { geometry: new CylinderGeometry(1.05, 1.05, 0.15, 20), colour: megaDustbotTrim, position: [0, 2.3, -0.4] },
+    { geometry: new SphereGeometry(0.28, 10, 8), colour: dustbotRed, position: [-0.8, 1.05, 2.2] },
+    { geometry: new SphereGeometry(0.28, 10, 8), colour: dustbotRed, position: [0.8, 1.05, 2.2] },
+    { geometry: new BoxGeometry(2.8, 0.22, 0.36), colour: megaDustbotTrim, position: [0, 0.35, 2.4] },
+  ])
+}
+
+// A grey clump of dust, 1 unit across.
+export function createDustBallGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new SphereGeometry(0.5, 10, 8), colour: 0x8d8d8d, position: [0, 0, 0] },
+    { geometry: new SphereGeometry(0.28, 8, 6), colour: 0xa9a9a9, position: [0.3, 0.2, 0.15] },
+    { geometry: new SphereGeometry(0.24, 8, 6), colour: 0x6f6f6f, position: [-0.28, -0.1, 0.2] },
+  ])
+}

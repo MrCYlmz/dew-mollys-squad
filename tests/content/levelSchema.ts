@@ -62,6 +62,12 @@ const wall = z
     message: 'the whole wall must lie on the track',
   })
 
+const boss = z.strictObject({
+  type: z.literal('boss'),
+  z: z.number(),
+  boss: z.enum(['dustbot', 'megaDustbot']),
+})
+
 export type LevelFile = z.infer<typeof levelSchema>
 type Wave = z.infer<typeof wave>
 
@@ -85,11 +91,27 @@ export const levelSchema = z
     level: z.int().min(1),
     length: z.number().min(300).max(600),
     placeholder: z.literal(true).optional(),
-    events: z.array(z.union([gateRow, wave, barrel, wall])),
+    expectedSquadAtBoss: z.int().min(1).optional(),
+    events: z.array(z.union([gateRow, wave, barrel, wall, boss])),
   })
   .superRefine((level, context) => {
+    const hasBoss = level.events.some((event) => event.type === 'boss')
+    if (hasBoss !== (level.expectedSquadAtBoss !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expectedSquadAtBoss'],
+        message: 'expectedSquadAtBoss is required in a level with a boss and not allowed in one without',
+      })
+    }
     level.events.forEach((event, index) => {
-      if (event.z <= 0 || event.z >= level.length) {
+      if (event.type === 'boss') {
+        if (event.z !== level.length) {
+          context.addIssue({ code: 'custom', path: ['events', index, 'z'], message: 'the boss stands at z = length, the arena start' })
+        }
+        if (index !== level.events.length - 1) {
+          context.addIssue({ code: 'custom', path: ['events', index], message: 'the boss is the last event' })
+        }
+      } else if (event.z <= 0 || event.z >= level.length) {
         context.addIssue({ code: 'custom', path: ['events', index, 'z'], message: 'z must lie between 0 and length' })
       }
       if (index > 0 && event.z < level.events[index - 1].z) {

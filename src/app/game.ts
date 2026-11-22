@@ -1,9 +1,11 @@
-import type { Level } from '../content/level'
+import type { BossKind, Level } from '../content/level'
 import { tuning } from '../content/tuning'
 import { watchFocus } from '../platform/focus'
 import { createInput, type PlayerInput } from '../platform/input'
 import { GameRenderer, type ScreenPoint } from '../render/gameRenderer'
+import { firstLevel, levelAfter } from '../sim/levelOrder'
 import { createRun, type Run, type SteerInput } from '../sim/run'
+import { bossHpPercent, type BossHp } from '../ui/screens/Hud'
 
 export type Screen = 'title' | 'playing' | 'paused' | 'victory' | 'defeat'
 
@@ -13,6 +15,10 @@ export interface GameView {
   squadCount: number
   progress: number
   distanceReached: number
+  // The boss that caught the squad in a lost run, or null.
+  caughtBy: BossKind | null
+  // Null outside the boss arena.
+  boss: BossHp | null
 }
 
 const tickSeconds = 1 / tuning.tickRate
@@ -29,6 +35,7 @@ export class Game {
   private readonly labelPoint: ScreenPoint = { x: 0, y: 0 }
   private shownLabelX = Number.NaN
   private shownLabelY = Number.NaN
+  private level: Level
   private run: Run
   private squadLabel: HTMLElement | null = null
   private accumulator = 0
@@ -37,7 +44,7 @@ export class Game {
   view: GameView
 
   constructor(
-    private readonly level: Level,
+    private readonly levels: readonly Level[],
     canvas: HTMLCanvasElement,
     gameElement: HTMLElement,
   ) {
@@ -47,8 +54,9 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.resize(gameElement))
     this.resizeObserver.observe(gameElement)
     this.resize(gameElement)
+    this.level = firstLevel(levels)
     this.run = this.newRun()
-    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0 }
+    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null }
     this.frameRequest = requestAnimationFrame(this.frame)
   }
 
@@ -63,6 +71,18 @@ export class Game {
   }
 
   play(): void {
+    this.level = firstLevel(this.levels)
+    this.restart()
+  }
+
+  // After the last level in level order, goes back to the title.
+  nextLevel(): void {
+    const next = levelAfter(this.levels, this.level)
+    if (next === null) {
+      this.quitToTitle()
+      return
+    }
+    this.level = next
     this.restart()
   }
 
@@ -83,12 +103,13 @@ export class Game {
     this.lastTimestamp = null
     this.accumulator = 0
     this.input.takeDragPixels()
-    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0 })
+    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null })
   }
 
   quitToTitle(): void {
+    this.level = firstLevel(this.levels)
     this.run = this.newRun()
-    this.publish({ screen: 'title', squadCount: this.run.state.squad.count, progress: 0 })
+    this.publish({ screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null })
   }
 
   dispose(): void {
@@ -131,6 +152,7 @@ export class Game {
       this.steerInput.right = this.input.right
       for (const event of this.run.step(this.steerInput)) {
         if (event.type === 'catsLost') this.renderer.scatterCats(event.count)
+        else if (event.type === 'bossHit') this.renderer.flashBoss()
       }
       if (state.status !== 'running') break
     }
@@ -141,10 +163,19 @@ export class Game {
       this.publish({ screen: 'victory', squadCount: state.squad.count, progress: 1 })
     } else if (state.status === 'lost') {
       this.accumulator = 0
-      this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z) })
-    } else if (state.squad.count !== this.view.squadCount || progress !== this.view.progress) {
-      this.publish({ squadCount: state.squad.count, progress })
+      const caughtBy = state.lossCause === 'caughtByBoss' && state.boss !== null ? state.boss.kind : null
+      this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z), caughtBy })
+    } else if (state.squad.count !== this.view.squadCount || progress !== this.view.progress || this.bossBarChanged()) {
+      this.publish({ squadCount: state.squad.count, progress, boss: state.boss === null ? null : { hp: state.boss.hp, fullHp: state.boss.fullHp } })
     }
+  }
+
+  // The boss HP bar is redrawn only when its shown percentage changes, not on every hit.
+  private bossBarChanged(): boolean {
+    const boss = this.run.state.boss
+    const shown = this.view.boss
+    if (boss === null || shown === null) return boss !== shown
+    return bossHpPercent(boss) !== bossHpPercent(shown)
   }
 
   private placeSquadLabel(alpha: number): void {

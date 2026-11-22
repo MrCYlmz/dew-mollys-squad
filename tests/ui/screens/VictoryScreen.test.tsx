@@ -9,7 +9,7 @@ afterEach(cleanup)
 
 describe('victory screen', () => {
   it('victory_shows_level_complete_and_the_cats_left', () => {
-    render(<VictoryScreen catsLeft={37} onPlayAgain={() => {}} onBackToTitle={() => {}} />)
+    render(<VictoryScreen catsLeft={37} onNextLevel={() => {}} onBackToTitle={() => {}} />)
 
     expect(strings.levelComplete).toBe('Level complete')
     expect(screen.getByText(strings.levelComplete)).toBeTruthy()
@@ -17,27 +17,28 @@ describe('victory screen', () => {
     expect(screen.getByText(/\b37\b/)).toBeTruthy()
   })
 
-  it('play_again_button_restarts_the_level', async () => {
+  // docs/domain/screens.md: Victory's main action is the next level in level order.
+  it('next_level_button_asks_for_the_next_level', async () => {
     const user = userEvent.setup()
-    const onPlayAgain = vi.fn()
+    const onNextLevel = vi.fn()
     const onBackToTitle = vi.fn()
-    render(<VictoryScreen catsLeft={37} onPlayAgain={onPlayAgain} onBackToTitle={onBackToTitle} />)
+    render(<VictoryScreen catsLeft={37} onNextLevel={onNextLevel} onBackToTitle={onBackToTitle} />)
 
-    await user.click(screen.getByRole('button', { name: strings.playAgain }))
+    await user.click(screen.getByRole('button', { name: strings.nextLevel }))
 
-    expect(onPlayAgain).toHaveBeenCalledTimes(1)
+    expect(onNextLevel).toHaveBeenCalledTimes(1)
     expect(onBackToTitle).not.toHaveBeenCalled()
   })
 
   it('back_to_title_button_goes_to_the_title', async () => {
     const user = userEvent.setup()
-    const onPlayAgain = vi.fn()
+    const onNextLevel = vi.fn()
     const onBackToTitle = vi.fn()
-    render(<VictoryScreen catsLeft={37} onPlayAgain={onPlayAgain} onBackToTitle={onBackToTitle} />)
+    render(<VictoryScreen catsLeft={37} onNextLevel={onNextLevel} onBackToTitle={onBackToTitle} />)
 
     await user.click(screen.getByRole('button', { name: strings.backToTitle }))
 
     expect(onBackToTitle).toHaveBeenCalledTimes(1)
-    expect(onPlayAgain).not.toHaveBeenCalled()
+    expect(onNextLevel).not.toHaveBeenCalled()
   })
 })

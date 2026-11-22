@@ -1,4 +1,4 @@
-import type { Gate, Level } from '../../src/content/level'
+import type { BossKind, Gate, Level } from '../../src/content/level'
 import type { GameEvent, Run, RunState, SteerInput } from '../../src/sim/run'
 
 export const noSteering: SteerInput = { drag: 0, left: false, right: false }
@@ -51,4 +51,17 @@ export function steerTo(run: Run, x: number): void {
 // `times` rows of the same gate on both sides, 5 units apart from z = start, so the squad takes the gate `times` times wherever it steers.
 export function repeatedRows(gate: Gate, times: number, start = 5): Level['events'] {
   return Array.from({ length: times }, (_, index) => ({ type: 'gates' as const, z: start + 5 * index, left: gate, right: gate }))
+}
+
+// A boss level ends with the boss event at z = length, the arena start.
+export function bossLevelOf(
+  events: Level['events'],
+  { boss, expectedSquadAtBoss, length = 300, level = 1 }: { boss: BossKind; expectedSquadAtBoss: number; length?: number; level?: number },
+): Level {
+  return { id: 'test-boss-level', level, length, expectedSquadAtBoss, events: [...events, { type: 'boss', z: length, boss }] }
+}
+
+// Steps until the squad reaches the arena and the boss enters; returns the events of those ticks.
+export function stepToArena(run: Run, maxTicks = 6000, input: SteerInput | ((tick: number) => SteerInput) = noSteering): GameEvent[] {
+  return stepUntil(run, (state) => state.boss !== null, maxTicks, input)
 }

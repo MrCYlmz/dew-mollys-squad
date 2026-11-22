@@ -71,4 +71,35 @@ describe('win and loss', () => {
     expect(run.state.status).toBe('won')
     expect(run.state.squad.z).toBe(wonAtZ)
   })
+
+  it('run_lost_at_0_cats_is_out_of_cats', () => {
+    const run = createRun({
+      level: levelOf([{ type: 'gates', z: 20, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }]),
+      seed: 1,
+    })
+
+    stepUntil(run, () => false, 6000)
+
+    expect(run.state.status).toBe('lost')
+    expect(run.state.lossCause).toBe('outOfCats')
+  })
+
+  it('run_lost_to_enemy_contact_is_out_of_cats', () => {
+    const run = createRun({ level: levelOf([{ type: 'wave', z: 60, enemy: 'bulldog', pattern: 'column', count: 1, x: 0, spacing: 1 }]), seed: 1 })
+
+    stepUntil(run, () => false, 6000)
+
+    expect(run.state.status).toBe('lost')
+    expect(run.state.lossCause).toBe('outOfCats')
+  })
+
+  it('running_and_won_runs_have_no_loss_cause', () => {
+    const run = createRun({ level: levelOf([], 300), seed: 1 })
+    expect(run.state.lossCause).toBeNull()
+
+    stepUntil(run, () => false, 6000)
+
+    expect(run.state.status).toBe('won')
+    expect(run.state.lossCause).toBeNull()
+  })
 })

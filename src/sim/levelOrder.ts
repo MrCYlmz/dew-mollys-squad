@@ -1,8 +1,8 @@
 import type { Level } from '../content/level'
 
-// Level order: by level number, then by id.
+// Level order: by level number, then by id. Level ids are unique, so two levels never tie.
 function comesBefore(first: Level, second: Level): number {
-  return first.level - second.level || (first.id < second.id ? -1 : first.id > second.id ? 1 : 0)
+  return first.level - second.level || (first.id < second.id ? -1 : 1)
 }
 
 export function firstLevel(levels: readonly Level[]): Level {

@@ -30,7 +30,8 @@ One term per concept. Code, tests and docs use these words exactly.
 | Enemy stream | The endless enemies of a level besides its waves: one every interval, from the start of the run until the finish line or the arena start. |
 | Stream interval | The seconds between two enemies of the enemy stream, set per level. |
 | Stream spawn distance | How far ahead of the squad's centre a stream enemy appears. |
-| Enemy cap | The most enemies alive at once, 150. Beyond it the oldest enemy disappears. |
+| Enemy chase speed | The speed at which every enemy moves across the track toward the squad's centre x, 6 units/s. |
+| Enemy cap | The most enemies alive at once, 150. An enemy that would spawn beyond it is dropped. |
 | Barrel | A static water bucket on the track that splashes nearby enemies when destroyed. |
 | Shield | The shield dog's extra HP, which takes all damage before its body does. |
 | Obstacle | A wall or an unbroken buff block. The squad's centre running into one loses the run. |

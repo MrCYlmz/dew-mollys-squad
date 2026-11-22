@@ -129,8 +129,11 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 | Shield dog | Shield bearer | 15, plus a shield of 30 | 3 | 3 | The shield must break before the body takes damage |
 
 - An enemy starts where its wave's spawn pattern (see [levels](levels.md#wave)) or the [enemy stream](#enemy-stream) places it. Every enemy can come in every spawn pattern; the typical use is a guide for designers.
-- Every enemy chases the squad, in any lane, from its first tick: it moves straight toward the squad's centre at its own speed, following the squad as it steers, as the boss walks. It never leaves the track, because the squad's centre is always on it.
-- The road brings an enemy toward the squad as well, at the run speed. Example: a puppy straight ahead of the squad closes in at 8 + 4 = 12 units/s; a puppy off to one side spends part of its speed moving across, so it closes in along the road more slowly. In the boss arena, where the road has stopped, an enemy closes in at its own speed.
+- Every enemy chases the squad's centre, in any lane, from its first tick, following the squad as it steers:
+  - Along the road it runs toward the squad's centre at its own speed. An enemy ahead of the centre or level with it runs toward the squad; one behind the centre runs back toward it.
+  - Across the track it moves toward the squad's centre x at up to 6 units/s (the enemy chase speed, in the tuning config, the same for every kind). When the squad's centre x is closer than one tick's move, the enemy stops exactly at it and does not overshoot. So it never leaves the track, because the squad's centre is always on it.
+- The road brings an enemy toward the squad as well, at the run speed, so an enemy ahead of the squad closes in at the run speed plus its own speed, wherever it is across the track. Example: a puppy closes in at 8 + 4 = 12 units/s. In the boss arena, where the road has stopped, it closes in at its own speed.
+- Example: a puppy appears 40 units ahead at the left lane centre (x = −10/3) while the squad stays at the right lane centre (x = 10/3). It crosses the 20/3 units in about 1.1 s at 6 units/s and then runs at the squad's x, reaching the squad about 3.3 s after it appeared, if it is not shot. Steering away does not escape it, because the squad cannot leave the track.
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage, whatever HP it has left. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - An enemy that gets past the squad disappears behind it and does no damage.
 - An enemy is past the squad only once it is past the squad's last cat. Until then, an enemy touching any cat, even one inside the cluster, costs cats.
@@ -150,7 +153,7 @@ Besides its waves, every level has an endless enemy stream, set by the level fil
 ### Enemy cap
 
 - At most 150 enemies are alive at once (the enemy cap, in the tuning config), from the performance budget.
-- When an enemy would spawn, from a wave or the stream, while 150 are alive, the oldest alive enemy, the one that spawned first, disappears to make room. It is not killed and does not touch the squad: it costs no cats and counts as no kill.
+- An enemy that would spawn, from a wave or the stream, while 150 are alive is dropped: it never appears. Enemies already alive are not affected.
 
 ### Shield dog
 

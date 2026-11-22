@@ -99,7 +99,7 @@ Examples:
 
 - The stream is not an event: it has no `z` and runs from the start of the run until the finish line or the arena start.
 - Where stream enemies appear and how the interval is counted is set in [the run](run.md#enemy-stream).
-- Many stream and wave enemies alive at once can reach the [enemy cap](run.md#enemy-cap) of 150; then the oldest disappear. Designers keep the interval long enough that this does not happen in normal play.
+- Many stream and wave enemies alive at once can reach the [enemy cap](run.md#enemy-cap) of 150; then new enemies are dropped until some are gone. Designers keep the interval long enough that this does not happen in normal play.
 
 Examples:
 

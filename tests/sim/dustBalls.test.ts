@@ -144,6 +144,51 @@ describe('dust balls', () => {
     for (const dustBall of run.state.dustBalls) expect(dustBall.z).toBeGreaterThan(run.state.squad.z)
   })
 
+  it('dodged_dust_ball_disappears_only_once_past_the_last_cat', () => {
+    const run = bossRun('megaDustbot', doublingRows(2))
+    stepToArena(run)
+    stepToFirstThrow(run)
+    steerTo(run, 2)
+    let lastSeenZ = run.state.dustBalls[0].z
+    let lastCatZ = Math.min(...run.state.cats.map((cat) => cat.z))
+
+    // The dodged dust ball is the first in flight until it goes; the next is thrown 3 s after it.
+    while (run.state.dustBalls.length > 0 && run.state.dustBalls[0].z <= lastSeenZ) {
+      lastSeenZ = run.state.dustBalls[0].z
+      lastCatZ = Math.min(...run.state.cats.map((cat) => cat.z))
+      run.step(noSteering)
+    }
+
+    expect(run.state.status).toBe('running')
+    expect(lastSeenZ).toBeLessThan(lastCatZ)
+  })
+
+  it('mega_dustbot_throws_no_dust_ball_before_it_enters', () => {
+    const run = bossRun('megaDustbot', doublingRows(2))
+
+    const events = stepToArena(run)
+
+    expect(events.filter((event) => event.type === 'dustBallThrown')).toEqual([])
+    expect(run.state.dustBalls).toEqual([])
+  })
+
+  // A dust ball touches the squad within its hit radius plus a cat's, 0.5 + 0.3 = 0.8 units, of a cat.
+  it.each([
+    [0.65, true],
+    [0.95, false],
+  ])('dust_ball_passing_%f_units_from_a_lone_cat_touches_it_%s', (offset, touches) => {
+    const run = bossRun('megaDustbot', [])
+    stepToArena(run)
+    stepToFirstThrow(run)
+    expect(run.state.dustBalls[0].x).toBe(0)
+    steerTo(run, offset)
+
+    const events = stepTicks(run, 240)
+
+    expect(events.some((event) => event.type === 'dustBallHit')).toBe(touches)
+    expect(run.state.status).toBe(touches ? 'lost' : 'running')
+  })
+
   it('yarn_balls_and_dust_balls_do_not_stop_each_other', () => {
     // The cats fire straight up the dust ball's line; 4 cats land about 8 hits a second on the boss.
     const run = bossRun('megaDustbot', doublingRows(2))

@@ -235,14 +235,20 @@ describe('hitting the boss', () => {
     expect(run.state.boss!.z).toBeGreaterThan(firstReach - 0.75 - 2 * walkStep)
   })
 
-  it('boss_stops_yarn_balls', () => {
-    const run = bossRun('dustbot', unbeatable, doublingRows(3))
+  it.each<BossKind>(['dustbot', 'megaDustbot'])('%s_stops_every_yarn_ball_that_comes_within_reach', (boss) => {
+    // After a tick no yarn ball is left within both hit radii of the boss, less the step the boss walks after the hits.
+    const reach = yarnBallRadius + hitRadius[boss] - walkStep - 1e-9
+    const run = bossRun(boss, unbeatable, doublingRows(3))
     stepToArena(run)
-    stepTicks(run, 180)
+    stepTicks(run, 120)
 
     for (let tick = 0; tick < 300; tick++) {
       run.step(noSteering)
-      for (const yarnBall of run.state.yarnBalls) expect(yarnBall.z).toBeLessThan(run.state.boss!.z)
+      const { x, z } = run.state.boss!
+      for (const yarnBall of run.state.yarnBalls) {
+        expect(yarnBall.z).toBeLessThan(z)
+        expect(Math.hypot(yarnBall.x - x, yarnBall.z - z)).toBeGreaterThanOrEqual(reach)
+      }
     }
     expect(run.state.boss!.hp).toBeLessThan(run.state.boss!.fullHp)
   })

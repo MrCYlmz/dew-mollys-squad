@@ -39,6 +39,13 @@ describe('level order', () => {
     expect(levelAfter(world, world[1])?.id).toBe('level-10')
   })
 
+  it('victory_leads_to_the_nearest_level_after_wherever_the_files_list_it', () => {
+    const world = [levelFile('level-10', 10), levelFile('level-3', 3), levelFile('level-1', 1)]
+
+    expect(levelAfter(world, world[2])?.id).toBe('level-3')
+    expect(levelAfter(world, world[1])?.id).toBe('level-10')
+  })
+
   it('game_starts_at_level_1_and_its_victory_leads_to_the_dustbot_level_5', () => {
     const first = firstLevel(levels)
     const second = levelAfter(levels, first)

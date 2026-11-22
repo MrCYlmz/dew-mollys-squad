@@ -19,7 +19,6 @@ const tickSeconds = 1 / tuning.tickRate
 // Longer frames, such as after a stall, are cut short instead of being caught up tick by tick.
 const maxFrameSeconds = 0.25
 
-// The composition root of a run: owns the loop, and wires input to the sim and the sim to the renderer and screens.
 export class Game {
   private readonly renderer: GameRenderer
   private readonly input: PlayerInput

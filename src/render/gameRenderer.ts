@@ -12,6 +12,7 @@ import {
   MeshLambertMaterial,
   PerspectiveCamera,
   PlaneGeometry,
+  Quaternion,
   Scene,
   SphereGeometry,
   Vector3,
@@ -19,11 +20,21 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three'
+import type { EnemyKind } from '../content/level'
 import { tuning } from '../content/tuning'
-import { drawnCats, formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
+import { formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
 import type { RunState } from '../sim/run'
 import { GatePanel } from './gatePanel'
-import { createCatGeometry, createPuppyGeometry } from './models'
+import { createDigitMaterial, HpLabels } from './hpLabels'
+import {
+  createBarrelGeometry,
+  createBulldogGeometry,
+  createCatGeometry,
+  createChihuahuaGeometry,
+  createPuppyGeometry,
+  createShieldDogGeometry,
+  createShieldGeometry,
+} from './models'
 
 // Sim coordinates (x across, z forward) map to world (x, 0, −z), so the squad runs towards −z and screen right is +x.
 
@@ -36,6 +47,14 @@ const minCameraDistance = 15
 const scatterCapacity = 60
 const scatterLifetime = 1.2
 const gravity = 14
+const wallHeight = 1.2
+// Height of an enemy's HP number above the ground.
+const hpLabelHeight: Record<EnemyKind, number> = { puppy: 1.05, chihuahua: 0.95, bulldog: 1.4, shieldDog: 1.1 }
+const shieldLabelRise = 0.36
+const barrelLabelHeight = 1.15
+const bodyHpColour = new Color(0xffffff)
+const shieldHpColour = new Color(0x8fd0ff)
+const barrelHpColour = new Color(0xd6ecff)
 
 export interface ScreenPoint {
   x: number
@@ -45,6 +64,8 @@ export interface ScreenPoint {
 const matrix = new Matrix4()
 const position = new Vector3()
 const viewDirection = new Vector3()
+// Turns a quad that faces +z towards the camera, which looks down the track at cameraPitch.
+const facingCamera = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -cameraPitch)
 
 function lerp(from: number, to: number, alpha: number): number {
   return from + (to - from) * alpha
@@ -59,14 +80,24 @@ export class GameRenderer {
   private readonly materials: Material[] = []
   private readonly cats: InstancedMesh
   private readonly scatteredCats: InstancedMesh
-  private readonly puppies: InstancedMesh
-  private readonly hpBars: InstancedMesh
+  private readonly enemies: Record<EnemyKind, InstancedMesh>
+  private readonly enemyMeshes: InstancedMesh[]
+  private readonly shields: InstancedMesh
   private readonly yarnBalls: InstancedMesh
+  private readonly barrelGeometry = this.ownGeometry(createBarrelGeometry())
+  private readonly barrelMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
+  private readonly wallGeometry = this.ownGeometry(new BoxGeometry(1, 1, 1))
+  private readonly wallMaterial = this.ownMaterial(new MeshLambertMaterial({ color: 0xb5523b }))
+  private readonly digitMaterial = this.ownMaterial(createDigitMaterial())
   private readonly gatePanelGeometry = new PlaneGeometry(tuning.track.halfWidth, 2.2)
   private readonly levelGroup = new Group()
   private levelGeometries: BufferGeometry[] = []
   private levelMaterials: Material[] = []
   private gatePanels: GatePanel[] = []
+  // Sized to the level's barrels and walls, so they are made again for each run.
+  private barrels: InstancedMesh | null = null
+  private walls: InstancedMesh | null = null
+  private hpLabels: HpLabels | null = null
   private cssWidth = 1
   private cssHeight = 1
   private cameraDistance = minCameraDistance
@@ -97,16 +128,15 @@ export class GameRenderer {
     const catMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
     this.cats = this.instanced(catGeometry, catMaterial, tuning.squad.formationSlots)
     this.scatteredCats = this.instanced(catGeometry, catMaterial, scatterCapacity)
-    this.puppies = this.instanced(
-      this.ownGeometry(createPuppyGeometry()),
-      this.ownMaterial(new MeshLambertMaterial({ vertexColors: true })),
-      tuning.limits.puppies,
-    )
-    this.hpBars = this.instanced(
-      this.ownGeometry(new BoxGeometry(0.7, 0.1, 0.02)),
-      this.ownMaterial(new MeshBasicMaterial({ color: 0xff3b5c })),
-      tuning.limits.puppies,
-    )
+    const dogMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
+    this.enemies = {
+      puppy: this.instanced(this.ownGeometry(createPuppyGeometry()), dogMaterial, tuning.limits.enemies),
+      chihuahua: this.instanced(this.ownGeometry(createChihuahuaGeometry()), dogMaterial, tuning.limits.enemies),
+      bulldog: this.instanced(this.ownGeometry(createBulldogGeometry()), dogMaterial, tuning.limits.enemies),
+      shieldDog: this.instanced(this.ownGeometry(createShieldDogGeometry()), dogMaterial, tuning.limits.enemies),
+    }
+    this.enemyMeshes = Object.values(this.enemies)
+    this.shields = this.instanced(this.ownGeometry(createShieldGeometry()), dogMaterial, tuning.limits.enemies)
     this.yarnBalls = this.instanced(
       this.ownGeometry(new SphereGeometry(0.12, 8, 6)),
       this.ownMaterial(new MeshLambertMaterial({ color: 0xe0407b })),
@@ -148,6 +178,12 @@ export class GameRenderer {
     this.addLevelMesh(new PlaneGeometry(tuning.track.halfWidth * 2, 1.2), new MeshBasicMaterial({ color: 0x222222 }), 0, 0.01, -length)
     this.addLevelMesh(new BoxGeometry(tuning.track.halfWidth * 2 + 0.6, 0.4, 0.4), new MeshLambertMaterial({ color: 0xffd23f }), 0, 3.4, -length)
 
+    this.barrels = this.instanced(this.barrelGeometry, this.barrelMaterial, state.barrels.length)
+    this.walls = this.instanced(this.wallGeometry, this.wallMaterial, state.walls.length)
+    // A shield dog shows two numbers, its shield's and its body's.
+    this.hpLabels = new HpLabels(this.digitMaterial, tuning.limits.enemies * 2 + state.barrels.length, facingCamera)
+    this.scene.add(this.hpLabels.mesh)
+
     for (const row of state.gateRows) {
       for (const side of [-1, 1]) {
         const panel = new GatePanel(this.gatePanelGeometry)
@@ -175,7 +211,11 @@ export class GameRenderer {
     this.placeCamera(squadZ)
     this.drawCats(state, squadX, squadZ)
     this.drawScatteredCats(state, squadX, squadZ, frameSeconds)
-    this.drawPuppies(state, alpha)
+    this.hpLabels?.begin()
+    this.drawEnemies(state, alpha)
+    this.drawBarrels(state)
+    this.hpLabels?.finish()
+    this.drawWalls(state)
     this.drawYarnBalls(state, alpha)
     this.drawGates(state)
     this.renderer.render(this.scene, this.camera)
@@ -209,7 +249,7 @@ export class GameRenderer {
   }
 
   private instanced(geometry: BufferGeometry, material: Material, capacity: number): InstancedMesh {
-    const mesh = new InstancedMesh(geometry, material, capacity)
+    const mesh = new InstancedMesh(geometry, material, Math.max(capacity, 1))
     mesh.count = 0
     // Instances move every frame; the mesh's bounding sphere would not follow them.
     mesh.frustumCulled = false
@@ -231,6 +271,16 @@ export class GameRenderer {
     for (const geometry of this.levelGeometries) geometry.dispose()
     for (const material of this.levelMaterials) material.dispose()
     for (const panel of this.gatePanels) panel.dispose()
+    for (const mesh of [this.barrels, this.walls]) {
+      if (mesh === null) continue
+      this.scene.remove(mesh)
+      mesh.dispose()
+    }
+    if (this.hpLabels !== null) {
+      this.scene.remove(this.hpLabels.mesh)
+      this.hpLabels.dispose()
+    }
+    this.barrels = this.walls = this.hpLabels = null
     this.levelGeometries = []
     this.levelMaterials = []
     this.gatePanels = []
@@ -244,14 +294,17 @@ export class GameRenderer {
     this.camera.lookAt(position)
   }
 
+  // Cats keep their places in the squad, so they move with its interpolated position.
   private drawCats(state: RunState, squadX: number, squadZ: number): void {
-    const drawn = drawnCats(state.squad.count)
-    for (let slot = 0; slot < drawn; slot++) {
+    const cats = state.cats
+    const shiftX = squadX - state.squad.x
+    const shiftZ = squadZ - state.squad.z
+    for (let slot = 0; slot < cats.length; slot++) {
       const bob = Math.abs(Math.sin(this.seconds * 10 + slot * 1.7)) * 0.08
-      matrix.makeTranslation(squadX + formationOffsetX[slot], bob, -(squadZ + formationOffsetZ[slot]))
+      matrix.makeTranslation(cats[slot].x + shiftX, bob, -(cats[slot].z + shiftZ))
       this.cats.setMatrixAt(slot, matrix)
     }
-    this.cats.count = drawn
+    this.cats.count = cats.length
     this.cats.instanceMatrix.needsUpdate = true
   }
 
@@ -296,30 +349,59 @@ export class GameRenderer {
     this.scatteredCats.instanceMatrix.needsUpdate = true
   }
 
-  private drawPuppies(state: RunState, alpha: number): void {
-    const puppies = state.puppies
-    for (let i = 0; i < puppies.length; i++) {
-      const puppy = puppies[i]
-      const x = lerp(puppy.previousX, puppy.x, alpha)
-      const z = -lerp(puppy.previousZ, puppy.z, alpha)
+  private drawEnemies(state: RunState, alpha: number): void {
+    const enemies = state.enemies
+    for (const mesh of this.enemyMeshes) mesh.count = 0
+    this.shields.count = 0
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i]
+      const x = lerp(enemy.previousX, enemy.x, alpha)
+      const z = -lerp(enemy.previousZ, enemy.z, alpha)
+      const mesh = this.enemies[enemy.kind]
       matrix.makeTranslation(x, 0, z)
-      this.puppies.setMatrixAt(i, matrix)
-      const hpShare = puppy.hp / tuning.puppy.hp
-      matrix.makeScale(hpShare, 1, 1)
-      matrix.setPosition(position.set(x - (0.35 * (1 - hpShare)), 1.05, z))
-      this.hpBars.setMatrixAt(i, matrix)
+      mesh.setMatrixAt(mesh.count++, matrix)
+      const labelY = hpLabelHeight[enemy.kind]
+      this.hpLabels?.add(enemy.hp, x, labelY, z, bodyHpColour)
+      if (enemy.shield > 0) {
+        matrix.makeTranslation(x, 0.45, z + 0.55)
+        this.shields.setMatrixAt(this.shields.count++, matrix)
+        this.hpLabels?.add(enemy.shield, x, labelY + shieldLabelRise, z, shieldHpColour)
+      }
     }
-    this.puppies.count = puppies.length
-    this.hpBars.count = puppies.length
-    this.puppies.instanceMatrix.needsUpdate = true
-    this.hpBars.instanceMatrix.needsUpdate = true
+    for (const mesh of this.enemyMeshes) mesh.instanceMatrix.needsUpdate = true
+    this.shields.instanceMatrix.needsUpdate = true
+  }
+
+  private drawBarrels(state: RunState): void {
+    if (this.barrels === null) return
+    const barrels = state.barrels
+    for (let i = 0; i < barrels.length; i++) {
+      matrix.makeTranslation(barrels[i].x, 0, -barrels[i].z)
+      this.barrels.setMatrixAt(i, matrix)
+      this.hpLabels?.add(barrels[i].hp, barrels[i].x, barrelLabelHeight, -barrels[i].z, barrelHpColour)
+    }
+    this.barrels.count = barrels.length
+    this.barrels.instanceMatrix.needsUpdate = true
+  }
+
+  private drawWalls(state: RunState): void {
+    if (this.walls === null) return
+    const walls = state.walls
+    for (let i = 0; i < walls.length; i++) {
+      const wall = walls[i]
+      matrix.makeScale(wall.width, wallHeight, tuning.wall.depth)
+      matrix.setPosition(position.set(wall.x, wallHeight / 2, -(wall.z + tuning.wall.depth / 2)))
+      this.walls.setMatrixAt(i, matrix)
+    }
+    this.walls.count = walls.length
+    this.walls.instanceMatrix.needsUpdate = true
   }
 
   private drawYarnBalls(state: RunState, alpha: number): void {
     const yarnBalls = state.yarnBalls
     for (let i = 0; i < yarnBalls.length; i++) {
       const yarnBall = yarnBalls[i]
-      matrix.makeTranslation(yarnBall.x, 0.35, -lerp(yarnBall.previousZ, yarnBall.z, alpha))
+      matrix.makeTranslation(lerp(yarnBall.previousX, yarnBall.x, alpha), 0.35, -lerp(yarnBall.previousZ, yarnBall.z, alpha))
       this.yarnBalls.setMatrixAt(i, matrix)
     }
     this.yarnBalls.count = yarnBalls.length

@@ -79,6 +79,20 @@ describe('buff block', () => {
     expect(drops).toBeGreaterThan(0)
   })
 
+  it('yarn_balls_fly_on_up_to_the_front_edge_of_a_buff_block', () => {
+    // A yarn ball moves 0.5 units a tick, so one heading into the block is seen within 0.5 units of its front edge first.
+    const run = startRun([buffBlock(60, 'centre', unbreakable, 'add')])
+    let nearestToTheBlock = -Infinity
+
+    while (run.state.squad.z < 55 && run.state.status === 'running') {
+      run.step(noSteering)
+      for (const yarnBall of run.state.yarnBalls) nearestToTheBlock = Math.max(nearestToTheBlock, yarnBall.z)
+    }
+
+    expect(nearestToTheBlock).toBeGreaterThan(60 - 0.5)
+    expect(nearestToTheBlock).toBeLessThanOrEqual(60)
+  })
+
   it('yarn_ball_stops_at_a_buff_block_in_front_of_a_puppy', () => {
     // RANGE +10 lets the squad reach the block at z = 50 from z = 10. The puppy appears at z = 60 when the squad is at
     // z = 20 and walks through the block towards the squad; while it is still behind the block, no yarn ball reaches it.
@@ -101,11 +115,11 @@ describe('buff block', () => {
     expect(run.state.buffBlocks[0].hp).toBeLessThan(unbreakable)
   })
 
-  it('yarn_balls_beside_a_buff_block_pass_it_and_the_squad_beside_it_loses_no_cats', () => {
-    const run = startRun([buffBlock(40, 'left', 100, 'add')])
+  it.each(['left', 'right'] as const)('yarn_balls_beside_a_%s_lane_buff_block_pass_it_and_the_squad_beside_it_loses_no_cats', (lane) => {
+    const run = startRun([buffBlock(40, lane, 100, 'add')])
 
     const events = stepUntil(run, (state) => state.squad.z > 39, 6000)
-    expect(run.state.buffBlocks).toEqual([expect.objectContaining({ lane: 'left', hp: 100 })])
+    expect(run.state.buffBlocks).toEqual([expect.objectContaining({ lane, hp: 100 })])
 
     events.push(...stepUntil(run, (state) => state.squad.z > 45, 6000))
     expect(eventsOf(events, 'catsLost')).toEqual([])
@@ -170,6 +184,31 @@ describe('big buff', () => {
     expect(run.state.squad.count).toBe(1)
     expect(eventsOf(events, 'bigBuffCollected')).toEqual([])
     expect(run.state.bigBuffs).toEqual([])
+  })
+
+  it('squad_in_the_right_lane_breaks_a_right_lane_block_and_collects_its_buff', () => {
+    const run = startRun([buffBlock(60, 'right', 3, 'add')], 3)
+
+    const events = stepUntil(run, (state) => state.squad.z > 60.5, 6000)
+
+    expect(eventsOf(events, 'buffBlockBroken')).toEqual([expect.objectContaining({ lane: 'right', buff: 'add' })])
+    expect(run.state.squad.count).toBe(31)
+  })
+
+  it('big_buff_that_reached_the_squad_beside_its_lane_is_lost_though_the_squad_steers_into_its_lane_before_it_is_behind', () => {
+    // 25 cats stand up to about 1.5 units behind the squad's centre, so the buff is behind the last cat about 11 ticks
+    // after it reached the centre; by then the squad has steered back into the left lane.
+    const run = startRun([...squadOf(25), buffBlock(60, 'left', 1, 'add')], -3)
+    const events = stepUntil(run, (state) => state.bigBuffs.length > 0, 6000)
+    expect(run.state.squad.z).toBeLessThan(55)
+    steerTo(run, 0)
+    events.push(...stepUntil(run, (state) => state.squad.z >= 60, 6000))
+    steerTo(run, -3)
+
+    events.push(...stepUntil(run, (state) => state.squad.z > 64, 6000))
+
+    expect(eventsOf(events, 'bigBuffCollected')).toEqual([])
+    expect(run.state.squad.count).toBe(25)
   })
 
   it.each([
@@ -266,6 +305,21 @@ describe('running into a buff block', () => {
     expect(run.state.squad.count).toBe(0)
     expect(run.state.status).toBe('lost')
     expect(run.state.lossCause).toBe('outOfCats')
+  })
+
+  it('block_contact_in_the_gate_tick_applies_before_the_gate', () => {
+    // A single cat touches the block's front edge when the squad reaches z = 60.05, the same tick it takes the +10 gate.
+    // Block first: 1 − 10 leaves 0 and loses the run before the gate could add 10.
+    const gateZ = 60.05
+    const run = startRun([
+      { type: 'gates', z: gateZ, ...everyLane({ op: 'add', value: 10 }) },
+      buffBlock(gateZ + tuning.hitRadius.cat, 'centre', unbreakable, 'add'),
+    ])
+
+    stepUntil(run, (state) => state.squad.z > 62, 6000)
+
+    expect(run.state.status).toBe('lost')
+    expect(run.state.squad.count).toBe(0)
   })
 
   it('cat_reaching_into_the_block_lane_costs_cats_though_the_squad_centre_is_beside_it', () => {

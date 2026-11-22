@@ -125,6 +125,19 @@ describe('wall', () => {
     expect(run.state.squad.count).toBe(21)
   })
 
+  it('single_cat_first_touches_a_wall_at_its_front_edge', () => {
+    // The cat's hit circle reaches z = 60 once the squad's centre is at 60 − 0.3; a tick moves it 8 / 60 units.
+    const run = createRun({ level: levelOf([{ type: 'wall', z: 60, x: 0, width: 10 }]), seed: 1 })
+    let zAtTheTouch: number | undefined
+
+    while (zAtTheTouch === undefined && run.state.squad.z < 62 && run.state.status === 'running') {
+      if (run.step(noSteering).some((event) => event.type === 'catsLost')) zAtTheTouch = run.state.squad.z
+    }
+
+    expect(zAtTheTouch).toBeGreaterThanOrEqual(60 - tuning.hitRadius.cat)
+    expect(zAtTheTouch).toBeLessThan(60 - tuning.hitRadius.cat + 8 / 60)
+  })
+
   it('wall_contact_in_the_gate_tick_applies_before_the_gate', () => {
     // A single cat touches the wall's front edge when the squad reaches z = 60.05, the same tick it takes
     // the +10 gate. Wall first: 1 − 10 leaves 0 and loses the run before the gate could add 10.

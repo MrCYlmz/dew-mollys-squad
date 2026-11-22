@@ -128,13 +128,29 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 | Bulldog | Brute | 40 | 2.5 | 10 | A slow tank, alone or in small groups |
 | Shield dog | Shield bearer | 15, plus a shield of 30 | 3 | 3 | The shield must break before the body takes damage |
 
-- Every enemy runs at the squad as its wave's spawn pattern says (see [levels](levels.md#wave)), at its own speed along the road. Every enemy can come in every spawn pattern; the typical use is a guide for designers.
-- The road brings an enemy toward the squad as well, so an enemy closes in at the run speed plus its own speed. Example: a puppy closes in at 8 + 4 = 12 units/s. In the boss arena, where the road has stopped, it closes in at its own speed.
+- An enemy starts where its wave's spawn pattern (see [levels](levels.md#wave)) or the [enemy stream](#enemy-stream) places it. Every enemy can come in every spawn pattern; the typical use is a guide for designers.
+- Every enemy chases the squad, in any lane, from its first tick: it moves straight toward the squad's centre at its own speed, following the squad as it steers, as the boss walks. It never leaves the track, because the squad's centre is always on it.
+- The road brings an enemy toward the squad as well, at the run speed. Example: a puppy straight ahead of the squad closes in at 8 + 4 = 12 units/s; a puppy off to one side spends part of its speed moving across, so it closes in along the road more slowly. In the boss arena, where the road has stopped, an enemy closes in at its own speed.
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage, whatever HP it has left. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - An enemy that gets past the squad disappears behind it and does no damage.
 - An enemy is past the squad only once it is past the squad's last cat. Until then, an enemy touching any cat, even one inside the cluster, costs cats.
 - An enemy dies when its HP reaches 0 or less. HP can be a fraction after scaling; the number shown is rounded up. Example: a puppy with 0.24 HP left shows 1.
 - Enemies are not stopped by walls, barrels, buff blocks or each other.
+
+### Enemy stream
+
+Besides its waves, every level has an endless enemy stream, set by the level file's `stream` (see [levels](levels.md#stream)): one enemy every `interval` seconds.
+
+- The stream runs from the start of the run while the squad's distance travelled is less than `length`, so until the finish line or the arena start. It stops there, and when the run ends. Stream enemies still alive at the arena start keep coming, like wave enemies.
+- Timing counts whole ticks: the interval is `interval` × the tick rate (60 ticks/s), rounded to the nearest whole number of ticks, halves up, and at least 1 tick. Counting the run's first tick as tick 1, an enemy spawns on every tick that is a whole multiple of the interval. Example: an `interval` of 1.5 is 90 ticks, so enemies spawn on ticks 90, 180, 270 and so on, the first 1.5 s into the run.
+- The stream's enemies come in the order of its `enemies` list, starting over after the last. Example: with `["puppy", "puppy", "chihuahua"]` the stream sends puppy, puppy, chihuahua, puppy, puppy, chihuahua and so on.
+- A stream enemy spawns 40 units (the stream spawn distance, in the tuning config) ahead of the squad's centre, at z = distance travelled + 40, at an x drawn evenly from −5..5 by the seeded RNG.
+- A stream enemy is an enemy like any other: it chases, touches, dies and gets past the squad as above. Its HP scales with the level number like a wave enemy's (see [levels](levels.md#scaling)).
+
+### Enemy cap
+
+- At most 150 enemies are alive at once (the enemy cap, in the tuning config), from the performance budget.
+- When an enemy would spawn, from a wave or the stream, while 150 are alive, the oldest alive enemy, the one that spawned first, disappears to make room. It is not killed and does not touch the squad: it costs no cats and counts as no kill.
 
 ### Shield dog
 
@@ -149,10 +165,10 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 | --- | --- |
 | Line | A row of N enemies across the track |
 | Block | A grid, such as 5 × 4 puppies |
-| Column | Enemies in single file at one place across the track; steering away avoids them |
-| Flank | Enemies from the left and right edges walking inward |
+| Column | Enemies in single file at one place across the track |
+| Flank | Enemies in single file at the left and right edges |
 
-Where each pattern places its enemies is set in the [level file](levels.md#wave).
+A spawn pattern sets only where a wave's enemies start, as in the [level file](levels.md#wave). From their first tick they all chase the squad.
 
 ## Barrels
 
@@ -163,12 +179,22 @@ Where each pattern places its enemies is set in the [level file](levels.md#wave)
 - A barrel that gets past the squad's last cat disappears.
 - Barrel HP, splash damage and splash radius are in the tuning config and do not scale with the level number.
 
+## Obstacles
+
+Walls and unbroken buff blocks are obstacles.
+
+- When the squad's centre runs into an obstacle, the run is lost at once, whatever the squad count.
+- The squad's centre is in an obstacle when it is inside the obstacle's x-range across the track and between its front and back edge along the track (distance travelled from the obstacle's `z` to its `z` + its depth). For a wall the x-range is from `x` − `width` ÷ 2 to `x` + `width` ÷ 2, both edges included; for a buff block it is the block's lane, so the squad's centre is in its x-range when the squad is in that lane (see [lanes](#lanes)).
+- This is checked every tick, so a squad whose centre is in an obstacle's x-range as the obstacle reaches it is lost, and so is one that steers its centre into an obstacle while the obstacle passes. Example: a wall over x −5..0 at z = 160 loses the run of a squad at x = −1 when the distance travelled reaches 160, and of a squad at x = 0; a squad at x = 0.5 passes it.
+- Cats at the side of the squad that only clip an obstacle are not lost and do not lose the run: the obstacle passes through them.
+- Barrels are not obstacles: the squad passes them unharmed.
+
 ## Walls
 
 - A wall is a static block on the track. Its place and width across the track are set in the [level file](levels.md#wall); its depth along the track is the wall depth (1 unit, in the tuning config).
 - A wall stops yarn balls and takes no damage, so it cannot be destroyed.
-- When any cat touches a wall, the squad loses 10 cats (the wall cat loss, in the tuning config), down to 0, which loses the run. Each wall costs cats once: touching it again costs nothing more. Cats lost to a wall scatter off-screen unhurt.
-- A wall does not stop the squad or the road: it passes through the squad and on behind it.
+- A wall is an [obstacle](#obstacles): when the squad's centre runs into it, the run is lost.
+- A wall does not stop the road: one that the squad's centre misses passes through the cats it clips and on behind the squad.
 - A wall that gets past the squad's last cat disappears.
 
 ## Buff blocks
@@ -183,7 +209,7 @@ A buff block is a block filling one [lane](#lanes), with HP, that hides a big bu
 - When its HP reaches 0 or less, the block breaks and uncovers its big buff, which stands where the block's front edge was, at its lane.
 - A big buff is collected when it reaches the squad's centre while the squad's centre is in the big buff's lane. Otherwise it passes the squad and is lost. Example: a block in the left lane breaks; the squad steers to x = −3 and collects its buff, but a squad still at x = 0 when the buff reaches it loses it.
 - A big buff that is uncovered only after it has reached the squad's centre is lost.
-- An unbroken block costs cats like a wall: when any cat touches it, the squad loses 10 cats (the buff block cat loss, in the tuning config), down to 0, which loses the run. Each block costs cats once. The block stays, does not stop the squad, and can still be shot until it is past the squad's last cat.
+- An unbroken block is an [obstacle](#obstacles): when the squad's centre runs into it, the run is lost. A broken block is no obstacle. One that the squad's centre misses passes through the cats it clips and can still be shot until it is past the squad's last cat.
 - A block or big buff that gets past the squad's last cat disappears.
 
 ### Big buffs
@@ -264,8 +290,9 @@ These values are in the tuning config.
 ## Win and loss
 
 - A run is won when the boss is defeated, or, in a level without a boss, when the squad's centre reaches the finish line.
-- A run is lost when the squad count reaches 0, or when the boss touches the squad.
-- The run ends at its first win or loss in the playbook's tick order. Yarn ball hits come before contacts with the squad, so a yarn ball that defeats the boss wins the run even if the boss or a dust ball would touch the squad in the same tick.
+- A run is lost when the squad count reaches 0, when the squad's centre runs into an [obstacle](#obstacles), or when the boss touches the squad.
+- The run ends at its first win or loss in the playbook's tick order. Yarn ball hits come before contacts with the squad, so a yarn ball that defeats the boss wins the run even if the boss or a dust ball would touch the squad in the same tick, and a buff block that a yarn ball breaks in the tick the squad's centre runs into it does not lose the run.
+- Contacts in one tick are checked in this order: enemies, walls, buff blocks, dust balls, the boss. The first one that loses the run is why it was lost.
 - A won run earns 1–3 stars based on the squad count left.
 - After a loss, one tap restarts the level instantly, with no loading screen.
 - After a win, the player goes to the victory screen, then upgrades and the next level.

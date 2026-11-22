@@ -22,15 +22,20 @@ One term per concept. Code, tests and docs use these words exactly.
 | Weapon buff | An effect on fire rate, damage, multi-shot or range from a gate or big buff that lasts until the end of the run. |
 | Weapon-buff gate | A gate that gives a weapon buff. It is always blue. |
 | Multi-shot | Several yarn balls per cat per shot, fanned out in a spread. |
-| Enemy | A dog that runs at the squad: puppy, chihuahua, bulldog or shield dog. |
+| Enemy | A dog that chases the squad's centre: puppy, chihuahua, bulldog or shield dog. |
 | Contact damage | The number of cats an enemy removes when it touches the squad. |
 | Wave | A group of enemies spawned together in one spawn pattern. |
-| Spawn pattern | The formation of a wave: line, block, column or flank. |
+| Spawn pattern | The starting formation of a wave: line, block, column or flank. |
 | Spawn distance | How far before a wave's position the squad is when the wave appears. |
+| Enemy stream | The endless enemies of a level besides its waves: one every interval, from the start of the run until the finish line or the arena start. |
+| Stream interval | The seconds between two enemies of the enemy stream, set per level. |
+| Stream spawn distance | How far ahead of the squad's centre a stream enemy appears. |
+| Enemy cap | The most enemies alive at once, 150. Beyond it the oldest enemy disappears. |
 | Barrel | A static water bucket on the track that splashes nearby enemies when destroyed. |
 | Shield | The shield dog's extra HP, which takes all damage before its body does. |
-| Wall | A static block on the track that stops yarn balls and costs cats when the squad touches it, so the squad steers around it. |
-| Buff block | A block filling one lane, with HP, that hides a big buff. Yarn balls break it; an unbroken one costs cats like a wall. |
+| Obstacle | A wall or an unbroken buff block. The squad's centre running into one loses the run. |
+| Wall | A static block on the track that stops yarn balls and is an obstacle, so the squad steers around it. |
+| Buff block | A block filling one lane, with HP, that hides a big buff. Yarn balls break it; an unbroken one is an obstacle. |
 | Big buff | The reward behind a buff block: +30 cats, ×3 cats, FIRE RATE +60%, DMG +3, +2 BULLET or RANGE +30. The squad collects it by being in its lane when it arrives. |
 | Coin | A fish. Coins are the currency for upgrades. |
 | Boss | A giant robot vacuum cleaner at the end of some levels: the Dustbot or the Mega Dustbot. |

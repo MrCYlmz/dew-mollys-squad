@@ -23,7 +23,7 @@ Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the
 | Defeat | Distance reached, tip text | Retry, one tap, instant |
 
 - The first level starts with one tap from the title screen.
-- The Defeat screen names why the run was lost: "Out of cats" when the squad count reached 0, or the boss that touched the squad, such as "Caught by the Dustbot".
+- The Defeat screen names why the run was lost: "Out of cats" when the squad count reached 0, "Ran into a wall" or "Ran into a block" when the squad's centre ran into an obstacle, or the boss that touched the squad, such as "Caught by the Dustbot".
 - HUD: nothing important in the bottom 20% of the screen, where the finger is.
 - HUD and screens respect the phone's safe areas (notch, rounded corners).
 

@@ -37,10 +37,31 @@ One input steers. Firing is always on.
 
 - Every cat fires yarn balls straight ahead, all the time.
 - Each yarn ball travels up to the squad's range and damages the enemy, barrel or gate it hits.
+- A yarn ball stops at the first puppy or gate it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range.
+
+Base values at level 1, before weapon buffs and upgrades:
+
+| Value | Base |
+| --- | --- |
+| Fire rate | 2 yarn balls/s per cat |
+| Damage | 1 per yarn ball |
+| Range | 30 units |
+| Yarn ball speed | 30 units/s |
+
+### Yarn ball cap
+
+Never more than 400 yarn balls are in flight (the yarn ball cap, in the tuning config). A big squad fires fewer, stronger yarn balls instead, so results equal every cat firing its own:
+
+- If every cat fired its own yarn ball, the squad would have squad count × fire rate × range ÷ yarn ball speed yarn balls in flight.
+- When that is above the cap, each yarn ball stands for N cats: N is that number divided by the cap, rounded up. The squad then fires N times fewer yarn balls.
+- A yarn ball standing for N cats deals N × damage, and counts as N hits on an add or subtract gate. It still stops at the first puppy or gate it hits.
+- At or below the cap, N is 1 and every cat fires its own yarn ball.
+
+Examples at the base values (2 yarn balls/s, range 30, speed 30, so each yarn ball flies 1 s): a squad of 200 would have 400 in flight, so N is 1. A squad of 300 would have 600, so N is 2: each yarn ball deals 2 damage, and about 300 are in flight. A squad of 999 would have 1,998, so N is 5, and about 400 are in flight.
 
 ## Gates
 
-Each gate row has two gates. The squad takes the gate it runs through.
+Each gate row has two gates. The squad takes the gate it runs through: a squad whose centre is at x < 0 takes the left gate, and one at x ≥ 0, including exactly 0, takes the right gate.
 
 | Gate | Shown as | Effect when taken | Colour |
 | --- | --- | --- | --- |
@@ -54,7 +75,7 @@ Each gate row has two gates. The squad takes the gate it runs through.
 | Range | RANGE +10 | yarn balls travel 10 units farther | Blue |
 
 - Examples: a squad of 8 taking ×2 becomes 16. A squad of 7 taking ÷2 becomes 3. A squad of 1 taking ÷2 stays 1. A squad of 10 taking −15 becomes 0 and the run is lost.
-- Shooting a gate: each yarn ball that hits an add or subtract gate raises its value by 1. Example: −15 → −14 → … → 0 → +1.
+- Shooting a gate: an add or subtract gate counts the yarn ball hits it takes, and every 10 hits (the hits per gate step, in the tuning config) raise its value by 1. Example: −15 → −14 → … → 0 → +1, so a −15 gate turns blue at +1 after 160 hits.
 - A gate is blue as soon as its value is positive. Example: a subtract gate shot from −2 to +1 turns blue and adds 1.
 - Multiply and divide gates do not change when shot.
 - Weapon buffs last until the end of the run.
@@ -74,6 +95,8 @@ Every enemy shows its HP as a number or bar. Values are for level 1 and scale pe
 | Shield dog | Shield bearer | 15, plus a shield of 30 from the front | 3 | 3 | The shield must break before the body takes damage |
 
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
+- A puppy that gets past the squad disappears behind it and does no damage.
+- A puppy is past the squad only once it is past the squad's last cat. Until then, a puppy touching any cat, even one inside the cluster, costs a cat.
 - Shield dog: hits from the front reduce the shield first. The body takes damage only once the shield is at 0.
 
 ### Barrels
@@ -89,6 +112,8 @@ Every enemy shows its HP as a number or bar. Values are for level 1 and scale pe
 | Block | A grid, such as 5 × 4 puppies |
 | Column | Enemies in single file in one lane; steering away avoids them |
 | Flank | Enemies from the left and right edges walking inward |
+
+Where each pattern places its enemies is set in the [level file](levels.md#level-file).
 
 ## Boss
 

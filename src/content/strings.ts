@@ -1,0 +1,24 @@
+// Every visible string of the game.
+
+export const strings = {
+  gameName: "Molly's Squad",
+  tapToPlay: 'Tap to play',
+  levelProgress: 'Level progress',
+  pause: 'Pause',
+  paused: 'Paused',
+  resume: 'Resume',
+  restart: 'Restart',
+  quitToTitle: 'Quit to title',
+  levelComplete: 'Level complete',
+  catsLeft: 'Cats left',
+  playAgain: 'Play again',
+  backToTitle: 'Back to title',
+  defeat: 'Out of cats',
+  distanceReached: 'Distance reached',
+  retry: 'Tap to retry',
+  squadCount: 'Squad count',
+  gatePlus: '+',
+  gateMinus: '−',
+  gateTimes: '×',
+  gateDivide: '÷',
+}

@@ -1,0 +1,23 @@
+{
+  "id": "level-1",
+  "length": 400,
+  "placeholder": true,
+  "events": [
+    { "type": "gates", "z": 30, "left": { "op": "add", "value": 10 }, "right": { "op": "multiply", "value": 2 } },
+    { "type": "wave", "z": 55, "enemy": "puppy", "pattern": "line", "count": 5 },
+    { "type": "gates", "z": 80, "left": { "op": "multiply", "value": 2 }, "right": { "op": "add", "value": 8 } },
+    { "type": "wave", "z": 105, "enemy": "puppy", "pattern": "block", "columns": 4, "rows": 3, "x": 0, "spacing": 1.5 },
+    { "type": "gates", "z": 130, "left": { "op": "subtract", "value": 5 }, "right": { "op": "add", "value": 15 } },
+    { "type": "wave", "z": 150, "enemy": "puppy", "pattern": "column", "count": 10, "x": -2.5, "spacing": 1.5 },
+    { "type": "gates", "z": 175, "left": { "op": "multiply", "value": 2 }, "right": { "op": "divide", "value": 2 } },
+    { "type": "wave", "z": 200, "enemy": "puppy", "pattern": "flank", "count": 5, "spacing": 2 },
+    { "type": "gates", "z": 225, "left": { "op": "subtract", "value": 10 }, "right": { "op": "add", "value": 20 } },
+    { "type": "wave", "z": 245, "enemy": "puppy", "pattern": "line", "count": 8 },
+    { "type": "gates", "z": 270, "left": { "op": "divide", "value": 2 }, "right": { "op": "multiply", "value": 2 } },
+    { "type": "wave", "z": 295, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": -1.5, "spacing": 1.5 },
+    { "type": "gates", "z": 320, "left": { "op": "add", "value": 20 }, "right": { "op": "subtract", "value": 20 } },
+    { "type": "wave", "z": 340, "enemy": "puppy", "pattern": "column", "count": 12, "x": 2.5, "spacing": 1 },
+    { "type": "gates", "z": 365, "left": { "op": "multiply", "value": 2 }, "right": { "op": "add", "value": 30 } },
+    { "type": "wave", "z": 385, "enemy": "puppy", "pattern": "flank", "count": 6, "spacing": 1.5 }
+  ]
+}

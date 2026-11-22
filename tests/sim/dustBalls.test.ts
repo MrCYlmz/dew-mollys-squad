@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { BossKind, Level } from '../../src/content/level'
+import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
 import { bossLevelOf, copied, doublingRows, noSteering, steerTo, stepTicks, stepToArena } from './runHarness'
 
@@ -61,6 +62,26 @@ describe('dust balls', () => {
 
     expect(thrown).toHaveLength(4)
     thrown.forEach((tick, index) => expect(Math.abs(tick - throwInterval * (index + 1))).toBeLessThanOrEqual(1))
+  })
+
+  describe('with another dust ball interval in the tuning config', () => {
+    const documentedInterval = tuning.dustBall.interval
+
+    afterEach(() => {
+      tuning.dustBall.interval = documentedInterval
+    })
+
+    // At 60 ticks a second, 1 s is exactly 60 ticks and 1.5 s exactly 90.
+    it.each([
+      [1, [60, 120, 180]],
+      [1.5, [90, 180, 270]],
+    ])('mega_dustbot_with_an_interval_of_%d_s_throws_on_exactly_those_ticks', (interval, expected) => {
+      tuning.dustBall.interval = interval
+      const run = bossRun('megaDustbot', doublingRows(6))
+      stepToArena(run)
+
+      expect(throwTicks(run, expected[2])).toEqual(expected)
+    })
   })
 
   it('dust_ball_flies_from_the_boss_centre_at_10_units_per_second_toward_where_the_squad_centre_was', () => {

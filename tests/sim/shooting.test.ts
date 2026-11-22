@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
-import { copied, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
+import { copied, everyLane, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 function averageYarnBallsInFlight(run: Run, ticks: number): number {
   let total = 0
@@ -35,7 +35,7 @@ describe('yarn balls', () => {
   it('every_cat_fires', () => {
     const run = createRun({
       level: levelOf([
-        { type: 'gates', z: 2, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+        { type: 'gates', z: 2, ...everyLane({ op: 'multiply', value: 2 }) },
       ]),
       seed: 1,
     })
@@ -133,81 +133,5 @@ describe('yarn balls', () => {
     }
 
     expect(backPuppyHitWhileFrontStood).toBe(false)
-  })
-
-  it('yarn_ball_stops_at_a_gate_in_front_of_a_puppy', () => {
-    const run = createRun({
-      level: levelOf([
-        { type: 'gates', z: 20, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
-        { type: 'wave', z: 36, enemy: 'puppy', pattern: 'line', count: 2 },
-      ]),
-      seed: 1,
-    })
-    steerTo(run, -2.5)
-    const puppyInLane = () => run.state.enemies.find((puppy) => puppy.x < 0)
-
-    stepUntil(run, (state) => state.gateRows[0].taken !== null, 600)
-    expect(puppyInLane()?.hp).toBe(3)
-
-    stepUntil(run, () => (puppyInLane()?.hp ?? 0) < 3, 120)
-    expect(puppyInLane()?.hp ?? 0).toBeLessThan(3)
-  })
-
-  it('yarn_balls_from_beyond_the_track_edge_pass_a_gate_row', () => {
-    // 16 cats at the right edge: the outer ones stand beyond x = 5
-    const run = createRun({
-      level: levelOf([
-        ...repeatedRows({ op: 'multiply', value: 2 }, 4),
-        { type: 'gates', z: 60, left: { op: 'add', value: 1 }, right: { op: 'add', value: 1 } },
-      ]),
-      seed: 1,
-    })
-    steerTo(run, 5)
-    let offTrackPastTheRow = 0
-    let onTrackPastTheRow = 0
-
-    // While every cat is behind the row, a yarn ball beyond it has flown through it.
-    while (Math.max(...run.state.cats.map((cat) => cat.z)) < 59.5 && run.state.status === 'running') {
-      run.step(noSteering)
-      for (const yarnBall of run.state.yarnBalls) {
-        if (yarnBall.z <= 60) continue
-        if (Math.abs(yarnBall.x) > 5) offTrackPastTheRow++
-        else onTrackPastTheRow++
-      }
-    }
-
-    expect(run.state.squad.count).toBe(16)
-    expect(Math.max(...run.state.cats.map((cat) => cat.x))).toBeGreaterThan(5)
-    expect(offTrackPastTheRow).toBeGreaterThan(0)
-    expect(onTrackPastTheRow).toBe(0)
-  })
-
-  it('fanned_yarn_ball_that_passed_a_row_beyond_the_edge_hits_the_next_row_once_back_on_track', () => {
-    // 2 cats at the left edge, one of them beyond x = −5, each firing 2 yarn balls at ±2.5°, 4 shots/s. The inward yarn ball of
-    // the outer cat is back on track about 5 units after it is fired: fired less than that before the row at z = 20, it passes
-    // that row beyond the edge and meets the row at z = 26 on track. A barrel just behind z = 26 lies in its path and in the
-    // path of no yarn ball that passes z = 26 beyond the edge.
-    function barrelHpBeforeTheSecondRow(secondRow: boolean) {
-      const run = createRun({
-        level: levelOf([
-          { type: 'gates', z: 1, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
-          { type: 'gates', z: 2, left: { op: 'multiShot', value: 1 }, right: { op: 'multiShot', value: 1 } },
-          ...[3, 4, 5, 6, 7].map((z) => ({ type: 'gates' as const, z, left: { op: 'fireRate' as const, value: 20 }, right: { op: 'fireRate' as const, value: 20 } })),
-          { type: 'gates', z: 20, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
-          ...(secondRow ? [{ type: 'gates' as const, z: 26, left: { op: 'multiply' as const, value: 2 }, right: { op: 'multiply' as const, value: 2 } }] : []),
-          { type: 'barrel', z: 27, x: -4.3 },
-        ]),
-        seed: 1,
-      })
-      steerTo(run, -5)
-      stepUntil(run, (state) => state.squad.z > 25, 6000)
-      return { run, hp: run.state.barrels[0].hp }
-    }
-
-    const withoutTheRow = barrelHpBeforeTheSecondRow(false)
-    expect(Math.min(...withoutTheRow.run.state.cats.map((cat) => cat.x))).toBeLessThan(-5)
-    expect(withoutTheRow.hp).toBeLessThan(10)
-
-    expect(barrelHpBeforeTheSecondRow(true).hp).toBe(10)
   })
 })

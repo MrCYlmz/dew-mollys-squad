@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BossKind, Level } from '../../src/content/level'
 import { createRun, type GameEvent, type Run, type RunState } from '../../src/sim/run'
-import { bossLevelOf, copied, doublingRows, noSteering, repeatedRows, steerTo, stepTicks, stepToArena, stepUntil } from './runHarness'
+import { bossLevelOf, copied, doublingRows, everyLane, noSteering, repeatedRows, steerTo, stepTicks, stepToArena, stepUntil } from './runHarness'
 
 // Values from docs/domain/run.md (Boss) and levels.md (Balancing).
 const length = 300
@@ -198,7 +198,7 @@ describe('hitting the boss', () => {
   })
 
   it('a_damage_buff_raises_the_damage_each_yarn_ball_deals_to_the_boss', () => {
-    const run = bossRun('dustbot', 60, [{ type: 'gates', z: 20, left: { op: 'damage', value: 1 }, right: { op: 'damage', value: 1 } }])
+    const run = bossRun('dustbot', 60, [{ type: 'gates', z: 20, ...everyLane({ op: 'damage', value: 1 }) }])
     stepToArena(run)
 
     const events = stepTicks(run, 600)

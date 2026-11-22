@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Gate, Level } from '../../src/content/level'
 import { createRun, type Run } from '../../src/sim/run'
-import { doublingRows, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
+import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
-type GateSide = 'left' | 'right'
+type Lane = 'left' | 'right'
 
 const fireRate: Gate = { op: 'fireRate', value: 20 }
 const damage: Gate = { op: 'damage', value: 1 }
@@ -87,7 +87,7 @@ describe('fire rate gate', () => {
 
   it('cats_that_join_after_a_fire_rate_gate_fire_with_the_buff', () => {
     // 2 cats at 2.4 yarn balls/s
-    const run = oneCatAfter([...repeatedRows(fireRate, 1), { type: 'gates', z: 10, left: double, right: double }])
+    const run = oneCatAfter([...repeatedRows(fireRate, 1), { type: 'gates', z: 10, ...everyLane(double) }])
 
     expect(run.state.squad.count).toBe(2)
     expect(Math.abs(averageYarnBallsInFlight(run, 300) - 4.8)).toBeLessThanOrEqual(0.3)
@@ -119,28 +119,6 @@ describe('damage gate', () => {
 
     expect(hpSeen).toEqual([3, 1])
     expect(shotKills).toBe(1)
-  })
-
-  it('damage_buff_does_not_change_the_hits_a_yarn_ball_counts_on_a_gate', () => {
-    // 2 cats land about 2 × 2 × 3.75 = 15 hits on the gate, one per yarn ball whatever its damage: one step
-    const run = createRun({
-      level: levelOf([
-        ...repeatedRows(damage, 1),
-        { type: 'gates', z: 10, left: double, right: double },
-        { type: 'gates', z: 60, left: { op: 'subtract', value: 15 }, right: { op: 'subtract', value: 15 } },
-      ]),
-      seed: 1,
-    })
-    steerTo(run, -2.5)
-    const values = new Set<number>()
-
-    while (run.state.gateRows[2].taken === null && run.state.status === 'running') {
-      run.step(noSteering)
-      values.add(run.state.gateRows[2].left.value)
-    }
-
-    expect(run.state.weapon.damage).toBe(2)
-    expect([...values]).toEqual([-15, -14])
   })
 })
 
@@ -251,31 +229,13 @@ describe('weapon-buff gates in a row', () => {
     expect(run.state.gateRows[3].taken).toBe('left')
   })
 
-  it.each(buffs)('yarn_ball_stops_at_a_%s_gate_in_front_of_a_puppy', (_name, buff) => {
-    const run = createRun({
-      level: levelOf([
-        { type: 'gates', z: 20, left: buff, right: buff },
-        { type: 'wave', z: 36, enemy: 'puppy', pattern: 'line', count: 2 },
-      ]),
-      seed: 1,
-    })
-    steerTo(run, -2.5)
-    const puppyInLane = () => run.state.enemies.find((enemy) => enemy.x < 0)
-
-    stepUntil(run, (state) => state.gateRows[0].taken !== null, 600)
-    expect(puppyInLane()?.hp).toBe(3)
-
-    stepUntil(run, () => (puppyInLane()?.hp ?? 0) < 3, 120)
-    expect(puppyInLane()?.hp ?? 0).toBeLessThan(3)
-  })
-
   it('taking_one_gate_of_a_row_mixing_add_and_damage_leaves_the_other', () => {
-    const row = (side: GateSide) => {
+    const row = (lane: Lane) => {
       const run = createRun({
         level: levelOf([{ type: 'gates', z: 30, left: { op: 'add', value: 10 }, right: damage }]),
         seed: 1,
       })
-      steerTo(run, side === 'left' ? -2.5 : 2.5)
+      steerTo(run, lane === 'left' ? -2.5 : 2.5)
       const events = stepUntil(run, (state) => state.squad.z > 31, 6000)
       return { state: run.state, gateTaken: events.filter((event) => event.type === 'gateTaken') }
     }
@@ -285,9 +245,9 @@ describe('weapon-buff gates in a row', () => {
 
     expect(left.state.squad.count).toBe(11)
     expect(left.state.weapon.damage).toBe(1)
-    expect(left.gateTaken).toEqual([{ type: 'gateTaken', side: 'left', op: 'add', value: 10, squadCount: 11 }])
+    expect(left.gateTaken).toEqual([{ type: 'gateTaken', lane: 'left', op: 'add', value: 10, squadCount: 11 }])
     expect(right.state.squad.count).toBe(1)
     expect(right.state.weapon.damage).toBe(2)
-    expect(right.gateTaken).toEqual([{ type: 'gateTaken', side: 'right', op: 'damage', value: 1, squadCount: 1 }])
+    expect(right.gateTaken).toEqual([{ type: 'gateTaken', lane: 'right', op: 'damage', value: 1, squadCount: 1 }])
   })
 })

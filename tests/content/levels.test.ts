@@ -81,10 +81,30 @@ describe('placeholder levels', () => {
 
   it('placeholder_levels_have_every_weapon_buff_gate', () => {
     const ops = new Set(
-      placeholders.flatMap((level) => level.events.flatMap((event) => (event.type === 'gates' ? [event.left.op, event.right.op] : []))),
+      placeholders.flatMap((level) =>
+        level.events.flatMap((event) => (event.type === 'gates' ? [event.left, event.centre, event.right].flatMap((gate) => (gate ? [gate.op] : [])) : [])),
+      ),
     )
 
     for (const op of ['fireRate', 'damage', 'multiShot', 'range']) expect(ops).toContain(op)
+  })
+
+  it('every_placeholder_level_places_gates_in_all_three_lanes', () => {
+    for (const level of placeholders) {
+      const lanes = new Set(
+        level.events.flatMap((event) =>
+          event.type === 'gates' ? (['left', 'centre', 'right'] as const).filter((lane) => event[lane] !== undefined) : [],
+        ),
+      )
+
+      expect(lanes).toEqual(new Set(['left', 'centre', 'right']))
+    }
+  })
+
+  it('every_placeholder_level_has_a_buff_block', () => {
+    for (const level of placeholders) {
+      expect(level.events.some((event) => event.type === 'buffBlock')).toBe(true)
+    }
   })
 
   it('placeholder_levels_have_a_barrel_and_a_wall', () => {

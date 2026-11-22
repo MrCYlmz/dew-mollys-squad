@@ -24,6 +24,21 @@ function withEvent(event: object) {
   return { ...documentedLevel, events: [event] }
 }
 
+// The boss example from docs/domain/levels.md: length 400, expected squad at boss 60, the Dustbot at z = 400.
+const documentedBossLevel = {
+  ...documentedLevel,
+  expectedSquadAtBoss: 60,
+  events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'dustbot' }],
+}
+
+function bossLevelWith(change: object) {
+  return { ...documentedBossLevel, ...change }
+}
+
+function withEventsBeforeTheBoss(...events: object[]) {
+  return { ...documentedBossLevel, events: [...documentedLevel.events, ...events, { type: 'boss', z: 400, boss: 'dustbot' }] }
+}
+
 describe('level schema', () => {
   it('accepts_the_documented_examples', () => {
     expect(levelSchema.safeParse(documentedLevel).success).toBe(true)
@@ -91,5 +106,54 @@ describe('level schema', () => {
     ['with an unknown event type', withEvent({ type: 'coin', z: 80, x: 0 })],
   ])('rejects_a_level_%s', (_case, level) => {
     expect(levelSchema.safeParse(level).success).toBe(false)
+  })
+})
+
+describe('boss level schema', () => {
+  it('accepts_the_documented_boss_level', () => {
+    expect(levelSchema.safeParse(documentedBossLevel).success).toBe(true)
+  })
+
+  it('accepts_a_mega_dustbot_level_marked_as_placeholder', () => {
+    const megaDustbotLevel = bossLevelWith({
+      placeholder: true,
+      events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'megaDustbot' }],
+    })
+
+    expect(levelSchema.safeParse(megaDustbotLevel).success).toBe(true)
+  })
+
+  it('accepts_an_expected_squad_at_boss_of_1', () => {
+    expect(levelSchema.safeParse(bossLevelWith({ expectedSquadAtBoss: 1 })).success).toBe(true)
+  })
+
+  it.each([
+    ['without expectedSquadAtBoss', bossLevelWith({ expectedSquadAtBoss: undefined })],
+    ['with an expectedSquadAtBoss of 0', bossLevelWith({ expectedSquadAtBoss: 0 })],
+    ['with a fractional expectedSquadAtBoss', bossLevelWith({ expectedSquadAtBoss: 60.5 })],
+    ['with the boss before the arena start', bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 399, boss: 'dustbot' }] })],
+    ['with the boss past the arena start', bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 401, boss: 'dustbot' }] })],
+    ['with an unknown boss', bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'toaster' }] })],
+    ['with a boss event missing its boss', bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 400 }] })],
+    [
+      'with two bosses',
+      bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'dustbot' }, { type: 'boss', z: 400, boss: 'megaDustbot' }] }),
+    ],
+    ['with a gate row at the arena start', withEventsBeforeTheBoss({ type: 'gates', z: 400, left: { op: 'add', value: 1 }, right: { op: 'add', value: 1 } })],
+    ['with a wave at the arena start', withEventsBeforeTheBoss({ type: 'wave', z: 400, enemy: 'puppy', pattern: 'line', count: 1 })],
+    ['with a barrel at the arena start', withEventsBeforeTheBoss({ type: 'barrel', z: 400, x: 0 })],
+    ['with a wall at the arena start', withEventsBeforeTheBoss({ type: 'wall', z: 400, x: 0, width: 2 })],
+    [
+      'with a wave past the arena start',
+      bossLevelWith({
+        events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'dustbot' }, { type: 'wave', z: 410, enemy: 'puppy', pattern: 'line', count: 1 }],
+      }),
+    ],
+  ])('rejects_a_boss_level_%s', (_case, level) => {
+    expect(levelSchema.safeParse(level).success).toBe(false)
+  })
+
+  it('rejects_expected_squad_at_boss_in_a_level_without_a_boss', () => {
+    expect(levelSchema.safeParse({ ...documentedLevel, expectedSquadAtBoss: 60 }).success).toBe(false)
   })
 })

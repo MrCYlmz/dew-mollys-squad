@@ -25,6 +25,21 @@ const busyLevel: Level = {
   ],
 }
 
+// A Mega Dustbot level, so the arena, the boss and its dust balls are in the run too.
+const megaDustbotLevel: Level = {
+  id: 'mega-dustbot-level',
+  level: 10,
+  length: 300,
+  expectedSquadAtBoss: 40,
+  events: [
+    { type: 'gates', z: 40, left: { op: 'add', value: 20 }, right: { op: 'multiply', value: 2 } },
+    { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
+    { type: 'gates', z: 120, left: { op: 'multiply', value: 2 }, right: { op: 'add', value: 10 } },
+    { type: 'wave', z: 290, enemy: 'bulldog', pattern: 'column', count: 3, x: 2, spacing: 6 },
+    { type: 'boss', z: 300, boss: 'megaDustbot' },
+  ],
+}
+
 function playerInput(tick: number): SteerInput {
   return {
     drag: Math.sin(tick / 25) * 0.2,
@@ -52,6 +67,17 @@ function play(seed: number) {
   return { events, state: snapshot(run.state) }
 }
 
+function playBossLevel(seed: number) {
+  const run = createRun({ level: megaDustbotLevel, seed })
+  const events = stepUntil(run, () => false, 6000, playerInput)
+  return {
+    events,
+    state: snapshot(run.state),
+    boss: { ...run.state.boss },
+    dustBalls: run.state.dustBalls.map((dustBall) => ({ ...dustBall })),
+  }
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -65,6 +91,15 @@ describe('determinism', () => {
     expect(second).toEqual(first)
   })
 
+  it('same_boss_level_seed_and_input_give_the_same_run', () => {
+    const first = playBossLevel(42)
+    const second = playBossLevel(42)
+
+    expect(first.state.status).not.toBe('running')
+    expect(first.boss.kind).toBe('megaDustbot')
+    expect(second).toEqual(first)
+  })
+
   it('sim_uses_no_math_random_or_wall_clock', () => {
     const forbidden = () => {
       throw new Error('the sim must not read Math.random or the clock')
@@ -74,5 +109,16 @@ describe('determinism', () => {
     vi.spyOn(performance, 'now').mockImplementation(forbidden)
 
     expect(() => play(7)).not.toThrow()
+  })
+
+  it('boss_and_dust_balls_use_no_math_random_or_wall_clock', () => {
+    const forbidden = () => {
+      throw new Error('the sim must not read Math.random or the clock')
+    }
+    vi.spyOn(Math, 'random').mockImplementation(forbidden)
+    vi.spyOn(Date, 'now').mockImplementation(forbidden)
+    vi.spyOn(performance, 'now').mockImplementation(forbidden)
+
+    expect(() => playBossLevel(7)).not.toThrow()
   })
 })

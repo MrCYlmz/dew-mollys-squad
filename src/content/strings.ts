@@ -15,6 +15,8 @@ export const strings = {
   nextLevel: 'Next level',
   backToTitle: 'Back to title',
   defeat: 'Out of cats',
+  caughtByDustbot: 'Caught by the Dustbot',
+  caughtByMegaDustbot: 'Caught by the Mega Dustbot',
   distanceReached: 'Distance reached',
   retry: 'Tap to retry',
   squadCount: 'Squad count',

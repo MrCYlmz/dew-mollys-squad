@@ -14,6 +14,8 @@ export interface SteerInput {
 
 export type RunStatus = 'running' | 'won' | 'lost'
 
+export type LossCause = 'outOfCats' | 'caughtByBoss'
+
 // previousX and previousZ hold the position at the end of the tick before, for drawing between ticks.
 export interface SquadState {
   readonly count: number
@@ -96,6 +98,8 @@ export interface GateRowState {
 export interface RunState {
   readonly level: Level
   readonly status: RunStatus
+  // Null while the run goes on and after a win.
+  readonly lossCause: LossCause | null
   readonly squad: SquadState
   // The drawn cats, at most formationSlots of them; cats beyond those stand in the same places.
   readonly cats: readonly CatState[]
@@ -381,7 +385,7 @@ class RunSimulation implements Run {
   private nextWave = 0
   private nextGateRow = 0
 
-  readonly state: RunState & { status: RunStatus; cats: readonly CatState[]; boss: BossState | null }
+  readonly state: RunState & { status: RunStatus; lossCause: LossCause | null; cats: readonly CatState[]; boss: BossState | null }
 
   constructor(level: Level, seed: number) {
     this.random = createRng(seed)
@@ -460,6 +464,7 @@ class RunSimulation implements Run {
     this.state = {
       level,
       status: 'running',
+      lossCause: null,
       squad: this.squad,
       cats: this.drawnCatLists[0],
       weapon: this.weapon,
@@ -850,7 +855,7 @@ class RunSimulation implements Run {
   private resolveBossContact(): boolean {
     const boss = this.state.boss
     if (boss === null || !this.withinReachOfACat(boss.x, boss.z, catRadius + tuning.hitRadius[boss.kind])) return false
-    this.state.status = 'lost'
+    this.lose('caughtByBoss')
     return true
   }
 
@@ -881,8 +886,13 @@ class RunSimulation implements Run {
     this.pushCatsLost(catsLost)
     this.placeCats()
     if (this.squad.count > 0) return false
-    this.state.status = 'lost'
+    this.lose('outOfCats')
     return true
+  }
+
+  private lose(cause: LossCause): void {
+    this.state.status = 'lost'
+    this.state.lossCause = cause
   }
 
   // Returns true when the run is lost.
@@ -906,7 +916,7 @@ class RunSimulation implements Run {
       this.placeCats()
       this.nextGateRow++
       if (squad.count === 0) {
-        this.state.status = 'lost'
+        this.lose('outOfCats')
         return true
       }
       row = this.gateRows[this.nextGateRow]

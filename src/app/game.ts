@@ -1,4 +1,4 @@
-import type { Level } from '../content/level'
+import type { BossKind, Level } from '../content/level'
 import { tuning } from '../content/tuning'
 import { watchFocus } from '../platform/focus'
 import { createInput, type PlayerInput } from '../platform/input'
@@ -15,6 +15,8 @@ export interface GameView {
   squadCount: number
   progress: number
   distanceReached: number
+  // The boss that caught the squad in a lost run, or null.
+  caughtBy: BossKind | null
   // Null outside the boss arena.
   boss: BossHp | null
 }
@@ -54,7 +56,7 @@ export class Game {
     this.resize(gameElement)
     this.level = firstLevel(levels)
     this.run = this.newRun()
-    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, boss: null }
+    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null }
     this.frameRequest = requestAnimationFrame(this.frame)
   }
 
@@ -101,7 +103,7 @@ export class Game {
     this.lastTimestamp = null
     this.accumulator = 0
     this.input.takeDragPixels()
-    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, boss: null })
+    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null })
   }
 
   quitToTitle(): void {
@@ -161,7 +163,8 @@ export class Game {
       this.publish({ screen: 'victory', squadCount: state.squad.count, progress: 1 })
     } else if (state.status === 'lost') {
       this.accumulator = 0
-      this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z) })
+      const caughtBy = state.lossCause === 'caughtByBoss' && state.boss !== null ? state.boss.kind : null
+      this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z), caughtBy })
     } else if (state.squad.count !== this.view.squadCount || progress !== this.view.progress || this.bossBarChanged()) {
       this.publish({ squadCount: state.squad.count, progress, boss: state.boss === null ? null : { hp: state.boss.hp, fullHp: state.boss.fullHp } })
     }

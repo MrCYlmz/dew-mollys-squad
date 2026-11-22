@@ -59,6 +59,25 @@ describe('barrel', () => {
     expect(events.filter((event) => event.type === 'barrelDestroyed')).toEqual([{ type: 'barrelDestroyed', x: 0, z: 80 }])
   })
 
+  it('barrel_brought_to_exactly_0_hp_is_destroyed_on_that_hit', () => {
+    // 2 cats with 1 damage land more than 10 hits before they reach it
+    const run = createRun({ level: levelOf([...repeatedRows({ op: 'multiply', value: 2 }, 1), { type: 'barrel', z: 40, x: 0 }]), seed: 1 })
+    const hpSeen: number[] = []
+
+    const events = stepUntil(
+      run,
+      (state) => {
+        if (state.barrels.length > 0) hpSeen.push(state.barrels[0].hp)
+        return state.barrels.length === 0 || state.squad.z > 39
+      },
+      6000,
+    )
+
+    expect(events.filter((event) => event.type === 'barrelDestroyed')).toEqual([{ type: 'barrelDestroyed', x: 0, z: 40 }])
+    expect(hpSeen).toContain(1)
+    expect(Math.min(...hpSeen)).toBeGreaterThan(0)
+  })
+
   it('yarn_ball_stops_at_a_barrel_in_front_of_a_puppy', () => {
     const run = createRun({
       level: levelOf([
@@ -152,6 +171,36 @@ describe('barrel splash', () => {
     expect(inside.length).toBeGreaterThan(0)
     for (const { after } of inside) expect(after).toMatchObject({ shield: 0, hp: 15 })
     for (const { after } of outside) expect(after).toMatchObject({ shield: 30, hp: 15 })
+  })
+
+  it('barrel_splash_deals_30_damage_to_a_lone_bulldog_within_3_units', () => {
+    // As in splashTick, but one bulldog, timed to stand about 1 unit past the barrel when it is destroyed.
+    const closing = 2.5 / 8
+    const run = createRun({
+      level: levelOf([
+        ...repeatedRows({ op: 'damage', value: 1 }, 9),
+        { type: 'barrel', z: barrel.z, x: barrel.x },
+        { type: 'wave', z: (barrel.z + 1 + 130 * closing) / (1 + closing), enemy: 'bulldog', pattern: 'column', count: 1, x: -1, spacing: 1 },
+      ]),
+      seed: 1,
+    })
+    steerTo(run, barrel.x)
+    let distanceAtSplash = Infinity
+
+    stepUntil(
+      run,
+      (state) => {
+        if (state.barrels.length === 0) return true
+        const bulldog = state.enemies[0]
+        if (bulldog !== undefined) distanceAtSplash = Math.hypot(bulldog.x - barrel.x, bulldog.z - barrel.z)
+        return false
+      },
+      6000,
+    )
+
+    expect(run.state.barrels).toHaveLength(0)
+    expect(distanceAtSplash).toBeLessThan(2.5)
+    expect(run.state.enemies).toEqual([expect.objectContaining({ kind: 'bulldog', hp: 10 })])
   })
 
   it('barrel_splash_does_not_damage_another_barrel', () => {

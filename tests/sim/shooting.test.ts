@@ -181,4 +181,33 @@ describe('yarn balls', () => {
     expect(offTrackPastTheRow).toBeGreaterThan(0)
     expect(onTrackPastTheRow).toBe(0)
   })
+
+  it('fanned_yarn_ball_that_passed_a_row_beyond_the_edge_hits_the_next_row_once_back_on_track', () => {
+    // 2 cats at the left edge, one of them beyond x = −5, each firing 2 yarn balls at ±2.5°, 4 shots/s. The inward yarn ball of
+    // the outer cat is back on track about 5 units after it is fired: fired less than that before the row at z = 20, it passes
+    // that row beyond the edge and meets the row at z = 26 on track. A barrel just behind z = 26 lies in its path and in the
+    // path of no yarn ball that passes z = 26 beyond the edge.
+    function barrelHpBeforeTheSecondRow(secondRow: boolean) {
+      const run = createRun({
+        level: levelOf([
+          { type: 'gates', z: 1, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+          { type: 'gates', z: 2, left: { op: 'multiShot', value: 1 }, right: { op: 'multiShot', value: 1 } },
+          ...[3, 4, 5, 6, 7].map((z) => ({ type: 'gates' as const, z, left: { op: 'fireRate' as const, value: 20 }, right: { op: 'fireRate' as const, value: 20 } })),
+          { type: 'gates', z: 20, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+          ...(secondRow ? [{ type: 'gates' as const, z: 26, left: { op: 'multiply' as const, value: 2 }, right: { op: 'multiply' as const, value: 2 } }] : []),
+          { type: 'barrel', z: 27, x: -4.3 },
+        ]),
+        seed: 1,
+      })
+      steerTo(run, -5)
+      stepUntil(run, (state) => state.squad.z > 25, 6000)
+      return { run, hp: run.state.barrels[0].hp }
+    }
+
+    const withoutTheRow = barrelHpBeforeTheSecondRow(false)
+    expect(Math.min(...withoutTheRow.run.state.cats.map((cat) => cat.x))).toBeLessThan(-5)
+    expect(withoutTheRow.hp).toBeLessThan(10)
+
+    expect(barrelHpBeforeTheSecondRow(true).hp).toBe(10)
+  })
 })

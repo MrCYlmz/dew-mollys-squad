@@ -40,6 +40,6 @@ Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the
 
 ## Feedback
 
-- Every hit, gate and kill gives instant feedback: popping numbers, screen shake on big hits, and sound.
+- Every hit, gate, big buff and kill gives instant feedback: popping numbers, screen shake on big hits, and sound.
 - Sound effects: shot, hit, enemy death, good gate (happy meow), bad gate (hiss), coin, boss roar, win, lose. Shots from many cats sound as one batched shot, not one sound per cat.
 - One looping music track per world. Music and sound start only after the player's first tap.

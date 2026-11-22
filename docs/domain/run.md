@@ -4,10 +4,24 @@ Terms as in the [glossary](glossary.md).
 
 ## Movement
 
-- The squad moves forward at a constant 8 units/s. The player controls only the steering point.
+- The squad holds a fixed place on screen and does not visibly run forward. The road and everything on it (gate rows, enemies, barrels, walls and buff blocks) come toward the squad at the run speed, a constant 8 units/s. The player controls only the steering point.
+- Every rule is measured in distance travelled, as if the squad ran down a still road: the squad's distance travelled grows by 8 units/s, z is a place along the road measured from the start, and something standing still at z reaches the squad's centre when the distance travelled is z. Example: the squad meets a gate row at z = 40 after 5 s.
+- The camera does not move forward. It frames the squad and the road ahead of it.
 - The steering point is clamped to the track edges: x stays within −5..5.
 - The squad follows the steering point smoothly, closing the gap in about 80 ms, so it is responsive but not twitchy.
 - Cats stay in a tight cluster around the steering point.
+
+### Lanes
+
+The track has three marked lanes of equal width. Steering stays free: the squad can stand anywhere across the track, and the lanes only mark where gates and buff blocks stand.
+
+| Lane | Across the track | Lane centre |
+| --- | --- | --- |
+| Left | x −5 to −5/3 | x = −10/3 |
+| Centre | x −5/3 to 5/3 | x = 0 |
+| Right | x 5/3 to 5 | x = 10/3 |
+
+- The squad is in the lane its centre is in. A centre exactly on a lane border is in the lane to its right. Examples: a squad at x = −2 is in the left lane; at x = −5/3 it is in the centre lane; at x = 5/3 it is in the right lane.
 
 ## Controls
 
@@ -37,8 +51,8 @@ One input steers. Firing is always on.
 
 - Every cat fires yarn balls straight ahead, all the time.
 - Each yarn ball travels up to the squad's range, measured along its path.
-- A yarn ball stops at the first enemy, barrel, wall, gate or boss it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range. A wall takes no damage.
-- A yarn ball that is beyond the track edge (x below −5 or above 5) when it reaches a gate row passes the row without hitting either gate. Example: a cat at x = 5.2 at the edge of a wide squad fires past the gates.
+- A yarn ball stops at the first enemy, barrel, wall, buff block or boss it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range. A wall takes no damage.
+- Yarn balls fly through gates without stopping and without changing them (see [gates](#gates)).
 
 Base values at level 1, before weapon buffs and upgrades:
 
@@ -58,15 +72,15 @@ Never more than 400 yarn balls are in flight (the yarn ball cap, in the tuning c
 
 - If every cat fired its own yarn balls, the squad would have squad count × fire rate × yarn balls per shot × range ÷ yarn ball speed yarn balls in flight, using the current, buffed values.
 - When that is above the cap, each yarn ball stands for N cats: N is that number divided by the cap, rounded up. The squad then fires N times fewer yarn balls.
-- A yarn ball standing for N cats deals N × damage, and counts as N hits on an add or subtract gate. It still stops at the first enemy, barrel, wall, gate or boss it hits.
+- A yarn ball standing for N cats deals N × damage. It still stops at the first enemy, barrel, wall, buff block or boss it hits.
 - At or below the cap, N is 1 and every cat fires its own yarn balls.
-- Results are about equal, not exactly equal: when a yarn ball standing for N cats kills an enemy, destroys a barrel or defeats the boss with less HP than its damage, the spare damage is lost, where N separate yarn balls would have gone on to the next target. Example: a yarn ball dealing 2 damage that hits a puppy with 1 HP left kills it, and the second point of damage is lost. This only happens above the cap, so with squads above about 200 at the base values.
+- Results are about equal, not exactly equal: when a yarn ball standing for N cats kills an enemy, destroys a barrel, breaks a buff block or defeats the boss with less HP than its damage, the spare damage is lost, where N separate yarn balls would have gone on to the next target. Example: a yarn ball dealing 2 damage that hits a puppy with 1 HP left kills it, and the second point of damage is lost. This only happens above the cap, so with squads above about 200 at the base values.
 
 Examples at the base values (2 yarn balls/s, range 30, speed 30, so each yarn ball flies 1 s): a squad of 200 would have 400 in flight, so N is 1. A squad of 300 would have 600, so N is 2: each yarn ball deals 2 damage, and about 300 are in flight. A squad of 999 would have 1,998, so N is 5, and about 400 are in flight. A squad of 100 with one +1 BULLET gate fires 2 yarn balls per shot, so it would have 400 in flight, and N is still 1.
 
 ## Gates
 
-Each gate row has two gates. The squad takes the gate it runs through: a squad whose centre is at x < 0 takes the left gate, and one at x ≥ 0, including exactly 0, takes the right gate.
+A gate row has one, two or three gates, each filling one [lane](#lanes); a lane without a gate is empty. When the row reaches the squad, the squad takes the gate in the lane its centre is in. Example: in a row of +10 on the left, ×2 in the centre and an empty right lane, a squad at x = 0 takes ×2, and a squad at x = 3 takes nothing.
 
 | Gate | Shown as | Effect when taken | Colour |
 | --- | --- | --- | --- |
@@ -80,17 +94,16 @@ Each gate row has two gates. The squad takes the gate it runs through: a squad w
 | Range | RANGE +10 | yarn balls travel 10 units farther | Blue |
 
 - Examples: a squad of 8 taking ×2 becomes 16. A squad of 7 taking ÷2 becomes 3. A squad of 1 taking ÷2 stays 1. A squad of 10 taking −15 becomes 0 and the run is lost.
-- Shooting a gate: an add or subtract gate counts the yarn ball hits it takes, and every 10 hits (the hits per gate step, in the tuning config) raise its value by 1. Example: −15 → −14 → … → 0 → +1, so a −15 gate turns blue at +1 after 160 hits.
-- A gate is blue as soon as its value is positive. Example: a subtract gate shot from −2 to +1 turns blue and adds 1.
-- Multiply, divide and weapon-buff gates do not change when shot. A yarn ball hitting one still stops there.
-- Weapon-buff gates are always blue.
-- A gate row may mix any two gate types. Example: +10 on the left and DMG +1 on the right.
-- Each gate can be taken once. When the squad takes one gate of a row, the other disappears.
+- Gates cannot be shot. Yarn balls fly through every gate, good, bad or weapon-buff, without stopping, without dealing damage and without changing it. A gate's value never changes during a run.
+- Add, multiply and weapon-buff gates are blue; subtract and divide gates are red.
+- A gate row may mix any gate types. Example: +10 on the left, −15 in the centre and DMG +1 on the right.
+- Each gate can be taken once. When the squad takes one gate of a row, the rest of the row disappears.
+- When the squad's centre is in an empty lane as the row reaches it, the squad takes no gate, and the row passes behind the squad and disappears.
 - Taking a gate shows a big floating number and plays a sound, and the squad count animates up or down.
 
 ### Weapon buffs
 
-A weapon-buff gate changes a value of every cat, from the moment it is taken until the end of the run. Buffs from several gates add up. The squad count does not affect them: cats that join later fire with the same buffs.
+A weapon-buff gate changes a value of every cat, from the moment it is taken until the end of the run. Buffs from several gates, and from [big buffs](#big-buffs), add up. The squad count does not affect them: cats that join later fire with the same buffs.
 
 | Gate | Effect per gate | Cap |
 | --- | --- | --- |
@@ -100,10 +113,9 @@ A weapon-buff gate changes a value of every cat, from the moment it is taken unt
 | Range | Range + 10 units | None |
 
 - Fire rate adds up on the base rate, not on the current rate. Examples at the base of 2 yarn balls/s: one gate gives 2.4, two give 2.8, ten give 6, the cap. An eleventh gate changes nothing.
-- A gate taken at its cap is still taken, and its row's other gate still disappears, but the value stays at the cap.
+- A gate taken at its cap is still taken, and the rest of its row still disappears, but the value stays at the cap.
 - Multi-shot: a cat's yarn balls of one shot leave together in a fan, spread evenly around straight ahead, with the multi-shot spread (5°, in the tuning config) between neighbouring yarn balls. Examples: 2 yarn balls fly at −2.5° and +2.5°; 3 at −5°, 0° and +5°.
-- A yarn ball in a fan flies at the yarn ball speed along its own direction and drifts sideways as it goes. It may leave the track; it then passes gate rows as above.
-- The damage buff does not change how many hits a yarn ball counts as on an add or subtract gate: one per cat it stands for, whatever its damage.
+- A yarn ball in a fan flies at the yarn ball speed along its own direction and drifts sideways as it goes. It may leave the track.
 
 ## Enemies
 
@@ -116,12 +128,13 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 | Bulldog | Brute | 40 | 2.5 | 10 | A slow tank, alone or in small groups |
 | Shield dog | Shield bearer | 15, plus a shield of 30 | 3 | 3 | The shield must break before the body takes damage |
 
-- Every enemy runs at the squad as its wave's spawn pattern says (see [levels](levels.md#wave)), at its own speed. Every enemy can come in every spawn pattern; the typical use is a guide for designers.
+- Every enemy runs at the squad as its wave's spawn pattern says (see [levels](levels.md#wave)), at its own speed along the road. Every enemy can come in every spawn pattern; the typical use is a guide for designers.
+- The road brings an enemy toward the squad as well, so an enemy closes in at the run speed plus its own speed. Example: a puppy closes in at 8 + 4 = 12 units/s. In the boss arena, where the road has stopped, it closes in at its own speed.
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage, whatever HP it has left. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - An enemy that gets past the squad disappears behind it and does no damage.
 - An enemy is past the squad only once it is past the squad's last cat. Until then, an enemy touching any cat, even one inside the cluster, costs cats.
 - An enemy dies when its HP reaches 0 or less. HP can be a fraction after scaling; the number shown is rounded up. Example: a puppy with 0.24 HP left shows 1.
-- Enemies are not stopped by walls, barrels or each other.
+- Enemies are not stopped by walls, barrels, buff blocks or each other.
 
 ### Shield dog
 
@@ -136,7 +149,7 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 | --- | --- |
 | Line | A row of N enemies across the track |
 | Block | A grid, such as 5 × 4 puppies |
-| Column | Enemies in single file in one lane; steering away avoids them |
+| Column | Enemies in single file at one place across the track; steering away avoids them |
 | Flank | Enemies from the left and right edges walking inward |
 
 Where each pattern places its enemies is set in the [level file](levels.md#wave).
@@ -155,8 +168,38 @@ Where each pattern places its enemies is set in the [level file](levels.md#wave)
 - A wall is a static block on the track. Its place and width across the track are set in the [level file](levels.md#wall); its depth along the track is the wall depth (1 unit, in the tuning config).
 - A wall stops yarn balls and takes no damage, so it cannot be destroyed.
 - When any cat touches a wall, the squad loses 10 cats (the wall cat loss, in the tuning config), down to 0, which loses the run. Each wall costs cats once: touching it again costs nothing more. Cats lost to a wall scatter off-screen unhurt.
-- The squad is not stopped by a wall and keeps moving forward through it.
+- A wall does not stop the squad or the road: it passes through the squad and on behind it.
 - A wall that gets past the squad's last cat disappears.
+
+## Buff blocks
+
+A buff block is a block filling one [lane](#lanes), with HP, that hides a big buff behind it. Its place, lane, HP and buff are set in the [level file](levels.md#buff-block).
+
+- A buff block is as wide as its lane and as deep as the buff block depth (1 unit, in the tuning config). It is on the track from the start of the run and comes at the squad with the road.
+- Its HP is set per block in the level file for level 1 and scales with the level number like enemy HP (see [levels](levels.md#scaling)). HP can be a fraction after scaling; the number shown is rounded up.
+- The block shows its HP as a number and the label of its big buff, such as "×3" or "DMG +3", so the player knows what it is worth before breaking it.
+- It stops yarn balls like an enemy and takes their damage, as many times over as the cats a yarn ball stands for.
+- Barrel splashes do not damage buff blocks.
+- When its HP reaches 0 or less, the block breaks and uncovers its big buff, which stands where the block's front edge was, at its lane.
+- A big buff is collected when it reaches the squad's centre while the squad's centre is in the big buff's lane. Otherwise it passes the squad and is lost. Example: a block in the left lane breaks; the squad steers to x = −3 and collects its buff, but a squad still at x = 0 when the buff reaches it loses it.
+- A big buff that is uncovered only after it has reached the squad's centre is lost.
+- An unbroken block costs cats like a wall: when any cat touches it, the squad loses 10 cats (the buff block cat loss, in the tuning config), down to 0, which loses the run. Each block costs cats once. The block stays, does not stop the squad, and can still be shot until it is past the squad's last cat.
+- A block or big buff that gets past the squad's last cat disappears.
+
+### Big buffs
+
+| Big buff | Shown as | Effect when collected | Cap |
+| --- | --- | --- | --- |
+| Add | +30 | squad count + 30 | 999 cats |
+| Multiply | ×3 | squad count × 3 | 999 cats |
+| Fire rate | FIRE RATE +60% | fire rate + 60% of the base fire rate | 3 × the base fire rate |
+| Damage | DMG +3 | yarn ball damage + 3 | None |
+| Multi-shot | +2 BULLET | yarn balls per shot + 2 | 5 per cat |
+| Range | RANGE +30 | range + 30 units | None |
+
+- The values are in the tuning config (the big buff values).
+- Big buffs add up with gates and other big buffs, and last until the end of the run, like [weapon buffs](#weapon-buffs). At a cap the value stays at the cap. Examples: a squad of 400 collecting ×3 becomes 999. Yarn balls per shot of 4 with +2 BULLET become 5. A fire rate of 5.2 at a base of 2 with FIRE RATE +60% becomes 6, the cap.
+- Collecting a big buff shows a big floating number and plays the good gate sound, as when taking a gate; for +30 and ×3 the squad count animates up.
 
 ## Boss
 
@@ -171,7 +214,7 @@ The hit radii and walk speeds are in the tuning config.
 
 ### The boss arena
 
-- The boss arena starts at the level's `length`. When the squad's centre reaches it, the squad stops moving forward and stays at z = `length`. Steering still works as before, within x −5..5, and every cat keeps firing straight ahead.
+- The boss arena starts at the level's `length`. When the squad's centre reaches it, the road stops coming at the squad, and the squad's distance travelled stays at `length`. Steering still works as before, within x −5..5, and every cat keeps firing straight ahead.
 - At that moment the boss enters: it appears at x = 0, 35 units (the boss start distance, in the tuning config) beyond the arena start, so at z = `length` + 35.
 - From then on the boss walks straight toward the squad's centre at its walk speed, following the squad as it steers.
 - A big HP bar shows the boss's HP while it is in the arena.

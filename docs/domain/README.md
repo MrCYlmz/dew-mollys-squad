@@ -3,7 +3,7 @@
 The game's rules, in game terms. They change on the story branch before any code.
 
 - [Glossary](glossary.md)
-- [The run](run.md): movement, controls, squad count, shooting, gates and weapon buffs, enemies, barrels, walls, the boss arena, boss HP and dust balls, win and loss
+- [The run](run.md): movement and lanes, controls, squad count, shooting, gates and weapon buffs, enemies, barrels, walls, buff blocks and big buffs, the boss arena, boss HP and dust balls, win and loss
 - [Levels](levels.md): structure, level order, the level file, scaling, balancing and boss HP, the first world
 - [Meta progression](meta-progression.md): upgrades and saved progress
 - [Screens](screens.md): flow, screens, settings, feedback

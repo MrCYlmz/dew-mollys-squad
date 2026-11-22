@@ -8,8 +8,8 @@ Terms as in the [glossary](glossary.md).
 - Levels are hand-made by designers as data, so a new level needs no code change.
 - Gate rows come every 40–60 units. This sets only the gaps between rows; the first row may come earlier.
 - Between gate rows, enemy waves run at the squad.
-- Barrels, coins and walls sit on the track: barrels to shoot, coins to collect, walls to steer around.
-- Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins or barrels.
+- Barrels, coins, walls and buff blocks sit on the track: barrels to shoot, coins to collect, walls to steer around, buff blocks to shoot open for a big buff.
+- Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins, barrels or buff blocks.
 - A level takes 60–120 s to play.
 
 ## Level order
@@ -34,7 +34,8 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 
 - A level without a boss ends at the finish line at z = `length`.
 - A level with a boss ends at the boss arena at z = `length`, and has no finish line.
-- Every event has a `type` and a `z` greater than 0 and less than `length`, except the boss event, whose `z` equals `length`. So no gate row, wave, barrel or wall starts past the arena start.
+- Every event has a `type` and a `z` greater than 0 and less than `length`, except the boss event, whose `z` equals `length`. So no gate row, wave, barrel, wall or buff block starts past the arena start.
+- Gate rows and buff blocks are placed by [lane](run.md#lanes): `"left"`, `"centre"` or `"right"`.
 - Coins are added to this format when they are built.
 
 ### Gate row
@@ -43,18 +44,18 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 | --- | --- |
 | `type` | `"gates"` |
 | `z` | Where the squad runs through the row |
-| `left`, `right` | The two gates, each `{ "op", "value" }`. The left gate covers x −5..0, the right gate x 0..5 |
+| `left`, `centre`, `right` | The gates, each `{ "op", "value" }` and each optional, but at least one must be there. Each gate fills its lane; a lane whose field is missing is empty |
 | `op` | `"add"`, `"subtract"`, `"multiply"`, `"divide"`, `"fireRate"`, `"damage"`, `"multiShot"` or `"range"` |
 | `value` | The number shown, as a whole number without a sign: 1 or more for add and subtract, 2 for multiply and divide, 20 for fire rate (per cent), 1 for damage, 1 for multi-shot, 10 for range |
 
-- The two gates of a row may have any two ops, the same or different.
+- The gates of a row may have any ops, the same or different.
 - The weapon-buff values are fixed, like multiply and divide, because [the run](run.md#weapon-buffs) defines each buff's effect.
 
 Examples:
 
-- `{ "type": "gates", "z": 40, "left": { "op": "add", "value": 10 }, "right": { "op": "subtract", "value": 15 } }` is a row of +10 on the left and −15 on the right.
-- `{ "type": "gates", "z": 90, "left": { "op": "add", "value": 10 }, "right": { "op": "damage", "value": 1 } }` is a row of +10 on the left and DMG +1 on the right.
-- `{ "type": "gates", "z": 140, "left": { "op": "fireRate", "value": 20 }, "right": { "op": "range", "value": 10 } }` is a row of FIRE RATE +20% on the left and RANGE +10 on the right.
+- `{ "type": "gates", "z": 40, "left": { "op": "add", "value": 10 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "subtract", "value": 15 } }` is a row of +10 on the left, ×2 in the centre and −15 on the right.
+- `{ "type": "gates", "z": 90, "left": { "op": "add", "value": 10 }, "right": { "op": "damage", "value": 1 } }` is a row of +10 on the left, an empty centre lane and DMG +1 on the right.
+- `{ "type": "gates", "z": 140, "centre": { "op": "fireRate", "value": 20 } }` is a single FIRE RATE +20% gate in the centre lane, with both outer lanes empty.
 
 ### Wave
 
@@ -73,7 +74,7 @@ Examples:
 | --- | --- | --- |
 | Line | `count`: 1 or more | One row of `count` enemies at `z`, spread evenly across the whole track: enemy i (from 0) at x = −5 + 10 × (i + 0.5) ÷ `count` |
 | Block | `columns`: 1 or more; `rows`: 1 or more; `x`: the block's centre; `spacing`: units between neighbouring enemies, more than 0 | `rows` rows of `columns` enemies, `spacing` apart across and along the track, centred on `x` |
-| Column | `count`: 1 or more; `x`: the lane; `spacing`: units between neighbouring enemies, more than 0 | `count` enemies in single file at `x`, from `z` back, `spacing` apart |
+| Column | `count`: 1 or more; `x`: where the column stands across the track; `spacing`: units between neighbouring enemies, more than 0 | `count` enemies in single file at `x`, from `z` back, `spacing` apart |
 | Flank | `count`: 1 or more per side; `spacing`: units between neighbouring enemies, more than 0 | `count` enemies in single file at the left edge (x = −5) and `count` at the right edge (x = 5), from `z` back, `spacing` apart |
 
 - Line, block and column enemies run straight at the squad along the track.
@@ -114,6 +115,21 @@ Example: `{ "type": "barrel", "z": 120, "x": 1.5 }` is a barrel at x = 1.5, z = 
 
 Example: `{ "type": "wall", "z": 160, "x": -2.5, "width": 5 }` is a wall over the left half of the track, x −5..0, from z = 160 to 161.
 
+### Buff block
+
+| Field | Value |
+| --- | --- |
+| `type` | `"buffBlock"` |
+| `z` | The block's front edge, the side facing the squad. The block reaches from `z` to `z` + the buff block depth |
+| `lane` | `"left"`, `"centre"` or `"right"`: the lane the block fills |
+| `hp` | The block's HP at level 1, more than 0. It [scales](#scaling) like enemy HP |
+| `buff` | The big buff behind the block: `"add"`, `"multiply"`, `"fireRate"`, `"damage"`, `"multiShot"` or `"range"` |
+
+- The big buff's value is not written in the level file: each big buff has one fixed value, set in [the run](run.md#big-buffs).
+- A buff block is on the track from the start of the run.
+
+Example: `{ "type": "buffBlock", "z": 120, "lane": "right", "hp": 40, "buff": "multiply" }` is a block with 40 HP at level 1 filling the right lane from z = 120 to 121, hiding a ×3.
+
 ### Boss
 
 | Field | Value |
@@ -131,6 +147,7 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 
 - For each level number above 1, enemy HP is multiplied by 1.08 (the enemy HP growth) and wave size by 1.05 (the wave size growth), both in the tuning config. The level number is the level file's `level`.
 - On level L, enemy HP is the level 1 HP × 1.08^(L − 1), kept as is, without rounding. Examples: a puppy has 3 HP on level 1, 3 × 1.08 = 3.24 HP on level 2 and 3 × 1.08² = 3.4992 HP on level 3. A shield dog's shield and body both scale.
+- A buff block's HP scales the same way from its `hp`. Example: a block with `"hp": 40` has 40 × 1.08⁴ = 54.419… HP on level 5.
 - On level L, a wave's size is its size in the level file × 1.05^(L − 1), rounded to the nearest whole number, halves up. For line, column and flank waves this scales `count` (per side for flank). For block waves it scales `rows`, so the block keeps its width and grows backwards. Examples: a line of 10 has 10 × 1.05 = 10.5, so 11 enemies on level 2; a line of 5 has 5.25, so still 5. A block of 5 columns and 4 rows on level 5 has 4 × 1.05⁴ = 4.86, so 5 rows of 5.
 - Scaled waves follow the same placement rules: a scaled line still spreads evenly across the track, and extra rows and enemies stand further back at the same `spacing`.
 - Barrels, walls and gates do not scale. Boss HP does not scale with the level number either; it follows the expected squad at boss (see [balancing](#balancing)).
@@ -143,7 +160,8 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 - Boss HP is kept as is, without rounding.
 - Example: an expected squad at boss of 60 at the base values (2 yarn balls/s, 1 damage, 1 yarn ball per shot) deals 60 × 2 × 1 × 1 = 120 damage per second, so the boss has 120 × 8 = 960 HP.
 - A bad run still reaches the boss with about 40% of the expected squad, so it can win with good aim.
-- Each gate row offers one clearly better gate and one that looks tempting. Example: +20 against ×2 when the squad count is 8 (+20 gives 28, ×2 gives 16).
+- Each gate row offers one clearly better gate and at least one that looks tempting. Example: +20 against ×2 when the squad count is 8 (+20 gives 28, ×2 gives 16).
+- The expected squad at boss counts gates only, not big buffs: a big buff is a reward on top of a good run.
 
 ## The first world (MVP)
 
@@ -151,9 +169,9 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 
 | Levels | Content |
 | --- | --- |
-| 1 | Teaches gates. Puppies only, generous gates, no boss. A hand icon shows how to steer; there is no text tutorial. |
+| 1 | Teaches gates across the three lanes. Puppies only, generous gates, no boss. A hand icon shows how to steer; there is no text tutorial. |
 | 2 | Teaches enemies. Puppies only, generous gates, no boss. |
-| 3 | Teaches shooting a red gate to fix it. Puppies only, generous gates. |
+| 3 | Teaches buff blocks: shoot a block open, then steer into its lane to collect the big buff. Puppies only, generous gates. |
 | 4–6 | Chihuahuas and barrels, the first weapon buffs. The first boss, the Dustbot, is on level 5. |
 | 7–9 | Bulldogs and shield dogs, tighter gate choices. |
 | 10 | The world boss, the Mega Dustbot, which throws dust balls. |

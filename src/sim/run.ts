@@ -599,7 +599,6 @@ class RunSimulation implements Run {
     return this.events
   }
 
-  // The pools hold one place per barrel, wall and buff block of the level.
   private placeBarrel(x: number, z: number): void {
     const barrel = this.barrels.acquire()
     if (barrel === undefined) return
@@ -995,7 +994,7 @@ class RunSimulation implements Run {
     return false
   }
 
-  // Returns true when the run is lost. Only unbroken blocks are left on the track to touch.
+  // Returns true when the run is lost.
   private resolveBuffBlocks(): boolean {
     for (const buffBlock of this.buffBlocks.active) {
       if (buffBlock.touched) continue

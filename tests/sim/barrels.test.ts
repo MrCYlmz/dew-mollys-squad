@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
+import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent } from '../../src/sim/run'
 import { copied, levelOf, noSteering, repeatedRows, steerTo, stepUntil } from './runHarness'
 
@@ -104,20 +105,33 @@ describe('barrel', () => {
 })
 
 describe('barrel splash', () => {
-  // One cat with 9 damage gates fires yarn balls of 10 damage, so its first yarn ball to reach the barrel
-  // at x = −2.5, z = 110 destroys it, at about the time the squad is at z = 90. A column of 40 enemies,
-  // 0.5 apart, comes down x = −1, out of the cat's line of fire, timed so that at that moment its front
-  // is about 8 units before the barrel: some enemies stand within 3 units of the barrel, others do not.
+  // One cat with 9 damage gates fires yarn balls of 10 damage, so its first yarn ball to reach the barrel at x = −2.5,
+  // z = 110 destroys it. Enemies chase the squad onto its line, so a column of 40 enemies, 0.5 apart, comes down that
+  // line from behind the barrel, which stops every yarn ball before them. The column is timed so that its front is
+  // `front` units behind the barrel when the barrel is destroyed: some enemies stand within 3 units of it, others do not.
   const barrel = { x: -2.5, z: 110 }
+  const damageRows = repeatedRows({ op: 'damage', value: 1 }, 9)
+
+  // The squad's distance travelled when the barrel is destroyed, with nothing else on the track.
+  function destroyedAtZ(): number {
+    const run = createRun({ level: levelOf([...damageRows, { type: 'barrel', z: barrel.z, x: barrel.x }]), seed: 1 })
+    steerTo(run, barrel.x)
+    stepUntil(run, (state) => state.barrels.length === 0, 6000)
+    return run.state.squad.z
+  }
+
+  // A wave appears when the squad is 40 units before it and its enemies close in from there at their own speed.
+  function waveZFor(speed: number, front: number): number {
+    const closing = speed / tuning.squad.forwardSpeed
+    return (barrel.z + front + (destroyedAtZ() + 40) * closing) / (1 + closing)
+  }
 
   function splashTick(enemy: EnemyKind, speed: number) {
-    const closing = speed / 8
-    const waveZ = (barrel.z - 8 + 130 * closing) / (1 + closing)
     const run = createRun({
       level: levelOf([
-        ...repeatedRows({ op: 'damage', value: 1 }, 9),
+        ...damageRows,
         { type: 'barrel', z: barrel.z, x: barrel.x },
-        { type: 'wave', z: waveZ, enemy, pattern: 'column', count: 40, x: -1, spacing: 0.5 },
+        { type: 'wave', z: waveZFor(speed, 1), enemy, pattern: 'column', count: 40, x: barrel.x, spacing: 0.5 },
       ]),
       seed: 1,
     })
@@ -129,7 +143,7 @@ describe('barrel splash', () => {
       if (events.some((event) => event.type === 'barrelDestroyed')) {
         // Enemies move after collisions, so each one is found again one step of its speed nearer.
         const after = (z: number) => run.state.enemies.find((moved) => Math.abs(moved.z - (z - speed / 60)) < 1e-6)
-        const distance = (z: number) => Math.hypot(-1 - barrel.x, z - barrel.z)
+        const distance = (z: number) => Math.abs(z - barrel.z)
         const clear = before.filter(({ z }) => Math.abs(distance(z) - 3) > 0.01)
         return {
           events,
@@ -174,13 +188,12 @@ describe('barrel splash', () => {
   })
 
   it('barrel_splash_deals_30_damage_to_a_lone_bulldog_within_3_units', () => {
-    // As in splashTick, but one bulldog, timed to stand about 1 unit past the barrel when it is destroyed.
-    const closing = 2.5 / 8
+    // As in splashTick, but one bulldog, timed to stand about 1 unit behind the barrel when it is destroyed.
     const run = createRun({
       level: levelOf([
-        ...repeatedRows({ op: 'damage', value: 1 }, 9),
+        ...damageRows,
         { type: 'barrel', z: barrel.z, x: barrel.x },
-        { type: 'wave', z: (barrel.z + 1 + 130 * closing) / (1 + closing), enemy: 'bulldog', pattern: 'column', count: 1, x: -1, spacing: 1 },
+        { type: 'wave', z: waveZFor(2.5, 1), enemy: 'bulldog', pattern: 'column', count: 1, x: barrel.x, spacing: 1 },
       ]),
       seed: 1,
     })
@@ -206,7 +219,7 @@ describe('barrel splash', () => {
   it('barrel_splash_does_not_damage_another_barrel', () => {
     const run = createRun({
       level: levelOf([
-        ...repeatedRows({ op: 'damage', value: 1 }, 9),
+        ...damageRows,
         { type: 'barrel', z: 110, x: -2.5 },
         { type: 'barrel', z: 111, x: -1 },
       ]),

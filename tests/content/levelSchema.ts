@@ -30,10 +30,17 @@ const gateRow = z
     message: 'a gate row has at least one gate',
   })
 
+const enemyKind = z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog'])
+
+const stream = z.strictObject({
+  interval: z.number().positive(),
+  enemies: z.array(enemyKind).min(1),
+})
+
 const waveBase = {
   type: z.literal('wave'),
   z: z.number(),
-  enemy: z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog']),
+  enemy: enemyKind,
 }
 const count = z.int().min(1)
 const spacing = z.number().positive()
@@ -107,6 +114,7 @@ export const levelSchema = z
     length: z.number().min(300).max(600),
     placeholder: z.literal(true).optional(),
     expectedSquadAtBoss: z.int().min(1).optional(),
+    stream,
     events: z.array(z.union([gateRow, wave, barrel, wall, buffBlock, boss])),
   })
   .superRefine((level, context) => {

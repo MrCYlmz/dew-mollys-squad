@@ -115,6 +115,24 @@ describe('placeholder levels', () => {
   })
 })
 
+// requirements.md: placeholder levels 1 and 5 get a stream, level 1 gentle, level 5 harder.
+describe('placeholder streams', () => {
+  const placeholderLevel = (number: number) =>
+    levelFileNames.map((fileName) => readLevel(fileName) as LevelFile).find((level) => level.placeholder === true && level.level === number)
+
+  it('placeholder_levels_1_and_5_have_a_stream', () => {
+    expect(placeholderLevel(1)?.stream).toBeDefined()
+    expect(placeholderLevel(5)?.stream).toBeDefined()
+  })
+
+  it('placeholder_level_5_sends_its_stream_faster_than_level_1', () => {
+    const level1 = placeholderLevel(1)
+    const level5 = placeholderLevel(5)
+
+    expect(level5?.stream.interval).toBeLessThan(level1?.stream.interval ?? 0)
+  })
+})
+
 describe('boss levels', () => {
   const allLevels = levelFileNames.map((fileName) => readLevel(fileName) as LevelFile)
 

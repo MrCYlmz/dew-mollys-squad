@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type GameEvent } from '../../src/sim/run'
-import { tuning } from '../../src/content/tuning'
 import { doublingRows, everyLane, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type WaveEvent = Extract<Level['events'][number], { type: 'wave' }>
@@ -24,8 +23,8 @@ function expectPositions(actual: readonly Position[], expected: Position[], tole
   })
 }
 
-// At the spawn tick a puppy may already have taken one step of 4/60 units.
-const spawnTolerance = { x: 0.1, z: 0.15 }
+// At the spawn tick a puppy may already have taken one step: 4/60 units along the road and up to 6/60 across.
+const spawnTolerance = { x: 0.15, z: 0.15 }
 
 describe('wave spawning', () => {
   it('wave_appears_when_the_squad_is_40_units_before_it', () => {
@@ -113,55 +112,14 @@ describe('wave spawning', () => {
 })
 
 describe('puppy movement', () => {
-  it('puppy_runs_straight_at_the_squad_at_4_units_per_second', () => {
-    const run = spawnWave({ type: 'wave', z: 50, enemy: 'puppy', pattern: 'column', count: 1, x: 4, spacing: 1 })
+  it('puppy_runs_along_the_road_toward_the_squad_at_4_units_per_second', () => {
+    const run = spawnWave({ type: 'wave', z: 50, enemy: 'puppy', pattern: 'column', count: 1, x: 0, spacing: 1 })
     const start = { ...run.state.enemies[0] }
 
-    stepTicks(run, 60)
-
-    expect(run.state.enemies[0].z).toBeCloseTo(start.z - 4, 6)
-    expect(run.state.enemies[0].x).toBe(start.x)
-  })
-
-  it('flank_puppies_walk_inward_at_45_degrees_at_their_usual_speed', () => {
-    const run = createRun({
-      level: levelOf([{ type: 'wave', z: 50, enemy: 'puppy', pattern: 'flank', count: 1, spacing: 1 }]),
-      seed: 1,
-    })
-    steerTo(run, -4)
-    stepUntil(run, (state) => state.enemies.length > 0, 6000)
-    const [leftStart, rightStart] = [...run.state.enemies].sort((a, b) => a.x - b.x).map((puppy) => ({ ...puppy }))
-
     stepTicks(run, 30)
 
-    // 0.5 s at 4 units/s along 45° is 2 / √2 units across and along the track
-    const step = 2 / Math.SQRT2
-    const [left, right] = [...run.state.enemies].sort((a, b) => a.x - b.x)
-    expect(left.x).toBeCloseTo(leftStart.x + step, 2)
-    expect(left.z).toBeCloseTo(leftStart.z - step, 2)
-    expect(right.x).toBeCloseTo(rightStart.x - step, 2)
-    expect(right.z).toBeCloseTo(rightStart.z - step, 2)
-  })
-
-  it('flank_puppies_run_straight_once_they_reach_the_centre', () => {
-    const run = createRun({
-      level: levelOf([{ type: 'wave', z: 50, enemy: 'puppy', pattern: 'flank', count: 1, spacing: 1 }]),
-      seed: 1,
-    })
-    steerTo(run, -4)
-    stepUntil(run, (state) => state.enemies.length > 0, 6000)
-
-    // 5 units across at 4 / √2 units/s takes about 1.77 s
-    stepTicks(run, 120)
-    for (const puppy of run.state.enemies) expect(puppy.x).toBeCloseTo(0, 6)
-    const zBefore = run.state.enemies.map((puppy) => puppy.z)
-
-    stepTicks(run, 30)
-
-    run.state.enemies.forEach((puppy, index) => {
-      expect(puppy.x).toBeCloseTo(0, 6)
-      expect(puppy.z).toBeCloseTo(zBefore[index] - 2, 6)
-    })
+    expect(run.state.enemies[0].z).toBeCloseTo(start.z - 2, 6)
+    expect(run.state.enemies[0].x).toBe(0)
   })
 })
 
@@ -205,16 +163,6 @@ describe('puppy contact', () => {
     expect(run.state.squad.count).toBe(8 - contactKills.length)
   })
 
-  it('puppy_that_gets_past_the_squad_disappears_without_damage', () => {
-    const run = spawnWave({ type: 'wave', z: 50, enemy: 'puppy', pattern: 'column', count: 3, x: 4, spacing: 2 })
-
-    const events = stepUntil(run, (state) => state.enemies.length === 0, 600)
-
-    expect(run.state.enemies).toHaveLength(0)
-    expect(run.state.squad.count).toBe(1)
-    expect(events.filter((event) => event.type === 'catsLost')).toHaveLength(0)
-  })
-
   it('puppy_touching_a_cat_does_not_lose_a_run_with_cats_left', () => {
     const run = createRun({
       level: levelOf([...doublingRows(3), { type: 'wave', z: 100, enemy: 'puppy', pattern: 'column', count: 80, x: 0, spacing: 0.25 }]),
@@ -230,24 +178,12 @@ describe('puppy contact', () => {
   })
 })
 
-// Lanes are picked from the squad's cat places (state.cats) and the hit radii in the tuning config,
-// so the tests hold whatever the formation looks like, as long as such a lane exists.
-describe('past the last cat', () => {
-  const touch = tuning.hitRadius.cat + tuning.hitRadius.puppy
-  const shot = tuning.hitRadius.yarnBall + tuning.hitRadius.puppy
-
+describe('squad formation', () => {
   function formedSquad(doublings: number) {
     const run = createRun({ level: levelOf(doublingRows(doublings)), seed: 1 })
     stepUntil(run, (state) => state.squad.z > 10 * doublings + 5, 6000)
     const { cats, squad } = run.state
     return { cats: cats.map((cat) => ({ x: cat.x - squad.x, z: cat.z - squad.z })), count: squad.count }
-  }
-
-  function runWithColumn(doublings: number, x: number, count: number, spacing: number) {
-    return createRun({
-      level: levelOf([...doublingRows(doublings), { type: 'wave', z: 150, enemy: 'puppy', pattern: 'column', count, x, spacing }]),
-      seed: 1,
-    })
   }
 
   it('cats_stand_around_the_squad_with_the_first_cat_in_the_centre', () => {
@@ -276,48 +212,5 @@ describe('past the last cat', () => {
       expect(run.state.cats).toHaveLength(Math.min(run.state.squad.count, 60))
     }
     expect(contacts).toBeGreaterThan(0)
-  })
-
-  it('puppy_behind_the_squad_centre_costs_a_cat_until_past_the_last_cat', () => {
-    // A lane no cat's yarn balls reach, where the puppy first touches a cat only once it is
-    // behind the squad's centre and closer than touching distance to the last cat's z.
-    const { cats } = formedSquad(3)
-    const lastCatZ = Math.min(...cats.map((cat) => cat.z))
-    const firstContactZ = (x: number) =>
-      Math.max(
-        ...cats
-          .filter((cat) => Math.abs(cat.x - x) < touch - 0.02)
-          .map((cat) => cat.z + Math.sqrt(touch ** 2 - (cat.x - x) ** 2)),
-      )
-    const lanes = Array.from({ length: 601 }, (_, index) => -3 + index / 100)
-      .filter((x) => cats.every((cat) => Math.abs(cat.x - x) > shot + 0.02))
-      .filter((x) => cats.some((cat) => Math.abs(cat.x - x) < touch - 0.02))
-      .filter((x) => firstContactZ(x) < Math.min(0, lastCatZ + touch) - 0.1)
-      .sort((a, b) => firstContactZ(a) - firstContactZ(b))
-    expect(lanes.length).toBeGreaterThan(0)
-
-    // Two puppies almost on top of each other touch in the same tick.
-    const run = runWithColumn(3, lanes[0], 2, 0.001)
-    const events = stepUntil(run, (state) => state.squad.z > 150, 6000)
-
-    expect(events.filter((event) => event.type === 'enemyKilled' && event.cause === 'contact')).toHaveLength(2)
-    expect(events.filter((event) => event.type === 'catsLost')).toEqual([
-      { type: 'catsLost', count: 1 },
-      { type: 'catsLost', count: 1 },
-    ])
-    expect(run.state.squad.count).toBe(6)
-    expect(run.state.status).toBe('running')
-  })
-
-  it('puppy_passing_just_beside_the_outermost_cat_costs_nothing', () => {
-    const { cats } = formedSquad(4)
-    const lane = Math.max(...cats.map((cat) => cat.x)) + touch + 0.03
-
-    const run = runWithColumn(4, lane, 1, 1)
-    const events = stepUntil(run, (state) => state.squad.z > 150, 6000)
-
-    expect(events.filter((event) => event.type === 'catsLost')).toEqual([])
-    expect(run.state.squad.count).toBe(16)
-    expect(run.state.enemies).toHaveLength(0)
   })
 })

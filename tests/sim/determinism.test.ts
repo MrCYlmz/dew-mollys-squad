@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type RunState, type SteerInput } from '../../src/sim/run'
-import { everyLane, stepUntil } from './runHarness'
+import { everyLane, levelOf, stepUntil } from './runHarness'
 
 const busyLevel: Level = {
   id: 'busy-level',
   level: 3,
   length: 400,
+  stream: { interval: 0.7, enemies: ['puppy', 'chihuahua', 'shieldDog'] },
   events: [
     { type: 'gates', z: 40, left: { op: 'add', value: 10 }, right: { op: 'multiply', value: 2 } },
     { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
@@ -33,6 +34,7 @@ const megaDustbotLevel: Level = {
   level: 10,
   length: 300,
   expectedSquadAtBoss: 80,
+  stream: { interval: 2, enemies: ['puppy', 'chihuahua'] },
   // Both gates of the first two rows are good, so the squad reaches the arena whichever way the input steers.
   events: [
     { type: 'gates', z: 20, ...everyLane({ op: 'add', value: 20 }) },
@@ -106,6 +108,18 @@ describe('determinism', () => {
     expect(first.boss.kind).toBe('megaDustbot')
     expect(first.events.some((event) => event.type === 'dustBallThrown')).toBe(true)
     expect(second).toEqual(first)
+  })
+
+  it('stream_enemies_land_at_the_same_x_with_the_same_seed_and_elsewhere_with_another', () => {
+    const streamXs = (seed: number) => {
+      const run = createRun({ level: levelOf([], 300, 1, { interval: 0.25, enemies: ['bulldog'] }), seed })
+      stepUntil(run, () => false, 60)
+      return run.state.enemies.map((enemy) => enemy.x)
+    }
+
+    expect(streamXs(42)).toHaveLength(4)
+    expect(streamXs(42)).toEqual(streamXs(42))
+    expect(streamXs(43)).not.toEqual(streamXs(42))
   })
 
   it('sim_uses_no_math_random_or_wall_clock', () => {

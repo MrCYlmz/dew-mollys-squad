@@ -6,6 +6,7 @@ const documentedLevel = {
   id: 'level-1',
   level: 1,
   length: 400,
+  stream: { interval: 2, enemies: ['puppy'] },
   events: [
     { type: 'gates', z: 40, left: { op: 'add', value: 10 }, centre: { op: 'multiply', value: 2 }, right: { op: 'subtract', value: 15 } },
     { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
@@ -43,6 +44,15 @@ function withEventsBeforeTheBoss(...events: object[]) {
 describe('level schema', () => {
   it('accepts_the_documented_examples', () => {
     expect(levelSchema.safeParse(documentedLevel).success).toBe(true)
+  })
+
+  // The second stream example from docs/domain/levels.md.
+  it('accepts_a_stream_that_sends_a_kind_more_than_once', () => {
+    expect(levelSchema.safeParse({ ...documentedLevel, stream: { interval: 0.8, enemies: ['puppy', 'puppy', 'chihuahua'] } }).success).toBe(true)
+  })
+
+  it('accepts_a_stream_of_every_enemy_kind', () => {
+    expect(levelSchema.safeParse({ ...documentedLevel, stream: { interval: 0.01, enemies: ['puppy', 'chihuahua', 'bulldog', 'shieldDog'] } }).success).toBe(true)
   })
 
   it('accepts_a_level_marked_as_placeholder', () => {
@@ -122,6 +132,15 @@ describe('level schema', () => {
     ['with a wall reaching past the right edge', withEvent({ type: 'wall', z: 80, x: 3, width: 5 })],
     ['with a wall of zero width', withEvent({ type: 'wall', z: 80, x: 0, width: 0 })],
     ['with a wall missing its width', withEvent({ type: 'wall', z: 80, x: 0 })],
+    ['without a stream', { ...documentedLevel, stream: undefined }],
+    ['with a stream interval of 0', { ...documentedLevel, stream: { interval: 0, enemies: ['puppy'] } }],
+    ['with a negative stream interval', { ...documentedLevel, stream: { interval: -1, enemies: ['puppy'] } }],
+    ['with a stream missing its interval', { ...documentedLevel, stream: { enemies: ['puppy'] } }],
+    ['with a stream without enemies', { ...documentedLevel, stream: { interval: 2, enemies: [] } }],
+    ['with a stream missing its enemies', { ...documentedLevel, stream: { interval: 2 } }],
+    ['with a stream of an unknown enemy', { ...documentedLevel, stream: { interval: 2, enemies: ['cat'] } }],
+    ['with a stream that has a z', { ...documentedLevel, stream: { interval: 2, enemies: ['puppy'], z: 10 } }],
+    ['with the stream as an event', withEvent({ type: 'stream', z: 80, interval: 2, enemies: ['puppy'] })],
     ['with an unknown event type', withEvent({ type: 'coin', z: 80, x: 0 })],
   ])('rejects_a_level_%s', (_case, level) => {
     expect(levelSchema.safeParse(level).success).toBe(false)

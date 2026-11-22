@@ -26,6 +26,26 @@ describe('weapon buffs', () => {
   })
 })
 
+describe('movement', () => {
+  it('run_speed_is_12_units_per_second', () => {
+    expect(tuning.squad.forwardSpeed).toBe(12)
+  })
+})
+
+describe('enemies', () => {
+  it('enemy_chase_speed_is_6_units_per_second', () => {
+    expect(tuning.enemyChaseSpeed).toBe(6)
+  })
+
+  it('stream_spawn_distance_is_40_units', () => {
+    expect(tuning.stream.spawnDistance).toBe(40)
+  })
+
+  it('enemy_cap_is_150', () => {
+    expect(tuning.limits.enemies).toBe(150)
+  })
+})
+
 describe('barrels and walls', () => {
   it('barrel_has_10_hp', () => {
     expect(tuning.barrel.hp).toBe(10)
@@ -40,8 +60,9 @@ describe('barrels and walls', () => {
     expect(tuning.wall.depth).toBe(1)
   })
 
-  it('wall_costs_10_cats', () => {
-    expect(tuning.wall.catLoss).toBe(10)
+  // Walls are obstacles now: running into one loses the run instead of costing cats.
+  it('wall_has_no_cat_loss', () => {
+    expect(tuning.wall).not.toHaveProperty('catLoss')
   })
 })
 
@@ -50,8 +71,8 @@ describe('buff blocks', () => {
     expect(tuning.buffBlock.depth).toBe(1)
   })
 
-  it('unbroken_buff_block_costs_10_cats', () => {
-    expect(tuning.buffBlock.catLoss).toBe(10)
+  it('unbroken_buff_block_has_no_cat_loss', () => {
+    expect(tuning.buffBlock).not.toHaveProperty('catLoss')
   })
 
   // Fire rate in per cent of the base fire rate, as on a fire rate gate.

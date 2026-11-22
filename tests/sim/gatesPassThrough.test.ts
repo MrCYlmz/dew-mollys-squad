@@ -32,7 +32,7 @@ describe('yarn balls and gates', () => {
   })
 
   it('yarn_balls_fly_through_a_gate_and_hit_the_puppy_behind_it', () => {
-    // The puppy closes at 8 + 4 units/s from 36 units out, so it is still beyond the gate at z = 20 when the squad gets there.
+    // The puppy closes at 12 + 4 units/s from 36 units out, so it is still beyond the gate at z = 20 when the squad gets there.
     const run = createRun({
       level: levelOf([
         { type: 'gates', z: 20, ...everyLane({ op: 'multiply', value: 2 }) },

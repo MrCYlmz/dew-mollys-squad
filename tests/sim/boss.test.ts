@@ -307,6 +307,41 @@ describe('boss touching the squad', () => {
   })
 })
 
+// The defeat screen names the boss when it caught the squad, instead of "Out of cats".
+describe('loss cause', () => {
+  it('run_has_no_loss_cause_while_it_runs_in_the_arena', () => {
+    const run = bossRun('dustbot', unbeatable)
+    stepToArena(run)
+
+    stepTicks(run, 60)
+
+    expect(run.state.status).toBe('running')
+    expect(run.state.lossCause).toBeNull()
+  })
+
+  it.each<BossKind>(['dustbot', 'megaDustbot'])('run_lost_to_the_%s_touching_the_squad_is_caught_by_the_boss', (boss) => {
+    const run = bossRun(boss, unbeatable, doublingRows(6))
+    stepToArena(run)
+
+    stepTicks(run, 3000)
+
+    expect(run.state.status).toBe('lost')
+    expect(run.state.squad.count).toBeGreaterThan(0)
+    expect(run.state.lossCause).toBe('caughtByBoss')
+    expect(run.state.boss!.kind).toBe(boss)
+  })
+
+  it('run_won_against_the_boss_has_no_loss_cause', () => {
+    const run = bossRun('dustbot', 1)
+    stepToArena(run)
+
+    stepTicks(run, 1200)
+
+    expect(run.state.status).toBe('won')
+    expect(run.state.lossCause).toBeNull()
+  })
+})
+
 describe('boss tick order', () => {
   // 16 cats with 16 damage gates deal 17 damage a hit, more than the 16 HP one step of expected squad adds, so a boss HP can be
   // picked that falls exactly in the tick the boss reaches the squad.

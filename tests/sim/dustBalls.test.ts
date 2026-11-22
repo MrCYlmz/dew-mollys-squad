@@ -125,6 +125,7 @@ describe('dust balls', () => {
     expect(events.filter((event) => event.type === 'catsLost')).toEqual([{ type: 'catsLost', count: 2 }])
     expect(run.state.squad.count).toBe(0)
     expect(run.state.status).toBe('lost')
+    expect(run.state.lossCause).toBe('outOfCats')
   })
 
   // The example from docs/domain/run.md: a squad that has steered 2 units aside by the time the dust ball arrives is missed.

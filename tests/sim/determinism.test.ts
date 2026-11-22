@@ -30,9 +30,11 @@ const megaDustbotLevel: Level = {
   id: 'mega-dustbot-level',
   level: 10,
   length: 300,
-  expectedSquadAtBoss: 40,
+  expectedSquadAtBoss: 80,
+  // Both gates of the first two rows are good, so the squad reaches the arena whichever way the input steers.
   events: [
-    { type: 'gates', z: 40, left: { op: 'add', value: 20 }, right: { op: 'multiply', value: 2 } },
+    { type: 'gates', z: 20, left: { op: 'add', value: 20 }, right: { op: 'add', value: 20 } },
+    { type: 'gates', z: 40, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
     { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
     { type: 'gates', z: 120, left: { op: 'multiply', value: 2 }, right: { op: 'add', value: 10 } },
     { type: 'wave', z: 290, enemy: 'bulldog', pattern: 'column', count: 3, x: 2, spacing: 6 },
@@ -97,6 +99,7 @@ describe('determinism', () => {
 
     expect(first.state.status).not.toBe('running')
     expect(first.boss.kind).toBe('megaDustbot')
+    expect(first.events.some((event) => event.type === 'dustBallThrown')).toBe(true)
     expect(second).toEqual(first)
   })
 

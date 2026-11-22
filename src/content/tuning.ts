@@ -8,7 +8,7 @@ export const tuning = {
   squad: {
     startCount: 1,
     maxCount: 999,
-    forwardSpeed: 8,
+    forwardSpeed: 12,
     // Time for the squad to close 95% of the gap to the steering point.
     followTime: 0.08,
     // Cats drawn and firing from distinct places; the squad count shows the rest.
@@ -40,6 +40,8 @@ export const tuning = {
     bulldog: { hp: 40, shield: 0, speed: 2.5, contactDamage: 10 },
     shieldDog: { hp: 15, shield: 30, speed: 3, contactDamage: 3 },
   },
+  // Units/s at which every enemy moves across the track toward the squad's centre x.
+  enemyChaseSpeed: 6,
   scaling: {
     // Factors per level number above 1.
     enemyHpGrowth: 1.08,
@@ -52,11 +54,9 @@ export const tuning = {
   },
   wall: {
     depth: 1,
-    catLoss: 10,
   },
   buffBlock: {
     depth: 1,
-    catLoss: 10,
   },
   // What each big buff adds or multiplies by; fire rate in per cent of the base fire rate, as on a fire rate gate.
   bigBuff: {
@@ -68,6 +68,10 @@ export const tuning = {
     range: 30,
   },
   wave: {
+    spawnDistance: 40,
+  },
+  stream: {
+    // How far ahead of the squad's centre a stream enemy appears.
     spawnDistance: 40,
   },
   // Walk speed in units/s.

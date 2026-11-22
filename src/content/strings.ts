@@ -17,6 +17,8 @@ export const strings = {
   defeat: 'Out of cats',
   caughtByDustbot: 'Caught by the Dustbot',
   caughtByMegaDustbot: 'Caught by the Mega Dustbot',
+  ranIntoWall: 'Ran into a wall',
+  ranIntoBlock: 'Ran into a block',
   distanceReached: 'Distance reached',
   retry: 'Tap to retry',
   squadCount: 'Squad count',

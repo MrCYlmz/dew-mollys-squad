@@ -3,6 +3,7 @@
   "level": 1,
   "length": 400,
   "placeholder": true,
+  "stream": { "interval": 2, "enemies": ["puppy"] },
   "events": [
     { "type": "gates", "z": 30, "left": { "op": "add", "value": 10 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "add", "value": 5 } },
     { "type": "wave", "z": 55, "enemy": "puppy", "pattern": "line", "count": 5 },

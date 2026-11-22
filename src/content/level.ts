@@ -93,6 +93,14 @@ export interface BossEvent {
   boss: BossKind
 }
 
+// The endless enemies besides the waves, from the start of the run until the finish line or the arena start.
+export interface Stream {
+  // Seconds between two stream enemies.
+  interval: number
+  // Sent in this order, then again from the start.
+  enemies: EnemyKind[]
+}
+
 export type LevelEvent = GateRowEvent | WaveEvent | BarrelEvent | WallEvent | BuffBlockEvent | BossEvent
 
 export interface Level {
@@ -103,5 +111,6 @@ export interface Level {
   placeholder?: true
   // Required in a level with a boss, whose HP it sets, and absent otherwise.
   expectedSquadAtBoss?: number
+  stream: Stream
   events: LevelEvent[]
 }

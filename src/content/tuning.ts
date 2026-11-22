@@ -33,10 +33,6 @@ export const tuning = {
     maxFireRateFactor: 3,
     maxYarnBallsPerShot: 5,
   },
-  gate: {
-    // Yarn ball hits that raise an add or subtract gate by 1.
-    hitsPerStep: 10,
-  },
   // HP and shield at level 1; speed in units/s; contact damage in cats.
   enemies: {
     puppy: { hp: 3, shield: 0, speed: 4, contactDamage: 1 },
@@ -57,6 +53,19 @@ export const tuning = {
   wall: {
     depth: 1,
     catLoss: 10,
+  },
+  buffBlock: {
+    depth: 1,
+    catLoss: 10,
+  },
+  // What each big buff adds or multiplies by; fire rate in per cent of the base fire rate, as on a fire rate gate.
+  bigBuff: {
+    add: 30,
+    multiply: 3,
+    fireRate: 60,
+    damage: 3,
+    multiShot: 2,
+    range: 30,
   },
   wave: {
     spawnDistance: 40,

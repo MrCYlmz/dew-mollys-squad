@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
-import { copied, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
+import { copied, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
 function averageYarnBallsInFlight(run: Run, ticks: number): number {
   let total = 0
@@ -70,18 +70,18 @@ describe('yarn balls', () => {
       level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'line', count: 1 }]),
       seed: 1,
     })
-    stepUntil(run, (state) => state.puppies.length > 0, 600)
-    const hpSeen = [run.state.puppies[0].hp]
+    stepUntil(run, (state) => state.enemies.length > 0, 600)
+    const hpSeen = [run.state.enemies[0].hp]
     const events: GameEvent[] = []
 
-    while (run.state.puppies.length > 0 && run.state.status === 'running') {
+    while (run.state.enemies.length > 0 && run.state.status === 'running') {
       events.push(...copied(run.step(noSteering)))
-      const hp = run.state.puppies[0]?.hp
+      const hp = run.state.enemies[0]?.hp
       if (hp !== undefined && hp !== hpSeen[hpSeen.length - 1]) hpSeen.push(hp)
     }
 
     expect(hpSeen).toEqual([3, 2, 1])
-    expect(events).toContainEqual(expect.objectContaining({ type: 'puppyKilled', cause: 'shot' }))
+    expect(events).toContainEqual(expect.objectContaining({ type: 'enemyKilled', cause: 'shot' }))
     expect(run.state.squad.count).toBe(1)
   })
 
@@ -90,12 +90,12 @@ describe('yarn balls', () => {
       level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'column', count: 3, x: 0, spacing: 2 }]),
       seed: 1,
     })
-    stepUntil(run, (state) => state.puppies.length > 0, 600)
+    stepUntil(run, (state) => state.enemies.length > 0, 600)
 
     let damagedPuppiesBehindTheFront = 0
-    while (run.state.puppies.length > 0 && run.state.status === 'running') {
+    while (run.state.enemies.length > 0 && run.state.status === 'running') {
       run.step(noSteering)
-      const nearestFirst = [...run.state.puppies].sort((a, b) => a.z - b.z)
+      const nearestFirst = [...run.state.enemies].sort((a, b) => a.z - b.z)
       damagedPuppiesBehindTheFront += nearestFirst.slice(1).filter((puppy) => puppy.hp < 3).length
     }
 
@@ -112,7 +112,7 @@ describe('yarn balls', () => {
     let hpSeen = 3
     while (run.state.squad.z < 60 && run.state.status === 'running') {
       run.step(noSteering)
-      for (const puppy of run.state.puppies) hpSeen = Math.min(hpSeen, puppy.hp)
+      for (const puppy of run.state.enemies) hpSeen = Math.min(hpSeen, puppy.hp)
     }
 
     expect(hpSeen).toBe(3)
@@ -123,12 +123,12 @@ describe('yarn balls', () => {
       level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'column', count: 2, x: 0, spacing: 0.25 }]),
       seed: 1,
     })
-    stepUntil(run, (state) => state.puppies.length > 0, 600)
+    stepUntil(run, (state) => state.enemies.length > 0, 600)
 
     let backPuppyHitWhileFrontStood = false
-    while (run.state.puppies.length === 2 && run.state.status === 'running') {
+    while (run.state.enemies.length === 2 && run.state.status === 'running') {
       run.step(noSteering)
-      const [, back] = [...run.state.puppies].sort((a, b) => a.z - b.z)
+      const [, back] = [...run.state.enemies].sort((a, b) => a.z - b.z)
       if (back !== undefined && back.hp < 3) backPuppyHitWhileFrontStood = true
     }
 
@@ -144,12 +144,41 @@ describe('yarn balls', () => {
       seed: 1,
     })
     steerTo(run, -2.5)
-    const puppyInLane = () => run.state.puppies.find((puppy) => puppy.x < 0)
+    const puppyInLane = () => run.state.enemies.find((puppy) => puppy.x < 0)
 
     stepUntil(run, (state) => state.gateRows[0].taken !== null, 600)
     expect(puppyInLane()?.hp).toBe(3)
 
     stepUntil(run, () => (puppyInLane()?.hp ?? 0) < 3, 120)
     expect(puppyInLane()?.hp ?? 0).toBeLessThan(3)
+  })
+
+  it('yarn_balls_from_beyond_the_track_edge_pass_a_gate_row', () => {
+    // 16 cats at the right edge: the outer ones stand beyond x = 5
+    const run = createRun({
+      level: levelOf([
+        ...repeatedRows({ op: 'multiply', value: 2 }, 4),
+        { type: 'gates', z: 60, left: { op: 'add', value: 1 }, right: { op: 'add', value: 1 } },
+      ]),
+      seed: 1,
+    })
+    steerTo(run, 5)
+    let offTrackPastTheRow = 0
+    let onTrackPastTheRow = 0
+
+    // While every cat is behind the row, a yarn ball beyond it has flown through it.
+    while (Math.max(...run.state.cats.map((cat) => cat.z)) < 59.5 && run.state.status === 'running') {
+      run.step(noSteering)
+      for (const yarnBall of run.state.yarnBalls) {
+        if (yarnBall.z <= 60) continue
+        if (Math.abs(yarnBall.x) > 5) offTrackPastTheRow++
+        else onTrackPastTheRow++
+      }
+    }
+
+    expect(run.state.squad.count).toBe(16)
+    expect(Math.max(...run.state.cats.map((cat) => cat.x))).toBeGreaterThan(5)
+    expect(offTrackPastTheRow).toBeGreaterThan(0)
+    expect(onTrackPastTheRow).toBe(0)
   })
 })

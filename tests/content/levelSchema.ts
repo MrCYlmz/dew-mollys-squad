@@ -10,6 +10,10 @@ const gate = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('subtract'), value: addOrSubtractValue }),
   z.strictObject({ op: z.literal('multiply'), value: z.literal(2) }),
   z.strictObject({ op: z.literal('divide'), value: z.literal(2) }),
+  z.strictObject({ op: z.literal('fireRate'), value: z.literal(20) }),
+  z.strictObject({ op: z.literal('damage'), value: z.literal(1) }),
+  z.strictObject({ op: z.literal('multiShot'), value: z.literal(1) }),
+  z.strictObject({ op: z.literal('range'), value: z.literal(10) }),
 ])
 
 const gateRow = z.strictObject({
@@ -19,7 +23,11 @@ const gateRow = z.strictObject({
   right: gate,
 })
 
-const waveBase = { type: z.literal('wave'), z: z.number(), enemy: z.literal('puppy') }
+const waveBase = {
+  type: z.literal('wave'),
+  z: z.number(),
+  enemy: z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog']),
+}
 const count = z.int().min(1)
 const spacing = z.number().positive()
 
@@ -36,6 +44,23 @@ const columnWave = z.strictObject({ ...waveBase, pattern: z.literal('column'), c
 const flankWave = z.strictObject({ ...waveBase, pattern: z.literal('flank'), count, spacing })
 
 const wave = z.discriminatedUnion('pattern', [lineWave, blockWave, columnWave, flankWave])
+
+const barrel = z.strictObject({
+  type: z.literal('barrel'),
+  z: z.number(),
+  x: z.number().min(-trackEdge).max(trackEdge),
+})
+
+const wall = z
+  .strictObject({
+    type: z.literal('wall'),
+    z: z.number(),
+    x: z.number(),
+    width: z.number().positive(),
+  })
+  .refine((wall) => wall.x - wall.width / 2 >= -trackEdge && wall.x + wall.width / 2 <= trackEdge, {
+    message: 'the whole wall must lie on the track',
+  })
 
 export type LevelFile = z.infer<typeof levelSchema>
 type Wave = z.infer<typeof wave>
@@ -57,9 +82,10 @@ function waveXRange(wave: Wave): [number, number] {
 export const levelSchema = z
   .strictObject({
     id: z.string().min(1),
+    level: z.int().min(1),
     length: z.number().min(300).max(600),
     placeholder: z.literal(true).optional(),
-    events: z.array(z.union([gateRow, wave])),
+    events: z.array(z.union([gateRow, wave, barrel, wall])),
   })
   .superRefine((level, context) => {
     level.events.forEach((event, index) => {

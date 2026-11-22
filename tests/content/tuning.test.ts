@@ -24,3 +24,39 @@ describe('gate shooting', () => {
     expect(tuning.gate.hitsPerStep).toBe(10)
   })
 })
+
+// Values docs/domain/ names as being in the tuning config.
+describe('weapon buffs', () => {
+  it('multi_shot_spread_is_5_degrees', () => {
+    expect(tuning.cat.multiShotSpread).toBe(5)
+  })
+})
+
+describe('barrels and walls', () => {
+  it('barrel_has_10_hp', () => {
+    expect(tuning.barrel.hp).toBe(10)
+  })
+
+  it('barrel_splash_deals_30_damage_within_3_units', () => {
+    expect(tuning.barrel.splashDamage).toBe(30)
+    expect(tuning.barrel.splashRadius).toBe(3)
+  })
+
+  it('wall_is_1_unit_deep', () => {
+    expect(tuning.wall.depth).toBe(1)
+  })
+
+  it('wall_costs_10_cats', () => {
+    expect(tuning.wall.catLoss).toBe(10)
+  })
+})
+
+describe('level scaling', () => {
+  it('enemy_hp_grows_by_1_08_per_level', () => {
+    expect(tuning.scaling.enemyHpGrowth).toBe(1.08)
+  })
+
+  it('wave_size_grows_by_1_05_per_level', () => {
+    expect(tuning.scaling.waveSizeGrowth).toBe(1.05)
+  })
+})

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { createRun, type Run } from '../../src/sim/run'
-import { doublingRows, levelOf, noSteering, stepTicks, stepUntil } from './runHarness'
+import { doublingRows, levelOf, noSteering, repeatedRows, stepTicks, stepUntil } from './runHarness'
 
 function yarnBallsInFlightPerTick(run: Run, ticks: number): number[] {
   const inFlight: number[] = []
@@ -66,7 +66,7 @@ describe('yarn ball cap', () => {
     const hpSeen = new Set<number>()
     while (run.state.squad.z < 150 && run.state.status === 'running') {
       run.step(noSteering)
-      for (const puppy of run.state.puppies) hpSeen.add(puppy.hp)
+      for (const puppy of run.state.enemies) hpSeen.add(puppy.hp)
     }
 
     expect(hpSeen.has(3)).toBe(true)
@@ -84,8 +84,8 @@ describe('yarn ball cap', () => {
     let shotKills = 0
     while (run.state.squad.z < 200 && run.state.status === 'running') {
       const events = run.step(noSteering)
-      shotKills += events.filter((event) => event.type === 'puppyKilled' && event.cause === 'shot').length
-      for (const puppy of run.state.puppies) hpSeen.add(puppy.hp)
+      shotKills += events.filter((event) => event.type === 'enemyKilled' && event.cause === 'shot').length
+      for (const puppy of run.state.enemies) hpSeen.add(puppy.hp)
     }
 
     expect(shotKills).toBeGreaterThan(0)
@@ -133,5 +133,134 @@ describe('yarn ball cap', () => {
 
     expect(ratio).toBeGreaterThanOrEqual(1.84)
     expect(ratio).toBeLessThanOrEqual(2.16)
+  })
+})
+
+// Squads of exactly 100 or 200 cats: 1 cat lands fewer than 10 hits on the +99 gates, so they stay +99.
+function hundredCats(): Level['events'] {
+  return [{ type: 'gates', z: 10, left: { op: 'add', value: 99 }, right: { op: 'add', value: 99 } }]
+}
+
+function twoHundredCats(): Level['events'] {
+  return [...hundredCats(), { type: 'gates', z: 15, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } }]
+}
+
+describe('yarn ball cap with weapon buffs', () => {
+  it('squad_of_100_with_one_multi_shot_gate_fires_every_yarn_ball', () => {
+    // 100 cats × 2 yarn balls/s × 2 per shot × 1 s = 400 in flight, so N is still 1
+    const run = createRun({ level: levelOf([...repeatedRows({ op: 'multiShot', value: 1 }, 1), ...hundredCats()]), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 11, 6000)
+    expect(run.state.squad.count).toBe(100)
+    stepTicks(run, 120)
+
+    const inFlight = yarnBallsInFlightPerTick(run, 120)
+
+    expect(Math.max(...inFlight)).toBeLessThanOrEqual(400)
+    expect(average(inFlight)).toBeGreaterThanOrEqual(380)
+  })
+
+  it('squad_of_200_with_one_multi_shot_gate_never_has_more_than_400_yarn_balls_in_flight', () => {
+    const run = createRun({ level: levelOf([...repeatedRows({ op: 'multiShot', value: 1 }, 1), ...twoHundredCats()]), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 16, 6000)
+    expect(run.state.squad.count).toBe(200)
+
+    const inFlight = yarnBallsInFlightPerTick(run, 240)
+
+    expect(Math.max(...inFlight)).toBeLessThanOrEqual(400)
+  })
+
+  it('squad_of_200_with_one_multi_shot_gate_fires_yarn_balls_standing_for_2_cats', () => {
+    // 800 would be in flight, so each yarn ball stands for 2 cats and a puppy goes 3 → 1 → killed
+    const run = createRun({
+      level: levelOf([
+        ...repeatedRows({ op: 'multiShot', value: 1 }, 1),
+        ...twoHundredCats(),
+        { type: 'wave', z: 120, enemy: 'puppy', pattern: 'line', count: 5 },
+      ]),
+      seed: 1,
+    })
+    stepUntil(run, (state) => state.squad.z > 16, 6000)
+    expect(run.state.squad.count).toBe(200)
+
+    const hpSeen = new Set<number>()
+    while (run.state.squad.z < 120 && run.state.status === 'running') {
+      run.step(noSteering)
+      for (const enemy of run.state.enemies) hpSeen.add(enemy.hp)
+    }
+
+    expect(hpSeen.has(3)).toBe(true)
+    expect([...hpSeen].filter((hp) => hp !== 3 && hp !== 1)).toEqual([])
+  })
+
+  it('squad_of_200_with_one_range_gate_counts_the_longer_flight_toward_the_cap', () => {
+    // 200 × 2 × 40 ÷ 30 = 533 would be in flight, so N is 2 and about 267 are in flight
+    const run = createRun({ level: levelOf([...repeatedRows({ op: 'range', value: 10 }, 1), ...twoHundredCats()]), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 16, 6000)
+    expect(run.state.squad.count).toBe(200)
+    stepTicks(run, 120)
+
+    const inFlight = yarnBallsInFlightPerTick(run, 120)
+
+    expect(average(inFlight)).toBeGreaterThanOrEqual(267 * 0.9)
+    expect(average(inFlight)).toBeLessThanOrEqual(267 * 1.1)
+  })
+
+  it('squad_of_200_with_one_fire_rate_gate_counts_the_faster_fire_toward_the_cap', () => {
+    // 200 × 2.4 × 1 = 480 would be in flight, so N is 2 and about 240 are in flight
+    const run = createRun({ level: levelOf([...repeatedRows({ op: 'fireRate', value: 20 }, 1), ...twoHundredCats()]), seed: 1 })
+    stepUntil(run, (state) => state.squad.z > 16, 6000)
+    expect(run.state.squad.count).toBe(200)
+    stepTicks(run, 120)
+
+    const inFlight = yarnBallsInFlightPerTick(run, 120)
+
+    expect(average(inFlight)).toBeGreaterThanOrEqual(240 * 0.9)
+    expect(average(inFlight)).toBeLessThanOrEqual(240 * 1.1)
+  })
+
+  it('squad_of_999_with_every_buff_at_its_cap_never_has_more_than_400_yarn_balls_in_flight', () => {
+    const run = createRun({
+      level: levelOf(
+        [
+          ...repeatedRows({ op: 'fireRate', value: 20 }, 10, 5),
+          ...repeatedRows({ op: 'multiShot', value: 1 }, 4, 55),
+          ...repeatedRows({ op: 'range', value: 10 }, 3, 75),
+          ...repeatedRows({ op: 'multiply', value: 2 }, 10, 90),
+        ],
+        400,
+      ),
+      seed: 1,
+    })
+
+    const inFlight = yarnBallsInFlightPerTick(run, 2400)
+
+    expect(run.state.squad.count).toBe(999)
+    expect(run.state.weapon.fireRate).toBeCloseTo(6, 9)
+    expect(run.state.weapon.yarnBallsPerShot).toBe(5)
+    expect(run.state.weapon.range).toBe(60)
+    expect(Math.max(...inFlight)).toBeLessThanOrEqual(400)
+  })
+
+  it('yarn_ball_standing_for_2_cats_after_a_damage_gate_deals_2_times_its_damage', () => {
+    // 256 cats would have 512 in flight, so N is 2: each yarn ball deals 2 × 2 = 4 to a 40 HP bulldog
+    const run = createRun({
+      level: levelOf([
+        ...doublingRows(8),
+        { type: 'gates', z: 85, left: { op: 'damage', value: 1 }, right: { op: 'damage', value: 1 } },
+        { type: 'wave', z: 150, enemy: 'bulldog', pattern: 'line', count: 5 },
+      ]),
+      seed: 1,
+    })
+    stepUntil(run, (state) => state.squad.z > 86, 6000)
+    expect(run.state.squad.count).toBe(256)
+
+    const hpSeen = new Set<number>()
+    while (run.state.squad.z < 150 && run.state.status === 'running') {
+      run.step(noSteering)
+      for (const enemy of run.state.enemies) hpSeen.add(enemy.hp)
+    }
+
+    expect([...hpSeen].some((hp) => hp < 40)).toBe(true)
+    expect([...hpSeen].filter((hp) => (40 - hp) % 4 !== 0)).toEqual([])
   })
 })

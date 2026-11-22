@@ -17,19 +17,23 @@ One term per concept. Code, tests and docs use these words exactly.
 | Good gate | A gate shown in blue. It helps the squad. |
 | Bad gate | A gate shown in red. It hurts the squad. |
 | Weapon buff | A gate effect on fire rate, damage, multi-shot or range that lasts until the end of the run. |
+| Weapon-buff gate | A gate that gives a weapon buff. It is always blue. |
+| Multi-shot | Several yarn balls per cat per shot, fanned out in a spread. |
 | Enemy | A dog that runs at the squad: puppy, chihuahua, bulldog or shield dog. |
 | Contact damage | The number of cats an enemy removes when it touches the squad. |
 | Wave | A group of enemies spawned together in one spawn pattern. |
 | Spawn pattern | The formation of a wave: line, block, column or flank. |
 | Spawn distance | How far before a wave's position the squad is when the wave appears. |
 | Barrel | A static water bucket on the track that splashes nearby enemies when destroyed. |
-| Obstacle | A wall on the track that the squad steers around. |
+| Shield | The shield dog's extra HP, which takes all damage before its body does. |
+| Wall | A static block on the track that stops yarn balls and costs cats when the squad touches it, so the squad steers around it. |
 | Coin | A fish. Coins are the currency for upgrades. |
 | Boss | A giant robot vacuum cleaner at the end of some levels. |
 | Boss arena | The end of the track where the squad stops and fights the boss. |
 | Finish line | The end of a level that has no boss. |
 | Level | A hand-made sequence of events placed at distances along the track. |
-| Event | One thing placed at a distance (z) in a level: a gate row, a wave, a barrel, coins, an obstacle or the boss. |
+| Level number | A level's number, stated in its level file. It sets how much enemy HP and wave size grow. |
+| Event | One thing placed at a distance (z) in a level: a gate row, a wave, a barrel, a wall, coins or the boss. |
 | World | A set of levels sharing a look and a boss. The MVP has one world of 10 levels. |
 | Stars | The 1–3 rating of a won run, based on the squad count left. |
 | Upgrade | A permanent improvement bought with coins between runs. |

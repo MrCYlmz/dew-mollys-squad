@@ -28,44 +28,69 @@ describe('level files', () => {
   })
 })
 
-describe('placeholder level', () => {
+// S-2 allows a second placeholder next to the first, so each rule holds for every placeholder level.
+describe('placeholder levels', () => {
   const placeholders = levelFileNames.map((fileName) => readLevel(fileName) as LevelFile).filter((level) => level.placeholder)
 
-  it('one_level_is_marked_as_placeholder', () => {
-    expect(placeholders).toHaveLength(1)
+  it('at_least_one_level_is_marked_as_placeholder', () => {
+    expect(placeholders.length).toBeGreaterThan(0)
   })
 
   // "About 400 units": within 10%
   it('placeholder_level_is_about_400_units_long', () => {
-    expect(placeholders[0].length).toBeGreaterThanOrEqual(360)
-    expect(placeholders[0].length).toBeLessThanOrEqual(440)
+    for (const level of placeholders) {
+      expect(level.length).toBeGreaterThanOrEqual(360)
+      expect(level.length).toBeLessThanOrEqual(440)
+    }
   })
 
   it('placeholder_level_has_gate_rows_every_40_to_60_units', () => {
-    const gateRowZs = placeholders[0].events.filter((event) => event.type === 'gates').map((event) => event.z)
+    for (const level of placeholders) {
+      const gateRowZs = level.events.filter((event) => event.type === 'gates').map((event) => event.z)
 
-    expect(gateRowZs.length).toBeGreaterThan(1)
-    gateRowZs.slice(1).forEach((z, index) => {
-      expect(z - gateRowZs[index]).toBeGreaterThanOrEqual(40)
-      expect(z - gateRowZs[index]).toBeLessThanOrEqual(60)
-    })
+      expect(gateRowZs.length).toBeGreaterThan(1)
+      gateRowZs.slice(1).forEach((z, index) => {
+        expect(z - gateRowZs[index]).toBeGreaterThanOrEqual(40)
+        expect(z - gateRowZs[index]).toBeLessThanOrEqual(60)
+      })
+    }
   })
 
-  it('placeholder_level_has_a_puppy_wave_between_every_two_gate_rows', () => {
-    const events = placeholders[0].events
-    const gateRowZs = events.filter((event) => event.type === 'gates').map((event) => event.z)
-    const waveZs = events.filter((event) => event.type === 'wave').map((event) => event.z)
+  it('placeholder_level_has_a_wave_between_every_two_gate_rows', () => {
+    for (const level of placeholders) {
+      const gateRowZs = level.events.filter((event) => event.type === 'gates').map((event) => event.z)
+      const waveZs = level.events.filter((event) => event.type === 'wave').map((event) => event.z)
 
-    gateRowZs.slice(1).forEach((z, index) => {
-      expect(waveZs.some((waveZ) => waveZ > gateRowZs[index] && waveZ < z)).toBe(true)
-    })
+      gateRowZs.slice(1).forEach((z, index) => {
+        expect(waveZs.some((waveZ) => waveZ > gateRowZs[index] && waveZ < z)).toBe(true)
+      })
+    }
   })
 
-  it('placeholder_level_uses_all_four_wave_patterns', () => {
-    const patterns = new Set(
-      placeholders[0].events.flatMap((event) => (event.type === 'wave' ? [event.pattern] : [])),
-    )
+  it('placeholder_levels_use_all_four_wave_patterns', () => {
+    const patterns = new Set(placeholders.flatMap((level) => level.events.flatMap((event) => (event.type === 'wave' ? [event.pattern] : []))))
 
     expect(patterns).toEqual(new Set(['line', 'block', 'column', 'flank']))
+  })
+
+  it('placeholder_levels_have_every_enemy_of_world_1', () => {
+    const enemies = new Set(placeholders.flatMap((level) => level.events.flatMap((event) => (event.type === 'wave' ? [event.enemy] : []))))
+
+    expect(enemies).toEqual(new Set(['puppy', 'chihuahua', 'bulldog', 'shieldDog']))
+  })
+
+  it('placeholder_levels_have_every_weapon_buff_gate', () => {
+    const ops = new Set(
+      placeholders.flatMap((level) => level.events.flatMap((event) => (event.type === 'gates' ? [event.left.op, event.right.op] : []))),
+    )
+
+    for (const op of ['fireRate', 'damage', 'multiShot', 'range']) expect(ops).toContain(op)
+  })
+
+  it('placeholder_levels_have_a_barrel_and_a_wall', () => {
+    const types = new Set(placeholders.flatMap((level) => level.events.map((event) => event.type)))
+
+    expect(types).toContain('barrel')
+    expect(types).toContain('wall')
   })
 })

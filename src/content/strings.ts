@@ -21,4 +21,9 @@ export const strings = {
   gateMinus: '−',
   gateTimes: '×',
   gateDivide: '÷',
+  // {value} stands for the gate value.
+  gateFireRate: 'FIRE RATE +{value}%',
+  gateDamage: 'DMG +{value}',
+  gateMultiShot: '+{value} BULLET',
+  gateRange: 'RANGE +{value}',
 }

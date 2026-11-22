@@ -1,10 +1,10 @@
-import type { Level } from '../../src/content/level'
+import type { Gate, Level } from '../../src/content/level'
 import type { GameEvent, Run, RunState, SteerInput } from '../../src/sim/run'
 
 export const noSteering: SteerInput = { drag: 0, left: false, right: false }
 
-export function levelOf(events: Level['events'], length = 300): Level {
-  return { id: 'test-level', length, events }
+export function levelOf(events: Level['events'], length = 300, level = 1): Level {
+  return { id: 'test-level', level, length, events }
 }
 
 // Stops early once the run is won or lost, so no test depends on what a finished run does.
@@ -46,4 +46,9 @@ export function doublingRows(times: number): Level['events'] {
 
 export function steerTo(run: Run, x: number): void {
   run.step({ drag: x - run.state.squad.steeringPoint, left: false, right: false })
+}
+
+// `times` rows of the same gate on both sides, 5 units apart from z = start, so the squad takes the gate `times` times wherever it steers.
+export function repeatedRows(gate: Gate, times: number, start = 5): Level['events'] {
+  return Array.from({ length: times }, (_, index) => ({ type: 'gates' as const, z: start + 5 * index, left: gate, right: gate }))
 }

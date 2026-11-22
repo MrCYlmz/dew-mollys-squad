@@ -5,17 +5,23 @@ import { stepUntil } from './runHarness'
 
 const busyLevel: Level = {
   id: 'busy-level',
-  length: 300,
+  level: 3,
+  length: 400,
   events: [
     { type: 'gates', z: 40, left: { op: 'add', value: 10 }, right: { op: 'multiply', value: 2 } },
     { type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 },
     { type: 'gates', z: 100, left: { op: 'subtract', value: 3 }, right: { op: 'divide', value: 2 } },
-    { type: 'wave', z: 130, enemy: 'puppy', pattern: 'block', columns: 5, rows: 4, x: 0, spacing: 1.5 },
-    { type: 'gates', z: 150, left: { op: 'multiply', value: 2 }, right: { op: 'add', value: 5 } },
-    { type: 'wave', z: 180, enemy: 'puppy', pattern: 'column', count: 8, x: -3, spacing: 2 },
-    { type: 'gates', z: 200, left: { op: 'add', value: 20 }, right: { op: 'subtract', value: 8 } },
-    { type: 'wave', z: 230, enemy: 'puppy', pattern: 'flank', count: 4, spacing: 2 },
-    { type: 'gates', z: 250, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
+    { type: 'barrel', z: 115, x: -1 },
+    { type: 'wave', z: 130, enemy: 'chihuahua', pattern: 'block', columns: 5, rows: 4, x: 0, spacing: 1.5 },
+    { type: 'gates', z: 150, left: { op: 'multiShot', value: 1 }, right: { op: 'add', value: 5 } },
+    { type: 'wall', z: 165, x: 3, width: 4 },
+    { type: 'wave', z: 180, enemy: 'bulldog', pattern: 'column', count: 3, x: -3, spacing: 2 },
+    { type: 'gates', z: 200, left: { op: 'add', value: 20 }, right: { op: 'fireRate', value: 20 } },
+    { type: 'wave', z: 230, enemy: 'shieldDog', pattern: 'flank', count: 2, spacing: 2 },
+    { type: 'gates', z: 250, left: { op: 'damage', value: 1 }, right: { op: 'range', value: 10 } },
+    { type: 'barrel', z: 270, x: 2 },
+    { type: 'wave', z: 280, enemy: 'puppy', pattern: 'line', count: 8 },
+    { type: 'gates', z: 300, left: { op: 'multiply', value: 2 }, right: { op: 'multiply', value: 2 } },
   ],
 }
 
@@ -31,8 +37,11 @@ function snapshot(state: RunState) {
   return {
     status: state.status,
     squad: { ...state.squad },
-    puppies: state.puppies.map((puppy) => ({ ...puppy })),
+    enemies: state.enemies.map((enemy) => ({ ...enemy })),
     yarnBalls: state.yarnBalls.map((yarnBall) => ({ ...yarnBall })),
+    barrels: state.barrels.map((barrel) => ({ ...barrel })),
+    walls: state.walls.map((wall) => ({ ...wall })),
+    weapon: { ...state.weapon },
     gateRows: state.gateRows.map((row) => ({ taken: row.taken, left: { ...row.left }, right: { ...row.right } })),
   }
 }

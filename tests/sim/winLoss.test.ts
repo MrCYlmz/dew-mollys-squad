@@ -34,6 +34,19 @@ describe('win and loss', () => {
     expect(run.state.squad.z).toBeLessThan(300)
   })
 
+  it('squad_dropping_to_0_at_a_gate_on_the_finish_line_loses_the_run', () => {
+    const run = createRun({
+      level: levelOf([{ type: 'gates', z: 50, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }], 50),
+      seed: 1,
+    })
+
+    stepUntil(run, () => false, 6000)
+
+    expect(run.state.squad.z).toBeGreaterThanOrEqual(50)
+    expect(run.state.squad.count).toBe(0)
+    expect(run.state.status).toBe('lost')
+  })
+
   it('lost_run_stays_lost_on_further_steps', () => {
     const run = createRun({
       level: levelOf([{ type: 'gates', z: 20, left: { op: 'subtract', value: 30 }, right: { op: 'subtract', value: 30 } }]),

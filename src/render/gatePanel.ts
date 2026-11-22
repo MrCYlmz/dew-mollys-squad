@@ -15,6 +15,14 @@ function gateLabel(gate: GateState): string {
       return `${strings.gateTimes}${gate.value}`
     case 'divide':
       return `${strings.gateDivide}${gate.value}`
+    case 'fireRate':
+      return strings.gateFireRate.replace('{value}', String(gate.value))
+    case 'damage':
+      return strings.gateDamage.replace('{value}', String(gate.value))
+    case 'multiShot':
+      return strings.gateMultiShot.replace('{value}', String(gate.value))
+    case 'range':
+      return strings.gateRange.replace('{value}', String(gate.value))
   }
 }
 
@@ -50,10 +58,14 @@ export class GatePanel {
     context.strokeStyle = 'rgba(255, 255, 255, 0.9)'
     context.stroke()
     context.fillStyle = '#ffffff'
+    const label = gateLabel(gate)
     context.font = 'bold 72px system-ui, sans-serif'
+    // Long labels such as FIRE RATE +20% are shrunk to fit the panel.
+    const fontSize = Math.min(72, Math.floor((72 * (width - 32)) / context.measureText(label).width))
+    context.font = `bold ${fontSize}px system-ui, sans-serif`
     context.textAlign = 'center'
     context.textBaseline = 'middle'
-    context.fillText(gateLabel(gate), width / 2, height / 2 + 4)
+    context.fillText(label, width / 2, height / 2 + 4)
     this.texture.needsUpdate = true
   }
 

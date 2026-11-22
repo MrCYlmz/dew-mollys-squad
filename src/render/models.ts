@@ -75,3 +75,62 @@ export function createPuppyGeometry(): BufferGeometry {
     { geometry: new BoxGeometry(0.08, 0.2, 0.08), colour: puppyDark, position: [0, 0.48, -0.32], rotationX: 0.6 },
   ])
 }
+
+const chihuahuaTan = 0xe0b07a
+const chihuahuaPink = 0xd98c8c
+
+// Small, with big ears. Faces +z, towards the squad.
+export function createChihuahuaGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new BoxGeometry(0.26, 0.2, 0.4), colour: chihuahuaTan, position: [0, 0.24, 0] },
+    { geometry: new SphereGeometry(0.14, 8, 6), colour: chihuahuaTan, position: [0, 0.44, 0.22] },
+    { geometry: new ConeGeometry(0.07, 0.2, 6), colour: chihuahuaPink, position: [-0.11, 0.6, 0.2] },
+    { geometry: new ConeGeometry(0.07, 0.2, 6), colour: chihuahuaPink, position: [0.11, 0.6, 0.2] },
+    { geometry: new BoxGeometry(0.05, 0.16, 0.05), colour: chihuahuaTan, position: [0, 0.36, -0.22], rotationX: 0.6 },
+  ])
+}
+
+const bulldogGrey = 0x8a7f74
+const bulldogDark = 0x4a423b
+
+// Big and wide. Faces +z, towards the squad.
+export function createBulldogGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new BoxGeometry(0.85, 0.55, 0.9), colour: bulldogGrey, position: [0, 0.45, 0] },
+    { geometry: new BoxGeometry(0.62, 0.48, 0.42), colour: bulldogGrey, position: [0, 0.78, 0.5] },
+    { geometry: new BoxGeometry(0.5, 0.18, 0.12), colour: bulldogDark, position: [0, 0.64, 0.74] },
+    { geometry: new BoxGeometry(0.14, 0.14, 0.1), colour: bulldogDark, position: [-0.28, 1.02, 0.46] },
+    { geometry: new BoxGeometry(0.14, 0.14, 0.1), colour: bulldogDark, position: [0.28, 1.02, 0.46] },
+  ])
+}
+
+const shieldDogBody = 0x5f6b7a
+const shieldDogDark = 0x343b45
+
+// Faces +z, towards the squad. Its shield is drawn separately, so it can disappear once broken.
+export function createShieldDogGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new BoxGeometry(0.48, 0.36, 0.66), colour: shieldDogBody, position: [0, 0.36, 0] },
+    { geometry: new BoxGeometry(0.36, 0.34, 0.32), colour: shieldDogBody, position: [0, 0.64, 0.3] },
+    { geometry: new BoxGeometry(0.16, 0.12, 0.14), colour: shieldDogDark, position: [0, 0.58, 0.52] },
+    { geometry: new BoxGeometry(0.08, 0.24, 0.12), colour: shieldDogDark, position: [-0.21, 0.62, 0.28] },
+    { geometry: new BoxGeometry(0.08, 0.24, 0.12), colour: shieldDogDark, position: [0.21, 0.62, 0.28] },
+  ])
+}
+
+// A round shield standing upright, facing +z.
+export function createShieldGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new CylinderGeometry(0.42, 0.42, 0.08, 16), colour: 0x4aa3ff, position: [0, 0, 0], rotationX: Math.PI / 2 },
+    { geometry: new CylinderGeometry(0.14, 0.14, 0.12, 10), colour: 0xdfeeff, position: [0, 0, 0.02], rotationX: Math.PI / 2 },
+  ])
+}
+
+// A water bucket.
+export function createBarrelGeometry(): BufferGeometry {
+  return mergeParts([
+    { geometry: new CylinderGeometry(0.42, 0.34, 0.8, 14), colour: 0x3f7fd1, position: [0, 0.4, 0] },
+    { geometry: new CylinderGeometry(0.44, 0.44, 0.08, 14), colour: 0xc9d3dc, position: [0, 0.78, 0] },
+    { geometry: new CylinderGeometry(0.36, 0.36, 0.02, 14), colour: 0x9fd8ff, position: [0, 0.76, 0] },
+  ])
+}

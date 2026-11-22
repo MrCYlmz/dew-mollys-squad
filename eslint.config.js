@@ -38,7 +38,7 @@ function layerBoundary(layer) {
 }
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules'] },
+  { ignores: ['dist', 'node_modules', 'reports', '.stryker-tmp'] },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {

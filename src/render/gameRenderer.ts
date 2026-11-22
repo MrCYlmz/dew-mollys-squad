@@ -1,27 +1,32 @@
 import {
+  AdditiveBlending,
+  BackSide,
   BoxGeometry,
   Color,
   DirectionalLight,
   Fog,
   Group,
   HemisphereLight,
+  InstancedBufferAttribute,
   InstancedMesh,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
-  OctahedronGeometry,
+  Object3D,
+  PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
   Scene,
-  SphereGeometry,
   Vector3,
   WebGLRenderer,
   type BufferGeometry,
   type Material,
+  type Texture,
 } from 'three'
 import type { BigBuff, BossKind, EnemyKind, Lane } from '../content/level'
+import { renderConfig, type Fur, type GraphicsQuality } from '../content/renderConfig'
 import { tuning } from '../content/tuning'
 import { formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
 import { laneBorder, laneCentreX } from '../sim/gates'
@@ -29,51 +34,50 @@ import type { RunState } from '../sim/run'
 import { createBigBuffMaterial, createGatePanelMaterial, disposePanelMaterial } from './gatePanel'
 import { createDigitMaterial, HpLabels } from './hpLabels'
 import {
+  bossBrushPlace,
   createBarrelGeometry,
+  createBigBuffGeometry,
+  createBossBodyGeometry,
+  createBossBrushGeometry,
+  createBossLightsGeometry,
   createBulldogGeometry,
   createCatGeometry,
   createChihuahuaGeometry,
   createDustBallGeometry,
-  createDustbotGeometry,
-  createMegaDustbotGeometry,
+  createFenceGeometry,
+  createHouseGeometry,
   createPuppyGeometry,
   createShieldDogGeometry,
   createShieldGeometry,
+  createSkyGeometry,
+  createTreeGeometry,
+  createYarnBallGeometry,
 } from './models'
+import { Particles } from './particles'
+import { createBrickTexture, createCrateTexture, createFinishTexture, createGlowTexture, createGrassTexture, createTrackTexture } from './textures'
 
 // The squad holds its place at the world origin and the road comes at it: a sim place (x, z) is drawn at world
 // (x, 0, roadZ − z), where roadZ is the squad's distance travelled. The road runs off towards −z and screen right is +x.
 
-const skyColour = 0x8fd3f4
-const cameraPitch = 0.62
-const cameraLookAhead = 4
-// Half the width the camera keeps in view at its look point: the track plus a margin.
-const viewHalfWidth = 6.8
-const minCameraDistance = 15
-const scatterCapacity = 60
-const scatterLifetime = 1.2
-const gravity = 14
-const wallHeight = 1.2
+const look = renderConfig
+const cameraLook = look.camera
 const lanes: readonly Lane[] = ['left', 'centre', 'right']
-const panelWidth = 2 * laneBorder - 0.2
-const panelHeight = 1.8
-const laneDashLength = 2
-const laneDashSpacing = 4
-const buffBlockHeight = 1.6
-const buffBlockHpColour = new Color(0xffffff)
-const bigBuffHeight = 0.9
-// Height of an enemy's HP number above the ground.
-const hpLabelHeight: Record<EnemyKind, number> = { puppy: 1.15, chihuahua: 1.05, bulldog: 1.55, shieldDog: 1.2 }
-const shieldLabelRise = 0.6
-const barrelLabelHeight = 1.3
-const bodyHpColour = new Color(0xffffff)
-const shieldHpColour = new Color(0x8fd0ff)
-const barrelHpColour = new Color(0xd6ecff)
-const bossHitFlashSeconds = 0.08
-const bossHitColour = new Color(0x662222)
-const noEmissive = new Color(0x000000)
-const dustBallHeight = 1.2
 const bossKinds: readonly BossKind[] = ['dustbot', 'megaDustbot']
+const panelWidth = 2 * laneBorder - look.panel.gap
+const panelHeight = look.panel.height
+// How far the road reaches behind the squad, and beyond the level's end so the camera never sees it stop.
+const roadBehind = 60
+const roadBeyond = cameraLook.far
+const catCapacity = tuning.squad.formationSlots + look.scatter.capacity
+const hpLabelHeight = look.hpLabel.heights
+const bodyHpColour = new Color(look.hpLabel.body)
+const shieldHpColour = new Color(look.hpLabel.shield)
+const barrelHpColour = new Color(look.hpLabel.barrel)
+const buffBlockHpColour = new Color(look.hpLabel.buffBlock)
+const bossHitColour = new Color(look.boss.hitFlash)
+const noEmissive = new Color(0, 0, 0)
+const curbColours = look.track.curbColours.map((colour) => new Color(colour))
+const houseColours = look.scenery.house.walls.map((colour) => new Color(colour))
 
 export interface ScreenPoint {
   x: number
@@ -82,49 +86,112 @@ export interface ScreenPoint {
 
 const matrix = new Matrix4()
 const position = new Vector3()
+const scale = new Vector3()
+const rotation = new Quaternion()
 const viewDirection = new Vector3()
-// Turns a quad that faces +z towards the camera, which looks down the track at cameraPitch.
-const facingCamera = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -cameraPitch)
+const yAxis = new Vector3(0, 1, 0)
+// Turns a quad that faces +z towards the camera, which looks down the track at its pitch.
+const facingCamera = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -cameraLook.pitch)
 
 function lerp(from: number, to: number, alpha: number): number {
   return from + (to - from) * alpha
+}
+
+function randomBetween(from: number, to: number): number {
+  return from + Math.random() * (to - from)
+}
+
+// Bricks keep their size on walls of any width: the texture is laid by the instance's scale, per face.
+function createWallMaterial(map: Texture): MeshLambertMaterial {
+  const { tileWidth, tileHeight } = look.wall
+  const material = new MeshLambertMaterial({ map })
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <uv_vertex>',
+      `#include <uv_vertex>
+	vec3 wallScale = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+	vec3 scaledPosition = position * wallScale;
+	vec2 wallUv = abs(normal.x) > 0.5 ? scaledPosition.zy : abs(normal.y) > 0.5 ? scaledPosition.xz : scaledPosition.xy;
+	vMapUv = wallUv / vec2(${tileWidth.toFixed(3)}, ${tileHeight.toFixed(3)});`,
+    )
+  }
+  return material
+}
+
+// Each crate face shows the damage stage its instance's damage attribute picks from the crate texture.
+function createCrateMaterial(map: Texture): MeshLambertMaterial {
+  const material = new MeshLambertMaterial({ map })
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'attribute float damage;\nvoid main() {')
+      .replace('#include <uv_vertex>', `#include <uv_vertex>\n\tvMapUv.x = (vMapUv.x + damage) / ${look.buffBlock.damageStages.toFixed(1)};`)
+  }
+  return material
+}
+
+interface Boss {
+  group: Group
+  brushes: [Mesh, Mesh]
 }
 
 // Draws the run. It reads sim state and decides no outcome.
 export class GameRenderer {
   private readonly renderer: WebGLRenderer
   private readonly scene = new Scene()
-  private readonly camera = new PerspectiveCamera(50, 1, 0.5, 140)
+  private readonly camera = new PerspectiveCamera(cameraLook.fov, 1, cameraLook.near, cameraLook.far)
+  private readonly maxPixelRatio: number
   private readonly geometries: BufferGeometry[] = []
   private readonly materials: Material[] = []
-  private readonly cats: InstancedMesh
-  private readonly scatteredCats: InstancedMesh
+  private readonly textures: Texture[] = []
+  private readonly sky: Mesh
+  private readonly sun: DirectionalLight
+  private readonly cats: Record<Fur, InstancedMesh>
+  private readonly catMeshes: InstancedMesh[]
   private readonly enemies: Record<EnemyKind, InstancedMesh>
   private readonly enemyMeshes: InstancedMesh[]
   private readonly shields: InstancedMesh
   private readonly yarnBalls: InstancedMesh
   private readonly bossMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
-  private readonly bosses: Record<BossKind, Mesh>
+  private readonly bosses: Record<BossKind, Boss>
   private readonly dustBalls: InstancedMesh
+  private readonly particles = new Particles()
   private bossFlashSeconds = 0
   private readonly barrelGeometry = this.ownGeometry(createBarrelGeometry())
   private readonly barrelMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
   private readonly wallGeometry = this.ownGeometry(new BoxGeometry(1, 1, 1))
-  private readonly wallMaterial = this.ownMaterial(new MeshLambertMaterial({ color: 0xb5523b }))
+  private readonly wallMaterial = this.ownMaterial(createWallMaterial(this.ownTexture(createBrickTexture())))
   private readonly digitMaterial = this.ownMaterial(createDigitMaterial())
   private readonly panelGeometry = this.ownGeometry(new PlaneGeometry(panelWidth, panelHeight))
-  private readonly laneDashGeometry = this.ownGeometry(new PlaneGeometry(0.15, laneDashLength).rotateX(-Math.PI / 2))
-  private readonly laneDashMaterial = this.ownMaterial(new MeshLambertMaterial({ color: 0xffffff }))
-  private readonly buffBlockGeometry = this.ownGeometry(new BoxGeometry(2 * laneBorder, buffBlockHeight, tuning.buffBlock.depth))
-  private readonly buffBlockMaterial = this.ownMaterial(new MeshLambertMaterial({ color: 0x8a5cd6 }))
-  private readonly bigBuffGeometry = this.ownGeometry(new OctahedronGeometry(0.6))
-  private readonly bigBuffMaterial = this.ownMaterial(new MeshLambertMaterial({ color: 0xffc21a, emissive: 0x553300 }))
+  private readonly laneDashGeometry = this.ownGeometry(
+    new PlaneGeometry(look.track.laneMarkingWidth, look.track.laneDashLength).rotateX(-Math.PI / 2),
+  )
+  private readonly laneDashMaterial = this.ownMaterial(new MeshLambertMaterial({ color: look.track.laneMarking }))
+  private readonly curbGeometry = this.ownGeometry(new BoxGeometry(look.track.curbWidth, look.track.curbHeight, look.track.curbLength))
+  private readonly plainMaterial = this.ownMaterial(new MeshLambertMaterial())
+  private readonly grassTexture = this.ownTexture(createGrassTexture())
+  private readonly grassMaterial = this.ownMaterial(new MeshLambertMaterial({ map: this.grassTexture }))
+  private readonly trackTexture = this.ownTexture(createTrackTexture())
+  private readonly trackMaterial = this.ownMaterial(new MeshLambertMaterial({ map: this.trackTexture }))
+  private readonly finishMaterial = this.ownMaterial(new MeshLambertMaterial({ map: this.ownTexture(createFinishTexture()) }))
+  private readonly finishBannerMaterial = this.ownMaterial(new MeshLambertMaterial({ color: look.track.finishBanner }))
+  private readonly finishPostMaterial = this.ownMaterial(new MeshLambertMaterial({ color: look.track.finishPost }))
+  private readonly treeGeometry = this.ownGeometry(createTreeGeometry())
+  private readonly houseGeometry = this.ownGeometry(createHouseGeometry())
+  private readonly fenceGeometry = this.ownGeometry(createFenceGeometry())
+  private readonly sceneryMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
+  private readonly crateMaterial = this.ownMaterial(createCrateMaterial(this.ownTexture(createCrateTexture())))
+  private readonly bigBuffGeometry = this.ownGeometry(createBigBuffGeometry())
+  private readonly bigBuffMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true, emissive: look.bigBuff.emissive }))
+  private readonly glowMaterial = this.ownMaterial(
+    new MeshBasicMaterial({ map: this.ownTexture(createGlowTexture()), transparent: true, depthWrite: false, blending: AdditiveBlending }),
+  )
+  private readonly glowGeometry = this.ownGeometry(new PlaneGeometry(look.bigBuff.glowSize, look.bigBuff.glowSize))
   private readonly bigBuffMaterials: Record<BigBuff, MeshBasicMaterial>
-  // Stands in the road's place, so the track and the gates move with roadZ.
+  // Stands in the road's place, so the track, the scenery and the gates move with roadZ.
   private readonly levelGroup = new Group()
   private readonly buffLabelGroup = new Group()
   private levelGeometries: BufferGeometry[] = []
-  private levelMaterials: Material[] = []
+  private levelMeshes: InstancedMesh[] = []
   private gatePanelMaterials: MeshBasicMaterial[] = []
   // gatePanels[i] shows the gate in gatePanelLanes[i] of the row gatePanelRows[i].
   private gatePanels: Mesh[] = []
@@ -132,68 +199,88 @@ export class GameRenderer {
   private gatePanelLanes: Lane[] = []
   // One label per buff block of the level, shown on the block and then on its big buff.
   private buffLabels: Mesh[] = []
+  // Each buff block's HP at the start of the run, found by its lane and front edge, so its cracks follow the HP lost.
+  private buffBlockStartLanes: Lane[] = []
+  private buffBlockStartZ: number[] = []
+  private buffBlockStartHp: number[] = []
+  private buffBlockDamage: InstancedBufferAttribute | null = null
   // Sized to the level's barrels, walls and buff blocks, so they are made again for each run.
   private barrels: InstancedMesh | null = null
   private walls: InstancedMesh | null = null
   private buffBlocks: InstancedMesh | null = null
   private bigBuffs: InstancedMesh | null = null
-  private laneDashes: InstancedMesh | null = null
+  private bigBuffGlows: InstancedMesh | null = null
   private hpLabels: HpLabels | null = null
   private roadZ = 0
   private cssWidth = 1
   private cssHeight = 1
-  private cameraDistance = minCameraDistance
+  private cameraDistance = cameraLook.minDistance
+  private lookAhead = 0
   private unitsPerPixel = 0.01
   private seconds = 0
   private catsToScatter = 0
   private readonly scatter = {
-    x: new Float32Array(scatterCapacity),
-    y: new Float32Array(scatterCapacity),
-    z: new Float32Array(scatterCapacity),
-    velocityX: new Float32Array(scatterCapacity),
-    velocityY: new Float32Array(scatterCapacity),
-    age: new Float32Array(scatterCapacity),
+    x: new Float32Array(look.scatter.capacity),
+    y: new Float32Array(look.scatter.capacity),
+    z: new Float32Array(look.scatter.capacity),
+    velocityX: new Float32Array(look.scatter.capacity),
+    velocityY: new Float32Array(look.scatter.capacity),
+    age: new Float32Array(look.scatter.capacity),
+    // The formation slot the cat ran in, which sets its fur.
+    slot: new Uint8Array(look.scatter.capacity),
     count: 0,
   }
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, quality: GraphicsQuality) {
+    const graphics = look.graphics[quality]
+    this.maxPixelRatio = graphics.maxPixelRatio
     this.renderer = new WebGLRenderer({ canvas, antialias: true })
-    this.scene.background = new Color(skyColour)
-    this.scene.fog = new Fog(skyColour, 60, 130)
-    this.scene.add(new HemisphereLight(0xffffff, 0x6a8f4a, 2))
-    const sun = new DirectionalLight(0xffffff, 1.6)
-    sun.position.set(4, 10, 6)
-    this.scene.add(sun)
+    this.renderer.shadowMap.enabled = graphics.shadows
+    this.renderer.shadowMap.type = PCFShadowMap
+    this.scene.fog = new Fog(look.sky.horizon, look.fog.near, look.fog.far)
+    this.scene.background = new Color(look.sky.horizon)
+    this.sky = new Mesh(
+      this.ownGeometry(createSkyGeometry(cameraLook.far * 0.9)),
+      this.ownMaterial(new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false })),
+    )
+    this.sky.renderOrder = -1
+    this.scene.add(this.sky)
+    this.sun = this.addLights(graphics.shadows)
     this.scene.add(this.levelGroup)
     this.scene.add(this.buffLabelGroup)
 
-    const catGeometry = this.ownGeometry(createCatGeometry())
     const catMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
-    this.cats = this.instanced(catGeometry, catMaterial, tuning.squad.formationSlots)
-    this.scatteredCats = this.instanced(catGeometry, catMaterial, scatterCapacity)
+    const catMesh = (fur: Fur) => this.instanced(this.ownGeometry(createCatGeometry(look.cat.fur[fur])), catMaterial, catCapacity, true)
+    this.cats = { orange: catMesh('orange'), grey: catMesh('grey'), black: catMesh('black'), white: catMesh('white'), calico: catMesh('calico') }
+    this.catMeshes = Object.values(this.cats)
     const dogMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
     this.enemies = {
-      puppy: this.instanced(this.ownGeometry(createPuppyGeometry()), dogMaterial, tuning.limits.enemies),
-      chihuahua: this.instanced(this.ownGeometry(createChihuahuaGeometry()), dogMaterial, tuning.limits.enemies),
-      bulldog: this.instanced(this.ownGeometry(createBulldogGeometry()), dogMaterial, tuning.limits.enemies),
-      shieldDog: this.instanced(this.ownGeometry(createShieldDogGeometry()), dogMaterial, tuning.limits.enemies),
+      puppy: this.instanced(this.ownGeometry(createPuppyGeometry()), dogMaterial, tuning.limits.enemies, true),
+      chihuahua: this.instanced(this.ownGeometry(createChihuahuaGeometry()), dogMaterial, tuning.limits.enemies, true),
+      bulldog: this.instanced(this.ownGeometry(createBulldogGeometry()), dogMaterial, tuning.limits.enemies, true),
+      shieldDog: this.instanced(this.ownGeometry(createShieldDogGeometry()), dogMaterial, tuning.limits.enemies, true),
     }
     this.enemyMeshes = Object.values(this.enemies)
-    this.shields = this.instanced(this.ownGeometry(createShieldGeometry()), dogMaterial, tuning.limits.enemies)
+    this.shields = this.instanced(this.ownGeometry(createShieldGeometry()), dogMaterial, tuning.limits.enemies, true)
     this.yarnBalls = this.instanced(
-      this.ownGeometry(new SphereGeometry(0.12, 8, 6)),
-      this.ownMaterial(new MeshLambertMaterial({ color: 0xe0407b })),
+      this.ownGeometry(createYarnBallGeometry()),
+      this.ownMaterial(new MeshLambertMaterial({ vertexColors: true })),
       tuning.yarnBallCap,
+      false,
     )
+    const bossLightsMaterial = this.ownMaterial(new MeshBasicMaterial({ vertexColors: true }))
+    const brushMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
     this.bosses = {
-      dustbot: this.bossMesh(createDustbotGeometry()),
-      megaDustbot: this.bossMesh(createMegaDustbotGeometry()),
+      dustbot: this.bossModel('dustbot', bossLightsMaterial, brushMaterial),
+      megaDustbot: this.bossModel('megaDustbot', bossLightsMaterial, brushMaterial),
     }
     this.dustBalls = this.instanced(
       this.ownGeometry(createDustBallGeometry()),
       this.ownMaterial(new MeshLambertMaterial({ vertexColors: true })),
       tuning.limits.dustBalls,
+      true,
     )
+    this.scene.add(this.particles.mesh)
     this.bigBuffMaterials = {
       add: createBigBuffMaterial('add'),
       multiply: createBigBuffMaterial('multiply'),
@@ -202,20 +289,26 @@ export class GameRenderer {
       multiShot: createBigBuffMaterial('multiShot'),
       range: createBigBuffMaterial('range'),
     }
+    const anisotropy = Math.min(this.renderer.capabilities.getMaxAnisotropy(), 4)
+    this.grassTexture.anisotropy = anisotropy
+    this.trackTexture.anisotropy = anisotropy
   }
 
   resize(cssWidth: number, cssHeight: number, pixelRatio: number): void {
     this.cssWidth = Math.max(cssWidth, 1)
     this.cssHeight = Math.max(cssHeight, 1)
-    this.renderer.setPixelRatio(Math.min(pixelRatio, 2))
+    this.renderer.setPixelRatio(Math.min(pixelRatio, this.maxPixelRatio))
     this.renderer.setSize(this.cssWidth, this.cssHeight, false)
     this.camera.aspect = this.cssWidth / this.cssHeight
     this.camera.updateProjectionMatrix()
 
     const halfHeightTan = Math.tan((this.camera.fov * Math.PI) / 360)
-    this.cameraDistance = Math.max(viewHalfWidth / (halfHeightTan * this.camera.aspect), minCameraDistance)
-    // The squad stands cameraLookAhead before the look point, so nearer the camera.
-    const squadDepth = this.cameraDistance - cameraLookAhead * Math.cos(cameraPitch)
+    this.cameraDistance = Math.max(cameraLook.viewHalfWidth / (halfHeightTan * this.camera.aspect), cameraLook.minDistance)
+    // The camera looks at a point lookAhead in front of the squad, chosen so the squad shows squadScreenY below the centre.
+    const { pitch, squadScreenY } = cameraLook
+    const screenDrop = squadScreenY * halfHeightTan
+    this.lookAhead = (screenDrop * this.cameraDistance) / (Math.sin(pitch) + screenDrop * Math.cos(pitch))
+    const squadDepth = this.cameraDistance - this.lookAhead * Math.cos(pitch)
     this.unitsPerPixel = (2 * squadDepth * halfHeightTan) / this.cssHeight
     this.placeCamera()
   }
@@ -225,38 +318,61 @@ export class GameRenderer {
     return this.unitsPerPixel
   }
 
-  // Builds the track, lanes and gates of a new run, freeing those of the run before.
+  // Builds the track, scenery, lanes and gates of a new run, freeing those of the run before.
   startRun(state: RunState): void {
     this.disposeLevel()
     const length = state.level.length
-    const trackLength = length + 120
+    const roadLength = roadBehind + length + roadBeyond
+    const roadMiddleZ = (roadBehind - length - roadBeyond) / 2
+    const halfWidth = tuning.track.halfWidth
 
-    this.addLevelMesh(new PlaneGeometry(400, trackLength + 200), new MeshLambertMaterial({ color: 0x7cc66b }), 0, -0.02, -length / 2)
-    this.addLevelMesh(new PlaneGeometry(tuning.track.halfWidth * 2, trackLength), new MeshLambertMaterial({ color: 0xe8d9b5 }), 0, 0, -length / 2)
-    for (const edge of [-1, 1]) {
-      this.addLevelMesh(new BoxGeometry(0.3, 0.3, trackLength), new MeshLambertMaterial({ color: 0xffffff }), edge * (tuning.track.halfWidth + 0.15), 0.15, -length / 2)
-    }
+    this.grassTexture.repeat.set(look.ground.width / look.ground.tileSize, roadLength / look.ground.tileSize)
+    this.trackTexture.repeat.set((halfWidth * 2) / look.track.tileSize, roadLength / look.track.tileSize)
+    this.addLevelPlane(look.ground.width, roadLength, this.grassMaterial, 0, -0.02, roadMiddleZ)
+    this.addLevelPlane(halfWidth * 2, roadLength, this.trackMaterial, 0, 0, roadMiddleZ)
+
     const bossEvent = state.level.events.find((event) => event.type === 'boss')
     // A boss level has no finish line.
-    if (bossEvent === undefined) {
-      this.addLevelMesh(new PlaneGeometry(tuning.track.halfWidth * 2, 1.2), new MeshBasicMaterial({ color: 0x222222 }), 0, 0.01, -length)
-      this.addLevelMesh(new BoxGeometry(tuning.track.halfWidth * 2 + 0.6, 0.4, 0.4), new MeshLambertMaterial({ color: 0xffd23f }), 0, 3.4, -length)
-    }
+    if (bossEvent === undefined) this.addFinishLine(-length)
 
-    // Two dashed lines between the three lanes, along the whole track.
-    const dashesPerLine = Math.ceil(trackLength / laneDashSpacing)
-    this.laneDashes = new InstancedMesh(this.laneDashGeometry, this.laneDashMaterial, dashesPerLine * 2)
+    // Red and white curbs along both edges.
+    const curbsPerEdge = Math.ceil(roadLength / look.track.curbLength)
+    const curbs = this.levelInstanced(this.curbGeometry, this.plainMaterial, curbsPerEdge * 2)
+    for (let curb = 0; curb < curbsPerEdge; curb++) {
+      const z = roadBehind - (curb + 0.5) * look.track.curbLength
+      for (const edge of [-1, 1]) {
+        const index = curb * 2 + (edge + 1) / 2
+        curbs.setMatrixAt(index, matrix.makeTranslation(edge * (halfWidth + look.track.curbWidth / 2), look.track.curbHeight / 2, z))
+        curbs.setColorAt(index, curbColours[curb % curbColours.length])
+      }
+    }
+    curbs.receiveShadow = true
+
+    // Two dashed lines between the three lanes, along the whole road.
+    const dashesPerLine = Math.ceil(roadLength / look.track.laneDashSpacing)
+    const laneDashes = this.levelInstanced(this.laneDashGeometry, this.laneDashMaterial, dashesPerLine * 2)
     for (let dash = 0; dash < dashesPerLine; dash++) {
-      const z = 60 - dash * laneDashSpacing
-      this.laneDashes.setMatrixAt(dash * 2, matrix.makeTranslation(-laneBorder, 0.01, z))
-      this.laneDashes.setMatrixAt(dash * 2 + 1, matrix.makeTranslation(laneBorder, 0.01, z))
+      const z = roadBehind - dash * look.track.laneDashSpacing
+      laneDashes.setMatrixAt(dash * 2, matrix.makeTranslation(-laneBorder, 0.01, z))
+      laneDashes.setMatrixAt(dash * 2 + 1, matrix.makeTranslation(laneBorder, 0.01, z))
     }
-    this.levelGroup.add(this.laneDashes)
+    laneDashes.receiveShadow = true
+    this.placeScenery(roadLength)
 
-    this.barrels = this.instanced(this.barrelGeometry, this.barrelMaterial, state.barrels.length)
-    this.walls = this.instanced(this.wallGeometry, this.wallMaterial, state.walls.length)
-    this.buffBlocks = this.instanced(this.buffBlockGeometry, this.buffBlockMaterial, state.buffBlocks.length)
-    this.bigBuffs = this.instanced(this.bigBuffGeometry, this.bigBuffMaterial, state.buffBlocks.length)
+    this.barrels = this.instanced(this.barrelGeometry, this.barrelMaterial, state.barrels.length, true)
+    this.walls = this.instanced(this.wallGeometry, this.wallMaterial, state.walls.length, true)
+    const crateGeometry = new BoxGeometry(2 * laneBorder, look.buffBlock.height, tuning.buffBlock.depth)
+    this.buffBlockDamage = new InstancedBufferAttribute(new Float32Array(Math.max(state.buffBlocks.length, 1)), 1)
+    crateGeometry.setAttribute('damage', this.buffBlockDamage)
+    this.levelGeometries.push(crateGeometry)
+    this.buffBlocks = this.instanced(crateGeometry, this.crateMaterial, state.buffBlocks.length, true)
+    this.bigBuffs = this.instanced(this.bigBuffGeometry, this.bigBuffMaterial, state.buffBlocks.length, true)
+    this.bigBuffGlows = this.instanced(this.glowGeometry, this.glowMaterial, state.buffBlocks.length, false)
+    for (const buffBlock of state.buffBlocks) {
+      this.buffBlockStartLanes.push(buffBlock.lane)
+      this.buffBlockStartZ.push(buffBlock.z)
+      this.buffBlockStartHp.push(buffBlock.hp)
+    }
     // A shield dog shows two numbers, its shield's and its body's.
     this.hpLabels = new HpLabels(this.digitMaterial, tuning.limits.enemies * 2 + state.barrels.length + state.buffBlocks.length, facingCamera)
     this.scene.add(this.hpLabels.mesh)
@@ -275,7 +391,7 @@ export class GameRenderer {
         if (gate === null) continue
         const material = createGatePanelMaterial(gate)
         const panel = new Mesh(this.panelGeometry, material)
-        panel.position.set(laneCentreX(lane), 1.4, -row.z)
+        panel.position.set(laneCentreX(lane), look.panel.gateHeight, -row.z)
         this.levelGroup.add(panel)
         this.gatePanelMaterials.push(material)
         this.gatePanels.push(panel)
@@ -286,15 +402,16 @@ export class GameRenderer {
 
     this.catsToScatter = 0
     this.scatter.count = 0
+    this.particles.clear()
     this.bossFlashSeconds = 0
     this.bossMaterial.emissive.copy(noEmissive)
     // Walls, barrels, the boss and some enemies first come into view during the run; compiling now keeps that from stalling a frame.
     // Only visible objects are compiled, so the level's boss is shown for it.
-    if (bossEvent !== undefined) this.bosses[bossEvent.boss].visible = true
+    if (bossEvent !== undefined) this.bosses[bossEvent.boss].group.visible = true
     for (const label of this.buffLabels) label.visible = true
     this.levelGroup.position.z = 0
     this.renderer.compile(this.scene, this.camera)
-    for (const boss of Object.values(this.bosses)) boss.visible = false
+    for (const boss of Object.values(this.bosses)) boss.group.visible = false
     for (const label of this.buffLabels) label.visible = false
   }
 
@@ -303,7 +420,17 @@ export class GameRenderer {
   }
 
   flashBoss(): void {
-    this.bossFlashSeconds = bossHitFlashSeconds
+    this.bossFlashSeconds = look.boss.hitFlashSeconds
+  }
+
+  // A puff where an enemy died, at its sim place.
+  showKill(x: number, z: number): void {
+    this.particles.emitKill(x, z)
+  }
+
+  // A splash where a barrel burst, at its sim place.
+  showBarrelSplash(x: number, z: number): void {
+    this.particles.emitSplash(x, z)
   }
 
   // Draws the state between the tick before and the last one, alpha of the way.
@@ -315,8 +442,7 @@ export class GameRenderer {
 
     this.roadZ = squadZ
     this.levelGroup.position.z = squadZ
-    this.drawCats(state, squadX, squadZ)
-    this.drawScatteredCats(state, squadX, squadZ, frameSeconds)
+    this.drawCats(state, squadX, squadZ, frameSeconds)
     this.hpLabels?.begin()
     this.drawEnemies(state, alpha)
     this.drawBarrels(state)
@@ -328,13 +454,14 @@ export class GameRenderer {
     this.drawBoss(state, alpha, frameSeconds)
     this.drawDustBalls(state, alpha)
     this.drawGates(state)
+    this.particles.update(frameSeconds, this.roadZ)
     this.renderer.render(this.scene, this.camera)
   }
 
   // Writes where the squad count label belongs, in CSS pixels from the top left of the canvas.
   squadLabelPoint(state: RunState, alpha: number, out: ScreenPoint): void {
     const squad = state.squad
-    position.set(lerp(squad.previousX, squad.x, alpha), 1 + formationRadius(squad.count) * 0.4, this.worldZ(lerp(squad.previousZ, squad.z, alpha)))
+    position.set(lerp(squad.previousX, squad.x, alpha), 1.1 + formationRadius(squad.count) * 0.4, this.worldZ(lerp(squad.previousZ, squad.z, alpha)))
     position.project(this.camera)
     out.x = ((position.x + 1) / 2) * this.cssWidth
     out.y = ((1 - position.y) / 2) * this.cssHeight
@@ -345,7 +472,10 @@ export class GameRenderer {
     for (const material of Object.values(this.bigBuffMaterials)) disposePanelMaterial(material)
     for (const geometry of this.geometries) geometry.dispose()
     for (const material of this.materials) material.dispose()
+    for (const texture of this.textures) texture.dispose()
     this.digitMaterial.map?.dispose()
+    this.particles.dispose()
+    this.sun.dispose()
     this.renderer.dispose()
   }
 
@@ -363,39 +493,148 @@ export class GameRenderer {
     return material
   }
 
-  private instanced(geometry: BufferGeometry, material: Material, capacity: number): InstancedMesh {
+  private ownTexture<T extends Texture>(texture: T): T {
+    this.textures.push(texture)
+    return texture
+  }
+
+  // Returns the sun, whose shadow map is freed with the renderer.
+  private addLights(shadows: boolean): DirectionalLight {
+    const { hemisphere, key } = look.light
+    this.scene.add(new HemisphereLight(hemisphere.sky, hemisphere.ground, hemisphere.intensity))
+    const sun = new DirectionalLight(key.colour, key.intensity)
+    const target = new Object3D()
+    target.position.set(key.target.x, key.target.y, key.target.z)
+    sun.target = target
+    sun.position.set(key.target.x + key.offset.x, key.target.y + key.offset.y, key.target.z + key.offset.z)
+    sun.castShadow = shadows
+    sun.shadow.mapSize.set(key.shadowMapSize, key.shadowMapSize)
+    sun.shadow.bias = key.shadowBias
+    sun.shadow.normalBias = key.shadowNormalBias
+    const shadowCamera = sun.shadow.camera
+    shadowCamera.left = -key.shadowHalfWidth
+    shadowCamera.right = key.shadowHalfWidth
+    shadowCamera.top = key.shadowHalfDepth
+    shadowCamera.bottom = -key.shadowHalfDepth
+    shadowCamera.near = 1
+    shadowCamera.far = sun.position.distanceTo(target.position) * 2
+    this.scene.add(sun, target)
+    return sun
+  }
+
+  // Moving objects; their bounding sphere would not follow the instances, so they are never culled.
+  private instanced(geometry: BufferGeometry, material: Material, capacity: number, castShadow: boolean): InstancedMesh {
     const mesh = new InstancedMesh(geometry, material, Math.max(capacity, 1))
     mesh.count = 0
-    // Instances move every frame; the mesh's bounding sphere would not follow them.
     mesh.frustumCulled = false
+    mesh.castShadow = castShadow
     this.scene.add(mesh)
     return mesh
   }
 
-  private bossMesh(geometry: BufferGeometry): Mesh {
-    const mesh = new Mesh(this.ownGeometry(geometry), this.bossMaterial)
-    mesh.visible = false
-    this.scene.add(mesh)
+  // Objects standing on the road for one run, freed with the level.
+  private levelInstanced(geometry: BufferGeometry, material: Material, count: number): InstancedMesh {
+    const mesh = new InstancedMesh(geometry, material, Math.max(count, 1))
+    mesh.count = count
+    this.levelGroup.add(mesh)
+    this.levelMeshes.push(mesh)
     return mesh
   }
 
-  private addLevelMesh(geometry: BufferGeometry, material: Material, x: number, y: number, z: number): void {
+  private bossModel(kind: BossKind, lightsMaterial: Material, brushMaterial: Material): Boss {
+    const group = new Group()
+    const body = new Mesh(this.ownGeometry(createBossBodyGeometry(kind)), this.bossMaterial)
+    body.castShadow = true
+    const brushGeometry = this.ownGeometry(createBossBrushGeometry(kind))
+    const brushes: [Mesh, Mesh] = [new Mesh(brushGeometry, brushMaterial), new Mesh(brushGeometry, brushMaterial)]
+    const radius = look.boss[kind].radius
+    brushes[0].position.set(-bossBrushPlace * radius, 0.03 * radius, bossBrushPlace * radius)
+    brushes[1].position.set(bossBrushPlace * radius, 0.03 * radius, bossBrushPlace * radius)
+    group.add(body, new Mesh(this.ownGeometry(createBossLightsGeometry(kind)), lightsMaterial), ...brushes)
+    group.visible = false
+    this.scene.add(group)
+    return { group, brushes }
+  }
+
+  private addLevelPlane(width: number, length: number, material: Material, x: number, y: number, z: number): void {
+    const geometry = new PlaneGeometry(width, length).rotateX(-Math.PI / 2)
     const mesh = new Mesh(geometry, material)
-    if (geometry instanceof PlaneGeometry) mesh.rotation.x = -Math.PI / 2
     mesh.position.set(x, y, z)
+    mesh.receiveShadow = true
     this.levelGroup.add(mesh)
     this.levelGeometries.push(geometry)
-    this.levelMaterials.push(material)
+  }
+
+  // A chequered line across the track under a banner on two posts.
+  private addFinishLine(z: number): void {
+    const halfWidth = tuning.track.halfWidth
+    const bannerHeight = look.track.finishBannerHeight
+    this.addLevelPlane(halfWidth * 2, 1.2, this.finishMaterial, 0, 0.01, z)
+    const banner = new BoxGeometry(halfWidth * 2 + 0.6, 0.5, 0.3)
+    const post = new BoxGeometry(0.25, bannerHeight, 0.25)
+    this.levelGeometries.push(banner, post)
+    const bannerMesh = new Mesh(banner, this.finishBannerMaterial)
+    bannerMesh.position.set(0, bannerHeight, z)
+    this.levelGroup.add(bannerMesh)
+    for (const edge of [-1, 1]) {
+      const postMesh = new Mesh(post, this.finishPostMaterial)
+      postMesh.position.set(edge * (halfWidth + 0.3), bannerHeight / 2, z)
+      postMesh.castShadow = true
+      this.levelGroup.add(postMesh)
+    }
+  }
+
+  // Fences, trees and houses repeating along both sides of the road.
+  private placeScenery(roadLength: number): void {
+    const { fence, tree, house } = look.scenery
+    const halfWidth = tuning.track.halfWidth
+    const fencesPerSide = Math.ceil(roadLength / fence.segmentLength)
+    const fences = this.levelInstanced(this.fenceGeometry, this.sceneryMaterial, fencesPerSide * 2)
+    for (let segment = 0; segment < fencesPerSide; segment++) {
+      for (const side of [-1, 1]) {
+        const x = side * (halfWidth + look.track.curbWidth + fence.offset)
+        fences.setMatrixAt(segment * 2 + (side + 1) / 2, matrix.makeTranslation(x, 0, roadBehind - segment * fence.segmentLength))
+      }
+    }
+
+    const treesPerSide = Math.ceil(roadLength / tree.spacing)
+    const trees = this.levelInstanced(this.treeGeometry, this.sceneryMaterial, treesPerSide * 2)
+    for (let i = 0; i < treesPerSide; i++) {
+      for (const side of [-1, 1]) {
+        const x = side * (halfWidth + tree.offset + Math.random() * tree.spread)
+        // The two sides are offset by half a spacing, so the trees do not stand in pairs.
+        const z = roadBehind - (i + (side + 1) / 4 + randomBetween(-0.2, 0.2)) * tree.spacing
+        rotation.setFromAxisAngle(yAxis, Math.random() * Math.PI * 2)
+        scale.setScalar(randomBetween(tree.minScale, tree.maxScale))
+        trees.setMatrixAt(i * 2 + (side + 1) / 2, matrix.compose(position.set(x, 0, z), rotation, scale))
+      }
+    }
+    trees.castShadow = true
+
+    const housesPerSide = Math.ceil(roadLength / house.spacing)
+    const houses = this.levelInstanced(this.houseGeometry, this.sceneryMaterial, housesPerSide * 2)
+    scale.setScalar(1)
+    for (let i = 0; i < housesPerSide; i++) {
+      for (const side of [-1, 1]) {
+        const index = i * 2 + (side + 1) / 2
+        const x = side * (halfWidth + house.offset + Math.random() * house.spread)
+        const z = roadBehind - (i + (side + 1) / 4) * house.spacing
+        // Doors face the road.
+        rotation.setFromAxisAngle(yAxis, -side * (Math.PI / 2))
+        houses.setMatrixAt(index, matrix.compose(position.set(x, 0, z), rotation, scale))
+        houses.setColorAt(index, houseColours[index % houseColours.length])
+      }
+    }
+    houses.castShadow = true
   }
 
   private disposeLevel(): void {
     this.levelGroup.clear()
     for (const geometry of this.levelGeometries) geometry.dispose()
-    for (const material of this.levelMaterials) material.dispose()
+    for (const mesh of this.levelMeshes) mesh.dispose()
     for (const material of this.gatePanelMaterials) disposePanelMaterial(material)
     this.buffLabelGroup.clear()
-    this.laneDashes?.dispose()
-    for (const mesh of [this.barrels, this.walls, this.buffBlocks, this.bigBuffs]) {
+    for (const mesh of [this.barrels, this.walls, this.buffBlocks, this.bigBuffs, this.bigBuffGlows]) {
       if (mesh === null) continue
       this.scene.remove(mesh)
       mesh.dispose()
@@ -404,45 +643,50 @@ export class GameRenderer {
       this.scene.remove(this.hpLabels.mesh)
       this.hpLabels.dispose()
     }
-    this.barrels = this.walls = this.buffBlocks = this.bigBuffs = this.laneDashes = this.hpLabels = null
+    this.barrels = this.walls = this.buffBlocks = this.bigBuffs = this.bigBuffGlows = this.hpLabels = null
+    this.buffBlockDamage = null
     this.levelGeometries = []
-    this.levelMaterials = []
+    this.levelMeshes = []
     this.gatePanelMaterials = []
     this.gatePanels = []
     this.gatePanelRows = []
     this.gatePanelLanes = []
     this.buffLabels = []
+    this.buffBlockStartLanes = []
+    this.buffBlockStartZ = []
+    this.buffBlockStartHp = []
   }
 
   // The camera stands still and frames the squad at the origin and the road ahead of it.
   private placeCamera(): void {
-    const lookZ = -cameraLookAhead
-    viewDirection.set(0, -Math.sin(cameraPitch), -Math.cos(cameraPitch))
+    const lookZ = -this.lookAhead
+    viewDirection.set(0, -Math.sin(cameraLook.pitch), -Math.cos(cameraLook.pitch))
     this.camera.position.set(0, -viewDirection.y * this.cameraDistance, lookZ - viewDirection.z * this.cameraDistance)
     position.set(0, 0, lookZ)
     this.camera.lookAt(position)
+    this.sky.position.copy(this.camera.position)
   }
 
-  // Cats keep their places in the squad, so they move with its interpolated position.
-  private drawCats(state: RunState, squadX: number, squadZ: number): void {
+  // Cats keep their places in the squad, so they move with its interpolated position; lost cats jump sideways off the track, unhurt.
+  private drawCats(state: RunState, squadX: number, squadZ: number, frameSeconds: number): void {
+    const { bobHeight, bobSpeed, bobLean, furOrder } = look.cat
+    for (const mesh of this.catMeshes) mesh.count = 0
     const cats = state.cats
     const shiftX = squadX - state.squad.x
     const shiftZ = squadZ - state.squad.z
     for (let slot = 0; slot < cats.length; slot++) {
-      const bob = Math.abs(Math.sin(this.seconds * 10 + slot * 1.7)) * 0.08
-      matrix.makeTranslation(cats[slot].x + shiftX, bob, this.worldZ(cats[slot].z + shiftZ))
-      this.cats.setMatrixAt(slot, matrix)
+      const bob = Math.abs(Math.sin(this.seconds * bobSpeed + slot * 1.7))
+      // Leaning forward, towards −z, at the top of the bob.
+      matrix.makeRotationX(-bob * bobLean)
+      matrix.setPosition(cats[slot].x + shiftX, bob * bobHeight, this.worldZ(cats[slot].z + shiftZ))
+      const mesh = this.cats[furOrder[slot % furOrder.length]]
+      mesh.setMatrixAt(mesh.count++, matrix)
     }
-    this.cats.count = cats.length
-    this.cats.instanceMatrix.needsUpdate = true
-  }
 
-  // Lost cats jump sideways off the track, unhurt.
-  private drawScatteredCats(state: RunState, squadX: number, squadZ: number, frameSeconds: number): void {
     const scatter = this.scatter
     const lost = this.catsToScatter
     this.catsToScatter = 0
-    for (let i = 0; i < lost && scatter.count < scatterCapacity; i++) {
+    for (let i = 0; i < lost && scatter.count < look.scatter.capacity; i++) {
       const slot = (state.squad.count + i) % tuning.squad.formationSlots
       const index = scatter.count++
       const side = formationOffsetX[slot] < 0 || (formationOffsetX[slot] === 0 && i % 2 === 0) ? -1 : 1
@@ -452,11 +696,12 @@ export class GameRenderer {
       scatter.velocityX[index] = side * (6 + (i % 3))
       scatter.velocityY[index] = 5 + (i % 2)
       scatter.age[index] = 0
+      scatter.slot[index] = slot
     }
 
     for (let i = scatter.count - 1; i >= 0; i--) {
       scatter.age[i] += frameSeconds
-      if (scatter.age[i] >= scatterLifetime) {
+      if (scatter.age[i] >= look.scatter.lifetime) {
         const last = --scatter.count
         scatter.x[i] = scatter.x[last]
         scatter.y[i] = scatter.y[last]
@@ -464,21 +709,25 @@ export class GameRenderer {
         scatter.velocityX[i] = scatter.velocityX[last]
         scatter.velocityY[i] = scatter.velocityY[last]
         scatter.age[i] = scatter.age[last]
+        scatter.slot[i] = scatter.slot[last]
         continue
       }
       scatter.x[i] += scatter.velocityX[i] * frameSeconds
-      scatter.velocityY[i] -= gravity * frameSeconds
+      scatter.velocityY[i] -= look.scatter.gravity * frameSeconds
       scatter.y[i] = Math.max(scatter.y[i] + scatter.velocityY[i] * frameSeconds, 0)
     }
     for (let i = 0; i < scatter.count; i++) {
-      matrix.makeTranslation(scatter.x[i], scatter.y[i], this.worldZ(scatter.z[i]))
-      this.scatteredCats.setMatrixAt(i, matrix)
+      // Tumbling the way it jumps.
+      matrix.makeRotationZ(-Math.sign(scatter.velocityX[i]) * scatter.age[i] * 8)
+      matrix.setPosition(scatter.x[i], scatter.y[i], this.worldZ(scatter.z[i]))
+      const mesh = this.cats[furOrder[scatter.slot[i] % furOrder.length]]
+      mesh.setMatrixAt(mesh.count++, matrix)
     }
-    this.scatteredCats.count = scatter.count
-    this.scatteredCats.instanceMatrix.needsUpdate = true
+    for (const mesh of this.catMeshes) mesh.instanceMatrix.needsUpdate = true
   }
 
   private drawEnemies(state: RunState, alpha: number): void {
+    const { waddleAngle, waddleSpeed, waddleBob } = look.dogs
     const enemies = state.enemies
     for (const mesh of this.enemyMeshes) mesh.count = 0
     this.shields.count = 0
@@ -487,14 +736,17 @@ export class GameRenderer {
       const x = lerp(enemy.previousX, enemy.x, alpha)
       const z = this.worldZ(lerp(enemy.previousZ, enemy.z, alpha))
       const mesh = this.enemies[enemy.kind]
-      matrix.makeTranslation(x, 0, z)
+      const waddle = Math.sin(this.seconds * waddleSpeed + i * 1.3)
+      const bob = Math.abs(waddle) * waddleBob
+      matrix.makeRotationZ(waddle * waddleAngle)
+      matrix.setPosition(x, bob, z)
       mesh.setMatrixAt(mesh.count++, matrix)
       const labelY = hpLabelHeight[enemy.kind]
       this.hpLabels?.add(enemy.hp, x, labelY, z, bodyHpColour)
       if (enemy.shield > 0) {
-        matrix.makeTranslation(x, 0.45, z + 0.55)
+        matrix.setPosition(x, look.shield.height + bob, z + look.shield.ahead)
         this.shields.setMatrixAt(this.shields.count++, matrix)
-        this.hpLabels?.add(enemy.shield, x, labelY + shieldLabelRise, z, shieldHpColour)
+        this.hpLabels?.add(enemy.shield, x, labelY + look.hpLabel.shieldRise, z, shieldHpColour)
       }
     }
     for (const mesh of this.enemyMeshes) mesh.instanceMatrix.needsUpdate = true
@@ -508,7 +760,7 @@ export class GameRenderer {
       const z = this.worldZ(barrels[i].z)
       matrix.makeTranslation(barrels[i].x, 0, z)
       this.barrels.setMatrixAt(i, matrix)
-      this.hpLabels?.add(barrels[i].hp, barrels[i].x, barrelLabelHeight, z, barrelHpColour)
+      this.hpLabels?.add(barrels[i].hp, barrels[i].x, hpLabelHeight.barrel, z, barrelHpColour)
     }
     this.barrels.count = barrels.length
     this.barrels.instanceMatrix.needsUpdate = true
@@ -517,21 +769,25 @@ export class GameRenderer {
   private drawWalls(state: RunState): void {
     if (this.walls === null) return
     const walls = state.walls
+    const height = look.wall.height
     for (let i = 0; i < walls.length; i++) {
       const wall = walls[i]
-      matrix.makeScale(wall.width, wallHeight, tuning.wall.depth)
-      matrix.setPosition(position.set(wall.x, wallHeight / 2, this.worldZ(wall.z + tuning.wall.depth / 2)))
+      matrix.makeScale(wall.width, height, tuning.wall.depth)
+      matrix.setPosition(position.set(wall.x, height / 2, this.worldZ(wall.z + tuning.wall.depth / 2)))
       this.walls.setMatrixAt(i, matrix)
     }
     this.walls.count = walls.length
     this.walls.instanceMatrix.needsUpdate = true
   }
 
+  // Rolling forward as they fly.
   private drawYarnBalls(state: RunState, alpha: number): void {
+    const { height, spinSpeed } = look.yarnBall
     const yarnBalls = state.yarnBalls
     for (let i = 0; i < yarnBalls.length; i++) {
       const yarnBall = yarnBalls[i]
-      matrix.makeTranslation(lerp(yarnBall.previousX, yarnBall.x, alpha), 0.35, this.worldZ(lerp(yarnBall.previousZ, yarnBall.z, alpha)))
+      matrix.makeRotationX(-(this.seconds * spinSpeed + i))
+      matrix.setPosition(lerp(yarnBall.previousX, yarnBall.x, alpha), height, this.worldZ(lerp(yarnBall.previousZ, yarnBall.z, alpha)))
       this.yarnBalls.setMatrixAt(i, matrix)
     }
     this.yarnBalls.count = yarnBalls.length
@@ -540,21 +796,27 @@ export class GameRenderer {
 
   private drawBoss(state: RunState, alpha: number, frameSeconds: number): void {
     const boss = state.boss
-    for (const kind of bossKinds) this.bosses[kind].visible = boss !== null && boss.kind === kind
+    for (const kind of bossKinds) this.bosses[kind].group.visible = boss !== null && boss.kind === kind
     if (boss === null) return
-    const mesh = this.bosses[boss.kind]
-    mesh.position.set(lerp(boss.previousX, boss.x, alpha), 0, this.worldZ(lerp(boss.previousZ, boss.z, alpha)))
+    const model = this.bosses[boss.kind]
+    model.group.position.set(lerp(boss.previousX, boss.x, alpha), 0, this.worldZ(lerp(boss.previousZ, boss.z, alpha)))
     // The model faces +z; turn it towards the squad.
-    mesh.rotation.y = Math.atan2(state.squad.x - boss.x, boss.z - state.squad.z)
+    model.group.rotation.y = Math.atan2(state.squad.x - boss.x, boss.z - state.squad.z)
+    // The two side brushes sweep inwards, turning opposite ways.
+    const brushTurn = look.boss.brushSpinSpeed * frameSeconds
+    model.brushes[0].rotation.y -= brushTurn
+    model.brushes[1].rotation.y += brushTurn
     this.bossFlashSeconds = Math.max(this.bossFlashSeconds - frameSeconds, 0)
     this.bossMaterial.emissive.copy(this.bossFlashSeconds > 0 ? bossHitColour : noEmissive)
   }
 
   private drawDustBalls(state: RunState, alpha: number): void {
+    const { height, spinSpeed } = look.dustBall
     const dustBalls = state.dustBalls
     for (let i = 0; i < dustBalls.length; i++) {
       const dustBall = dustBalls[i]
-      matrix.makeTranslation(lerp(dustBall.previousX, dustBall.x, alpha), dustBallHeight, this.worldZ(lerp(dustBall.previousZ, dustBall.z, alpha)))
+      matrix.makeRotationX(this.seconds * spinSpeed + i)
+      matrix.setPosition(lerp(dustBall.previousX, dustBall.x, alpha), height, this.worldZ(lerp(dustBall.previousZ, dustBall.z, alpha)))
       this.dustBalls.setMatrixAt(i, matrix)
     }
     this.dustBalls.count = dustBalls.length
@@ -562,38 +824,55 @@ export class GameRenderer {
   }
 
   private drawBuffBlocks(state: RunState): void {
-    if (this.buffBlocks === null) return
+    if (this.buffBlocks === null || this.buffBlockDamage === null) return
+    const { height, damageStages } = look.buffBlock
     const buffBlocks = state.buffBlocks
     for (let i = 0; i < buffBlocks.length; i++) {
       const buffBlock = buffBlocks[i]
       const x = laneCentreX(buffBlock.lane)
       const frontZ = this.worldZ(buffBlock.z)
-      matrix.makeTranslation(x, buffBlockHeight / 2, frontZ - tuning.buffBlock.depth / 2)
+      matrix.makeTranslation(x, height / 2, frontZ - tuning.buffBlock.depth / 2)
       this.buffBlocks.setMatrixAt(i, matrix)
-      this.hpLabels?.add(buffBlock.hp, x, buffBlockHeight / 2, frontZ + 0.3, buffBlockHpColour)
-      this.showBuffLabel(i, buffBlock.buff, x, buffBlockHeight + panelHeight / 2 + 0.2, frontZ)
+      const lost = 1 - buffBlock.hp / this.buffBlockStartHpOf(buffBlock.lane, buffBlock.z)
+      this.buffBlockDamage.setX(i, Math.min(Math.floor(lost * damageStages), damageStages - 1))
+      this.hpLabels?.add(buffBlock.hp, x, height / 2, frontZ + 0.3, buffBlockHpColour, look.hpLabel.buffBlockSize)
+      this.showBuffLabel(i, buffBlock.buff, x, height + panelHeight / 2 + 0.2, frontZ)
     }
     this.buffBlocks.count = buffBlocks.length
     this.buffBlocks.instanceMatrix.needsUpdate = true
+    this.buffBlockDamage.needsUpdate = true
   }
 
-  // Labels after the blocks' go to the uncovered big buffs, and the rest are hidden.
+  private buffBlockStartHpOf(lane: Lane, z: number): number {
+    for (let i = 0; i < this.buffBlockStartHp.length; i++) {
+      if (this.buffBlockStartLanes[i] === lane && this.buffBlockStartZ[i] === z) return this.buffBlockStartHp[i]
+    }
+    return 1
+  }
+
+  // Swinging, bobbing gold tokens in a pulsing glow. Labels after the blocks' go to the uncovered big buffs, and the rest are hidden.
   private drawBigBuffs(state: RunState): void {
-    if (this.bigBuffs === null) return
+    if (this.bigBuffs === null || this.bigBuffGlows === null) return
+    const { height, bobHeight, swingAngle, swingSpeed, pulseSpeed } = look.bigBuff
     const bigBuffs = state.bigBuffs
     const firstLabel = state.buffBlocks.length
-    const spin = this.seconds * 2
+    const y = height + Math.sin(this.seconds * pulseSpeed * 0.5) * bobHeight
+    scale.setScalar(1 + Math.sin(this.seconds * pulseSpeed) * 0.12)
     for (let i = 0; i < bigBuffs.length; i++) {
       const bigBuff = bigBuffs[i]
       const x = laneCentreX(bigBuff.lane)
       const z = this.worldZ(bigBuff.z)
-      matrix.makeRotationY(spin)
-      matrix.setPosition(position.set(x, bigBuffHeight, z))
+      matrix.makeRotationY(Math.sin(this.seconds * swingSpeed) * swingAngle)
+      matrix.setPosition(position.set(x, y, z))
       this.bigBuffs.setMatrixAt(i, matrix)
-      this.showBuffLabel(firstLabel + i, bigBuff.buff, x, bigBuffHeight + 0.6 + panelHeight / 2, z)
+      // Just behind the token, so the token draws over it.
+      this.bigBuffGlows.setMatrixAt(i, matrix.compose(position.set(x, y, z - 0.3), facingCamera, scale))
+      this.showBuffLabel(firstLabel + i, bigBuff.buff, x, height + 0.8 + panelHeight / 2, z)
     }
     this.bigBuffs.count = bigBuffs.length
+    this.bigBuffGlows.count = bigBuffs.length
     this.bigBuffs.instanceMatrix.needsUpdate = true
+    this.bigBuffGlows.instanceMatrix.needsUpdate = true
     for (let i = firstLabel + bigBuffs.length; i < this.buffLabels.length; i++) this.buffLabels[i].visible = false
   }
 

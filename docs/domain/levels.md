@@ -12,6 +12,13 @@ Terms as in the [glossary](glossary.md).
 - Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins or barrels.
 - A level takes 60–120 s to play.
 
+## Level order
+
+- Levels are played in level order: by level number, lowest first, and levels with the same number by `id`, in alphabetical order.
+- The title screen starts the first level in level order. After a won run, the victory screen's next level is the next level in level order; after the last level, it goes back to the title screen.
+- After a lost run, retry plays the same level again.
+- Example: with the files `level-1` (level 1) and `level-5` (level 5), the title starts `level-1`, its victory leads to `level-5`, and the victory of `level-5` leads back to the title.
+
 ## Level file
 
 Each level is one JSON file. Distances are in track units: x runs across the track from −5 (left edge) to 5 (right edge), z runs forward from the start (z = 0).
@@ -20,13 +27,15 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 | --- | --- |
 | `id` | Text, unique among levels, such as `"level-1"` |
 | `level` | The level number, a whole number 1 or more. It sets the level's [scaling](#scaling). Two levels may share a number, such as a placeholder and the real level it stands in for |
-| `length` | Distance from the start to the finish line, in units, 300–600 |
+| `length` | Distance from the start to the finish line, or in a boss level to the boss arena, in units, 300–600 |
 | `placeholder` | Optional. `true` marks a stand-in level that designers will replace |
+| `expectedSquadAtBoss` | The expected squad at boss, a whole number 1 or more. Required in a level with a boss, and not allowed in a level without one. It sets the [boss HP](#balancing) |
 | `events` | The level's events, sorted by `z` |
 
 - A level without a boss ends at the finish line at z = `length`.
-- Every event has a `type` and a `z` greater than 0 and less than `length`.
-- Coins and the boss are added to this format when they are built.
+- A level with a boss ends at the boss arena at z = `length`, and has no finish line.
+- Every event has a `type` and a `z` greater than 0 and less than `length`, except the boss event, whose `z` equals `length`. So no gate row, wave, barrel or wall starts past the arena start.
+- Coins are added to this format when they are built.
 
 ### Gate row
 
@@ -105,18 +114,34 @@ Example: `{ "type": "barrel", "z": 120, "x": 1.5 }` is a barrel at x = 1.5, z = 
 
 Example: `{ "type": "wall", "z": 160, "x": -2.5, "width": 5 }` is a wall over the left half of the track, x −5..0, from z = 160 to 161.
 
+### Boss
+
+| Field | Value |
+| --- | --- |
+| `type` | `"boss"` |
+| `z` | The arena start. It must equal the level's `length` |
+| `boss` | `"dustbot"` or `"megaDustbot"` |
+
+- A level has at most one boss event, and it is the last event.
+- Where the boss appears and how it fights is set in [the run](run.md#boss).
+
+Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with `{ "type": "boss", "z": 400, "boss": "dustbot" }`: the Dustbot at the arena starting at z = 400.
+
 ## Scaling
 
 - For each level number above 1, enemy HP is multiplied by 1.08 (the enemy HP growth) and wave size by 1.05 (the wave size growth), both in the tuning config. The level number is the level file's `level`.
 - On level L, enemy HP is the level 1 HP × 1.08^(L − 1), kept as is, without rounding. Examples: a puppy has 3 HP on level 1, 3 × 1.08 = 3.24 HP on level 2 and 3 × 1.08² = 3.4992 HP on level 3. A shield dog's shield and body both scale.
 - On level L, a wave's size is its size in the level file × 1.05^(L − 1), rounded to the nearest whole number, halves up. For line, column and flank waves this scales `count` (per side for flank). For block waves it scales `rows`, so the block keeps its width and grows backwards. Examples: a line of 10 has 10 × 1.05 = 10.5, so 11 enemies on level 2; a line of 5 has 5.25, so still 5. A block of 5 columns and 4 rows on level 5 has 4 × 1.05⁴ = 4.86, so 5 rows of 5.
 - Scaled waves follow the same placement rules: a scaled line still spreads evenly across the track, and extra rows and enemies stand further back at the same `spacing`.
-- Barrels, walls and gates do not scale.
+- Barrels, walls and gates do not scale. Boss HP does not scale with the level number either; it follows the expected squad at boss (see [balancing](#balancing)).
 
 ## Balancing
 
-- Each level states its expected squad at boss.
-- Boss HP = the expected squad's damage per second × 8 seconds.
+- Each boss level states its expected squad at boss (`expectedSquadAtBoss`): the squad count a good run has when it reaches the boss arena.
+- Boss HP = the expected squad's damage per second at the base weapon values × 8 s (the boss HP time, in the tuning config).
+- The expected squad's damage per second at the base weapon values = expected squad at boss × base fire rate × base damage × base yarn balls per shot, with the base values at level 1 from [the run](run.md#shooting), before weapon buffs and upgrades. The yarn ball cap does not change it.
+- Boss HP is kept as is, without rounding.
+- Example: an expected squad at boss of 60 at the base values (2 yarn balls/s, 1 damage, 1 yarn ball per shot) deals 60 × 2 × 1 × 1 = 120 damage per second, so the boss has 120 × 8 = 960 HP.
 - A bad run still reaches the boss with about 40% of the expected squad, so it can win with good aim.
 - Each gate row offers one clearly better gate and one that looks tempting. Example: +20 against ×2 when the squad count is 8 (+20 gives 28, ×2 gives 16).
 
@@ -129,6 +154,8 @@ Example: `{ "type": "wall", "z": 160, "x": -2.5, "width": 5 }` is a wall over th
 | 1 | Teaches gates. Puppies only, generous gates, no boss. A hand icon shows how to steer; there is no text tutorial. |
 | 2 | Teaches enemies. Puppies only, generous gates, no boss. |
 | 3 | Teaches shooting a red gate to fix it. Puppies only, generous gates. |
-| 4–6 | Chihuahuas and barrels, the first weapon buffs. The first boss is on level 5. |
+| 4–6 | Chihuahuas and barrels, the first weapon buffs. The first boss, the Dustbot, is on level 5. |
 | 7–9 | Bulldogs and shield dogs, tighter gate choices. |
-| 10 | The world boss. |
+| 10 | The world boss, the Mega Dustbot, which throws dust balls. |
+
+Only levels 5 and 10 have a boss; the others end at a finish line.

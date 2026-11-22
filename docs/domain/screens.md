@@ -4,7 +4,12 @@ Terms as in the [glossary](glossary.md). The screens lie over the game view.
 
 ## Flow
 
-Boot → Title → Playing ⇄ Paused → Victory or Defeat → Title. From the title, the player can open upgrades and settings.
+Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the player can open upgrades and settings.
+
+- Title → Playing starts the first level in [level order](levels.md#level-order).
+- Victory → Playing starts the next level in level order. After the last level, Victory goes back to the Title.
+- Defeat → Playing retries the same level.
+- Pause's quit goes back to the Title.
 
 ## Screens
 

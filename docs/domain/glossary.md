@@ -28,16 +28,23 @@ One term per concept. Code, tests and docs use these words exactly.
 | Shield | The shield dog's extra HP, which takes all damage before its body does. |
 | Wall | A static block on the track that stops yarn balls and costs cats when the squad touches it, so the squad steers around it. |
 | Coin | A fish. Coins are the currency for upgrades. |
-| Boss | A giant robot vacuum cleaner at the end of some levels. |
-| Boss arena | The end of the track where the squad stops and fights the boss. |
+| Boss | A giant robot vacuum cleaner at the end of some levels: the Dustbot or the Mega Dustbot. |
+| Dustbot | The boss of level 5 in world 1. It does not throw dust balls. |
+| Mega Dustbot | The world boss of world 1, on level 10. It throws dust balls. |
+| World boss | The boss of a world's last level. |
+| Dust ball | A projectile the Mega Dustbot throws at the squad. It removes cats when it touches the squad. |
+| Boss arena | The end of a boss level's track, from z = `length` on, where the squad stops and fights the boss. |
+| Arena start | Where the boss arena begins, at z = `length`. The squad's centre stops there. |
+| Boss HP time | The seconds the expected squad needs to defeat the boss at the base weapon values. Boss HP is worked out from it. |
 | Finish line | The end of a level that has no boss. |
 | Level | A hand-made sequence of events placed at distances along the track. |
 | Level number | A level's number, stated in its level file. It sets how much enemy HP and wave size grow. |
+| Level order | The order levels are played in: by level number, then by `id`. |
 | Event | One thing placed at a distance (z) in a level: a gate row, a wave, a barrel, a wall, coins or the boss. |
 | World | A set of levels sharing a look and a boss. The MVP has one world of 10 levels. |
 | Stars | The 1–3 rating of a won run, based on the squad count left. |
 | Upgrade | A permanent improvement bought with coins between runs. |
 | Upgrade level | How many times an upgrade has been bought. |
-| Expected squad at boss | The squad count a good run has when it reaches the boss, stated in each level. |
+| Expected squad at boss | The squad count a good run has when it reaches the boss, stated in each boss level. It sets the boss HP. |
 | Good run | A run that takes the better gate in every gate row. |
 | Bad run | A run that takes the worse gate in every gate row. |

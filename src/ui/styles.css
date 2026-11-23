@@ -73,6 +73,13 @@ button {
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+.load-failed {
+  margin: 0 16px;
+  font-size: clamp(18px, 4.5vw, 28px);
+  font-weight: 700;
+  text-align: center;
+}
+
 @keyframes pulse {
   50% {
     opacity: 0.45;
@@ -184,4 +191,17 @@ button {
     0 0 4px rgba(0, 0, 0, 0.6),
     0 3px 8px rgba(0, 0, 0, 0.4);
   will-change: transform;
+}
+
+/* The developer's performance overlay, shown only with the ?perf flag. */
+.perf-overlay {
+  position: absolute;
+  top: 56px;
+  left: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  font: 12px/1.35 ui-monospace, monospace;
+  pointer-events: none;
 }

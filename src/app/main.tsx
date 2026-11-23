@@ -3,7 +3,8 @@ import { levels } from '../content/levels'
 import { strings } from '../content/strings'
 import '../ui/styles.css'
 import { App } from './App'
-import { Game } from './game'
+import type { Game } from './game'
+import { readLaunchFlags } from './launchFlags'
 
 const gameElement = document.getElementById('game')
 const canvas = document.getElementById('scene')
@@ -13,5 +14,13 @@ if (!(gameElement instanceof HTMLElement) || !(canvas instanceof HTMLCanvasEleme
 }
 
 document.title = strings.gameName
-const game = new Game(levels, canvas, gameElement)
-render(<App game={game} />, uiRoot)
+const flags = readLaunchFlags(location.search)
+
+// Three.js is most of the download, so the game comes in its own chunk and the title screen shows before it arrives.
+const loadGame = async (): Promise<Game> => {
+  const { Game } = await import('./game')
+  const playedLevels = flags.stress ? [(await import('./stressLevel')).stressLevel] : levels
+  return new Game(playedLevels, canvas, gameElement, flags)
+}
+
+render(<App loadGame={loadGame} />, uiRoot)

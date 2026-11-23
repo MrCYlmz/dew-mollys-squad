@@ -26,6 +26,9 @@ export const renderConfig = {
   graphics: {
     high: { shadows: true, maxPixelRatio: 2 },
     low: { shadows: false, maxPixelRatio: 1.5 },
+    // Until the settings screen, a start that runs strictly below this fps over its first autoCheckSeconds of play switches to low.
+    autoLowBelowFps: 45,
+    autoCheckSeconds: 3,
   },
   camera: {
     fov: 50,
@@ -44,6 +47,8 @@ export const renderConfig = {
     horizon: 0xd3eefb,
     // Elevation in radians where the sky reaches its top colour.
     topElevation: 0.6,
+    // The sky dome's radius as a share of the camera's far distance, so it is never clipped.
+    farShare: 0.9,
   },
   fog: { near: 55, far: 150 },
   light: {
@@ -53,11 +58,12 @@ export const renderConfig = {
       colour: 0xffe0b0,
       intensity: 2.3,
       offset: { x: 7, y: 16, z: -9 },
-      // The point the sun aims at, ahead of the squad; shadows are drawn in a box around it.
-      target: { x: 0, y: 0, z: -14 },
+      // The point the sun aims at, ahead of the squad; shadows are drawn in a box around it, which reaches from just behind
+      // the squad to past the fog's near distance, so shadows never pop in where the road is still clear.
+      target: { x: 0, y: 0, z: -24 },
       shadowMapSize: 1024,
       shadowHalfWidth: 18,
-      shadowHalfDepth: 26,
+      shadowHalfDepth: 36,
       shadowBias: -0.0005,
       shadowNormalBias: 0.03,
     },
@@ -89,10 +95,19 @@ export const renderConfig = {
     finishBanner: 0xffd23f,
     finishPost: 0xe5483b,
     finishBannerHeight: 3.4,
+    finishLineDepth: 1.2,
+    finishBannerThickness: 0.5,
+    finishBannerDepth: 0.3,
+    finishPostWidth: 0.25,
+    // How far outside the track's edge the posts stand; the banner spans from post to post.
+    finishPostOutside: 0.3,
+    // How far the road reaches behind the squad.
+    roadBehind: 60,
   },
   scenery: {
-    fence: { colour: 0xfbf6ec, post: 0xe6dccb, offset: 1, segmentLength: 2 },
-    tree: { trunk: 0x8a5a33, leaves: 0x3f9e44, leavesLight: 0x5cba4f, spacing: 7, offset: 3, spread: 4, minScale: 0.8, maxScale: 1.35 },
+    fence: { colour: 0xfbf6ec, post: 0xe6dccb, offset: 1, segmentLength: 2, scale: 1 },
+    // Each tree is drawn at scale times a random factor from minScale to maxScale.
+    tree: { trunk: 0x8a5a33, leaves: 0x3f9e44, leavesLight: 0x5cba4f, spacing: 7, offset: 3, spread: 4, scale: 1, minScale: 0.8, maxScale: 1.35 },
     house: {
       // The model's walls are this white, and each house tints them with one of the walls colours.
       plaster: 0xffffff,
@@ -103,6 +118,7 @@ export const renderConfig = {
       spacing: 26,
       offset: 11,
       spread: 3,
+      scale: 1,
     },
   },
   cat: {
@@ -130,18 +146,19 @@ export const renderConfig = {
     waddleBob: 0.05,
   },
   // The shield dog's trash-can lid.
-  shield: { lid: 0xb7c0c9, ring: 0x8e98a3, handle: 0x5d6670, height: 0.48, ahead: 0.55 },
+  shield: { lid: 0xb7c0c9, ring: 0x8e98a3, handle: 0x5d6670, height: 0.48, ahead: 0.55, scale: 1 },
   yarnBall: { colour: 0xe0407b, strand: 0xff86b0, radius: 0.13, height: 0.35, spinSpeed: 14 },
   boss: {
-    dustbot: { body: 0xe9edf1, trim: 0x8f9aa6, top: 0xc9d1d9, light: 0x3fe0ff, brush: 0x3a3f45, bristle: 0x2b9be8, radius: 2 },
-    megaDustbot: { body: 0x2f3338, trim: 0xffb703, top: 0x484e56, light: 0xff2a2a, brush: 0x1d2024, bristle: 0xff6a00, radius: 2.5 },
+    // Each boss is drawn as big as its hit radius in the tuning config.
+    dustbot: { body: 0xe9edf1, trim: 0x8f9aa6, top: 0xc9d1d9, light: 0x3fe0ff, brush: 0x3a3f45, bristle: 0x2b9be8 },
+    megaDustbot: { body: 0x2f3338, trim: 0xffb703, top: 0x484e56, light: 0xff2a2a, brush: 0x1d2024, bristle: 0xff6a00 },
     hitFlash: 0x662222,
     hitFlashSeconds: 0.08,
     // Brush turns per second, times 2π.
     brushSpinSpeed: 9,
   },
-  dustBall: { colours: [0x8d8d8d, 0xa9a9a9, 0x6f6f6f], height: 1.2, spinSpeed: 4 },
-  barrel: { bucket: 0x3f86d6, band: 0x2f6bb0, rim: 0xd6dde4, water: 0x9fdcff, handle: 0x9aa4ad },
+  dustBall: { colours: [0x8d8d8d, 0xa9a9a9, 0x6f6f6f], height: 1.2, spinSpeed: 4, scale: 1 },
+  barrel: { bucket: 0x3f86d6, band: 0x2f6bb0, rim: 0xd6dde4, water: 0x9fdcff, handle: 0x9aa4ad, scale: 1 },
   wall: {
     brick: 0xbd5a3c,
     brickDark: 0xa34a30,
@@ -165,15 +182,26 @@ export const renderConfig = {
     tokenFace: 0xffe27a,
     emissive: 0x664000,
     glow: 0xffd75a,
+    // The coin's size, about 1.1 units across at scale 1.
+    scale: 1,
     glowSize: 2.4,
+    // The glow pulses this share larger and smaller than its size.
+    glowPulse: 0.12,
+    // How far the glow stands behind the coin, so the coin draws over it.
+    glowBehind: 0.3,
     height: 1,
     bobHeight: 0.15,
+    // Bobs per pulse.
+    bobPerPulse: 0.5,
     // The token swings this many radians to each side of facing the camera, so its face stays in view.
     swingAngle: 0.7,
     swingSpeed: 2.5,
     pulseSpeed: 5,
     // Fill of the label panel over a buff block and its big buff.
     label: 0xffb31e,
+    // Space between the top of a buff block and its label panel, and between a big buff's height and its label panel.
+    labelGapOverBlock: 0.2,
+    labelGapOverCoin: 0.8,
   },
   panel: {
     // Space left between the panels of neighbouring lanes.
@@ -185,6 +213,8 @@ export const renderConfig = {
     border: 0xffffff,
     text: 0xffffff,
     textOutline: 0x0f1c3a,
+    // Canvas pixels of the glow around a panel's edge.
+    glowBlur: 12,
   },
   gate: { good: 0x2f86ff, bad: 0xf03c3c },
   hpLabel: {
@@ -205,8 +235,10 @@ export const renderConfig = {
   particles: {
     capacity: 500,
     gravity: 12,
-    kill: { colours: [0xffffff, 0xfff1b8, 0xd8d8d8], count: 9, speed: 3, rise: 3, size: 0.17, lifetime: 0.5 },
-    splash: { colours: [0x6cc6ff, 0xb9e6ff, 0xffffff], count: 18, speed: 3.2, rise: 6, size: 0.15, lifetime: 0.8 },
+    // height: where a burst starts above the ground.
+    kill: { colours: [0xffffff, 0xfff1b8, 0xd8d8d8], count: 9, speed: 3, rise: 3, size: 0.17, lifetime: 0.5, height: 0.4 },
+    splash: { colours: [0x6cc6ff, 0xb9e6ff, 0xffffff], count: 18, speed: 3.2, rise: 6, size: 0.15, lifetime: 0.8, height: 0.7 },
   },
-  scatter: { capacity: 60, lifetime: 1.2, gravity: 14 },
+  // Lost cats jump sideways off the track: lost cats take the side and rise speeds in turn, and tumble at tumbleSpeed radians per second.
+  scatter: { capacity: 60, lifetime: 1.2, gravity: 14, sideSpeeds: [6, 7, 8], riseSpeeds: [5, 6], tumbleSpeed: 8 },
 }

@@ -10,3 +10,10 @@ export function watchFocus(onFocusLost: () => void): () => void {
     document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 }
+
+// Calls onChange with true when the page becomes visible and false when it is hidden. Returns a function that stops listening.
+export function watchVisibility(onChange: (visible: boolean) => void): () => void {
+  const onVisibilityChange = () => onChange(document.visibilityState === 'visible')
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+}

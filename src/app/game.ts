@@ -5,7 +5,7 @@ import { watchFocus, watchVisibility } from '../platform/focus'
 import { createInput, type PlayerInput } from '../platform/input'
 import { GameRenderer, type ScreenPoint } from '../render/gameRenderer'
 import { firstLevel, levelAfter } from '../sim/levelOrder'
-import { createRun, type Run, type SteerInput } from '../sim/run'
+import { createRun, type LossCause, type Run, type SteerInput } from '../sim/run'
 import { bossHpPercent, type BossHp } from '../ui/screens/Hud'
 import { chooseGraphicsQuality } from './graphicsQuality'
 import type { LaunchFlags } from './launchFlags'
@@ -13,17 +13,24 @@ import { PerfOverlay } from './perfOverlay'
 
 export type Screen = 'title' | 'playing' | 'paused' | 'victory' | 'defeat'
 
-// What the screens show.
-export interface GameView {
-  screen: Screen
+interface RunView {
   squadCount: number
   progress: number
-  distanceReached: number
-  // The boss that caught the squad in a lost run, or null.
-  caughtBy: BossKind | null
   // Null outside the boss arena.
   boss: BossHp | null
 }
+
+// What the Defeat screen shows about the lost run.
+export interface DefeatView {
+  screen: 'defeat'
+  distanceReached: number
+  lossCause: LossCause
+  // The boss that caught the squad, or null when no boss did.
+  caughtBy: BossKind | null
+}
+
+// What the screens show.
+export type GameView = RunView & ({ screen: Exclude<Screen, 'defeat'> } | DefeatView)
 
 const tickSeconds = 1 / tuning.tickRate
 // Longer frames, such as after a stall, are cut short instead of being caught up tick by tick.
@@ -77,7 +84,7 @@ export class Game {
     this.resize(gameElement)
     this.level = firstLevel(levels)
     this.run = this.newRun()
-    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null }
+    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null }
     this.frameRequest = requestAnimationFrame(this.frame)
     if (this.stress) this.play()
   }
@@ -125,7 +132,7 @@ export class Game {
     this.lastTimestamp = null
     this.accumulator = 0
     this.input.takeDragPixels()
-    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null })
+    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, boss: null })
   }
 
   quitToTitle(): void {
@@ -219,10 +226,10 @@ export class Game {
     } else if (state.status === 'won') {
       this.accumulator = 0
       this.publish({ screen: 'victory', squadCount: state.squad.count, progress: 1 })
-    } else if (state.status === 'lost') {
+    } else if (state.lossCause !== null) {
       this.accumulator = 0
       const caughtBy = state.lossCause === 'caughtByBoss' && state.boss !== null ? state.boss.kind : null
-      this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z), caughtBy })
+      this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z), lossCause: state.lossCause, caughtBy })
     } else if (state.squad.count !== this.view.squadCount || progress !== this.view.progress || this.bossBarChanged()) {
       this.publish({ squadCount: state.squad.count, progress, boss: state.boss === null ? null : { hp: state.boss.hp, fullHp: state.boss.fullHp } })
     }
@@ -248,7 +255,7 @@ export class Game {
     this.squadLabel.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`
   }
 
-  private publish(change: Partial<GameView>): void {
+  private publish(change: Partial<RunView> & ({ screen?: Exclude<Screen, 'defeat'> } | DefeatView)): void {
     this.view = { ...this.view, ...change }
     for (const listener of this.listeners) listener(this.view)
   }

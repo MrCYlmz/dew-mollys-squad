@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { levels } from '../../src/content/levels'
 import { firstLevel, levelAfter } from '../../src/sim/levelOrder'
+import { quietStream } from './runHarness'
 
 function levelFile(id: string, level: number): Level {
-  return { id, level, length: 300, events: [] }
+  return { id, level, length: 300, stream: quietStream, events: [] }
 }
 
 // The example from docs/domain/levels.md: the files level-1 (level 1) and level-5 (level 5).

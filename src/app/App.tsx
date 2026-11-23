@@ -45,7 +45,9 @@ export function App({ game: loadingGame }: AppProps) {
       {view.screen === 'victory' && (
         <VictoryScreen catsLeft={view.squadCount} onNextLevel={() => game.nextLevel()} onBackToTitle={() => game.quitToTitle()} />
       )}
-      {view.screen === 'defeat' && <DefeatScreen distanceReached={view.distanceReached} caughtBy={view.caughtBy} onRetry={() => game.restart()} />}
+      {view.screen === 'defeat' && (
+        <DefeatScreen distanceReached={view.distanceReached} lossCause={view.lossCause} caughtBy={view.caughtBy} onRetry={() => game.restart()} />
+      )}
     </>
   )
 }

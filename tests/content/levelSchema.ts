@@ -1,8 +1,11 @@
 import { z } from 'zod'
+import { tuning } from '../../src/content/tuning'
 
 // The level file format of docs/domain/levels.md. A new field is a domain docs change first.
 
 const trackEdge = 5
+// Walls and buff blocks end at least this far before the arena start, so none stands in the boss arena.
+const obstacleClearanceBeforeArena = 5
 
 const addOrSubtractValue = z.int().min(1)
 const gate = z.discriminatedUnion('op', [
@@ -30,10 +33,17 @@ const gateRow = z
     message: 'a gate row has at least one gate',
   })
 
+const enemyKind = z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog'])
+
+const stream = z.strictObject({
+  interval: z.number().positive(),
+  enemies: z.array(enemyKind).min(1),
+})
+
 const waveBase = {
   type: z.literal('wave'),
   z: z.number(),
-  enemy: z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog']),
+  enemy: enemyKind,
 }
 const count = z.int().min(1)
 const spacing = z.number().positive()
@@ -107,6 +117,7 @@ export const levelSchema = z
     length: z.number().min(300).max(600),
     placeholder: z.literal(true).optional(),
     expectedSquadAtBoss: z.int().min(1).optional(),
+    stream,
     events: z.array(z.union([gateRow, wave, barrel, wall, buffBlock, boss])),
   })
   .superRefine((level, context) => {
@@ -131,6 +142,12 @@ export const levelSchema = z
       }
       if (index > 0 && event.z < level.events[index - 1].z) {
         context.addIssue({ code: 'custom', path: ['events', index, 'z'], message: 'events must be sorted by z' })
+      }
+      if (hasBoss && (event.type === 'wall' || event.type === 'buffBlock')) {
+        const depth = event.type === 'wall' ? tuning.wall.depth : tuning.buffBlock.depth
+        if (event.z + depth > level.length - obstacleClearanceBeforeArena) {
+          context.addIssue({ code: 'custom', path: ['events', index, 'z'], message: 'walls and buff blocks end at least 5 units before the arena start' })
+        }
       }
       if (event.type === 'wave') {
         const [left, right] = waveXRange(event)

@@ -8,9 +8,10 @@ Terms as in the [glossary](glossary.md).
 - Levels are hand-made by designers as data, so a new level needs no code change.
 - Gate rows come every 40–60 units. This sets only the gaps between rows; the first row may come earlier.
 - Between gate rows, enemy waves run at the squad.
+- On top of the waves, an endless enemy stream sends one enemy every few seconds for the whole level (see [stream](#stream)). Its interval is the level's main difficulty setting: a shorter interval makes the level harder.
 - Barrels, coins, walls and buff blocks sit on the track: barrels to shoot, coins to collect, walls to steer around, buff blocks to shoot open for a big buff.
 - Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins, barrels or buff blocks.
-- A level takes 60–120 s to play.
+- The road of a level takes 25–50 s at the run speed (300–600 units at 12 units/s), plus the boss fight in a boss level.
 
 ## Level order
 
@@ -30,11 +31,13 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 | `length` | Distance from the start to the finish line, or in a boss level to the boss arena, in units, 300–600 |
 | `placeholder` | Optional. `true` marks a stand-in level that designers will replace |
 | `expectedSquadAtBoss` | The expected squad at boss, a whole number 1 or more. Required in a level with a boss, and not allowed in a level without one. It sets the [boss HP](#balancing) |
+| `stream` | The level's endless enemy stream, `{ "interval", "enemies" }`. Required in every level (see [stream](#stream)) |
 | `events` | The level's events, sorted by `z` |
 
 - A level without a boss ends at the finish line at z = `length`.
 - A level with a boss ends at the boss arena at z = `length`, and has no finish line.
 - Every event has a `type` and a `z` greater than 0 and less than `length`, except the boss event, whose `z` equals `length`. So no gate row, wave, barrel, wall or buff block starts past the arena start.
+- In a level with a boss, every wall and buff block ends at least 5 units before the arena start: its `z` + its depth is at most `length` − 5. So no obstacle stands in the boss arena, where the road has stopped. Example: with `"length": 400`, a wall or buff block 1 unit deep has a `z` of at most 394.
 - Gate rows and buff blocks are placed by [lane](run.md#lanes): `"left"`, `"centre"` or `"right"`.
 - Coins are added to this format when they are built.
 
@@ -77,8 +80,7 @@ Examples:
 | Column | `count`: 1 or more; `x`: where the column stands across the track; `spacing`: units between neighbouring enemies, more than 0 | `count` enemies in single file at `x`, from `z` back, `spacing` apart |
 | Flank | `count`: 1 or more per side; `spacing`: units between neighbouring enemies, more than 0 | `count` enemies in single file at the left edge (x = −5) and `count` at the right edge (x = 5), from `z` back, `spacing` apart |
 
-- Line, block and column enemies run straight at the squad along the track.
-- Flank enemies walk inward at 45° while running at the squad, at their usual speed, until they reach the centre (x = 0), then run straight at the squad.
+- The pattern sets only where the enemies start. From their first tick, enemies of every pattern chase the squad's centre (see [the run](run.md#enemies)).
 
 Examples:
 
@@ -88,6 +90,22 @@ Examples:
 - `{ "type": "wave", "z": 230, "enemy": "puppy", "pattern": "flank", "count": 4, "spacing": 2 }`: 4 puppies at each edge, from z 230 to 236.
 - `{ "type": "wave", "z": 260, "enemy": "chihuahua", "pattern": "line", "count": 10 }`: 10 chihuahuas across the track.
 - These counts are for level 1. On higher levels the wave has more enemies (see [scaling](#scaling)).
+
+### Stream
+
+| Field | Value |
+| --- | --- |
+| `interval` | Seconds between two stream enemies, more than 0 |
+| `enemies` | One or more of `"puppy"`, `"chihuahua"`, `"bulldog"` and `"shieldDog"`, sent in this order and then again from the start. A kind may appear more than once, to send it more often |
+
+- The stream is not an event: it has no `z` and runs from the start of the run until the finish line or the arena start.
+- Where stream enemies appear and how the interval is counted is set in [the run](run.md#enemy-stream).
+- Many stream and wave enemies alive at once can reach the [enemy cap](run.md#enemy-cap) of 150; then new enemies are dropped until some are gone. Designers keep the interval long enough that this does not happen in normal play.
+
+Examples:
+
+- `"stream": { "interval": 2, "enemies": ["puppy"] }`: one puppy every 2 s.
+- `"stream": { "interval": 0.8, "enemies": ["puppy", "puppy", "chihuahua"] }`: an enemy every 0.8 s, two puppies for each chihuahua.
 
 ### Barrel
 
@@ -147,6 +165,7 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 
 - For each level number above 1, enemy HP is multiplied by 1.08 (the enemy HP growth) and wave size by 1.05 (the wave size growth), both in the tuning config. The level number is the level file's `level`.
 - On level L, enemy HP is the level 1 HP × 1.08^(L − 1), kept as is, without rounding. Examples: a puppy has 3 HP on level 1, 3 × 1.08 = 3.24 HP on level 2 and 3 × 1.08² = 3.4992 HP on level 3. A shield dog's shield and body both scale.
+- Stream enemies' HP scales the same way as wave enemies'. The stream's `interval` does not scale with the level number; each level sets its own.
 - A buff block's HP scales the same way from its `hp`. Example: a block with `"hp": 40` has 40 × 1.08⁴ = 54.419… HP on level 5.
 - On level L, a wave's size is its size in the level file × 1.05^(L − 1), rounded to the nearest whole number, halves up. For line, column and flank waves this scales `count` (per side for flank). For block waves it scales `rows`, so the block keeps its width and grows backwards. Examples: a line of 10 has 10 × 1.05 = 10.5, so 11 enemies on level 2; a line of 5 has 5.25, so still 5. A block of 5 columns and 4 rows on level 5 has 4 × 1.05⁴ = 4.86, so 5 rows of 5.
 - Scaled waves follow the same placement rules: a scaled line still spreads evenly across the track, and extra rows and enemies stand further back at the same `spacing`.

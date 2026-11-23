@@ -4,6 +4,7 @@
   "length": 400,
   "placeholder": true,
   "expectedSquadAtBoss": 600,
+  "stream": { "interval": 1, "enemies": ["puppy", "puppy", "chihuahua"] },
   "events": [
     { "type": "gates", "z": 30, "left": { "op": "add", "value": 10 }, "centre": { "op": "add", "value": 5 }, "right": { "op": "multiply", "value": 2 } },
     { "type": "wave", "z": 55, "enemy": "puppy", "pattern": "line", "count": 5 },

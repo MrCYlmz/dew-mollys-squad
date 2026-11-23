@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Gate, Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
-import { copied, doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepUntil } from './runHarness'
+import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type BuffBlockEvent = Extract<Level['events'][number], { type: 'buffBlock' }>
 type Lane = BuffBlockEvent['lane']
@@ -128,8 +128,8 @@ describe('buff block', () => {
   })
 
   it('enemy_walks_on_through_a_buff_block', () => {
-    // The squad stands in the right lane, out of the puppy's way, and fires past it.
-    const run = startRun([buffBlock(50, 'centre', unbreakable, 'add'), { type: 'wave', z: 60, enemy: 'puppy', pattern: 'line', count: 1 }], 10 / 3)
+    // The block stops the squad's yarn balls, so the puppy walks through it unhurt; the squad stays before the block.
+    const run = startRun([buffBlock(56, 'centre', unbreakable, 'add'), { type: 'wave', z: 60, enemy: 'puppy', pattern: 'line', count: 1 }])
     let nearestPuppyZ = Infinity
 
     while (run.state.squad.z < 45 && run.state.status === 'running') {
@@ -137,8 +137,8 @@ describe('buff block', () => {
       for (const puppy of run.state.enemies) nearestPuppyZ = Math.min(nearestPuppyZ, puppy.z)
     }
 
-    expect(nearestPuppyZ).toBeLessThan(50 - 1)
-    expect(run.state.buffBlocks).toEqual([expect.objectContaining({ lane: 'centre', z: 50 })])
+    expect(nearestPuppyZ).toBeLessThan(56 - 1)
+    expect(run.state.buffBlocks).toEqual([expect.objectContaining({ lane: 'centre', z: 56 })])
   })
 
   it('barrel_splash_does_not_damage_a_buff_block', () => {
@@ -284,132 +284,191 @@ describe('big buff', () => {
 })
 
 describe('running into a buff block', () => {
-  it('squad_of_25_touching_an_unbroken_block_loses_10_cats_once_and_the_block_stays_until_past_the_last_cat', () => {
-    const run = startRun([...squadOf(25), buffBlock(60, 'centre', unbreakable, 'add')])
+  it.each([1, 25])('squad_of_%i_whose_centre_runs_into_an_unbroken_block_loses_the_run_at_once', (count) => {
+    const run = startRun([...squadOf(count), buffBlock(60, 'centre', unbreakable, 'add')])
 
-    const events = stepUntil(run, (state) => state.squad.z > 60.5, 6000)
-    expect(run.state.squad.count).toBe(15)
-    expect(run.state.buffBlocks).toHaveLength(1)
-
-    events.push(...stepUntil(run, (state) => state.squad.z > 66, 6000))
-    expect(eventsOf(events, 'catsLost')).toEqual([{ type: 'catsLost', count: 10 }])
-    expect(run.state.squad.count).toBe(15)
-    expect(run.state.buffBlocks).toEqual([])
-  })
-
-  it('squad_of_6_touching_an_unbroken_block_loses_the_run', () => {
-    const run = startRun([...squadOf(6), buffBlock(60, 'centre', unbreakable, 'add')])
-
-    stepUntil(run, (state) => state.squad.z > 62, 6000)
-
-    expect(run.state.squad.count).toBe(0)
-    expect(run.state.status).toBe('lost')
-    expect(run.state.lossCause).toBe('outOfCats')
-  })
-
-  it('block_contact_in_the_gate_tick_applies_before_the_gate', () => {
-    // A single cat touches the block's front edge when the squad reaches z = 60.05, the same tick it takes the +10 gate.
-    // Block first: 1 − 10 leaves 0 and loses the run before the gate could add 10.
-    const gateZ = 60.05
-    const run = startRun([
-      { type: 'gates', z: gateZ, ...everyLane({ op: 'add', value: 10 }) },
-      buffBlock(gateZ + tuning.hitRadius.cat, 'centre', unbreakable, 'add'),
-    ])
-
-    stepUntil(run, (state) => state.squad.z > 62, 6000)
+    const events = stepUntil(run, (state) => state.squad.z > 62, 6000)
 
     expect(run.state.status).toBe('lost')
-    expect(run.state.squad.count).toBe(0)
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+    expect(run.state.squad.count).toBe(count)
+    expect(eventsOf(events, 'catsLost')).toEqual([])
   })
 
-  it('cat_reaching_into_the_block_lane_costs_cats_though_the_squad_centre_is_beside_it', () => {
+  it('run_is_lost_in_the_tick_the_squad_centre_reaches_the_block_front_edge', () => {
+    const run = startRun([buffBlock(60, 'left', unbreakable, 'add')], -3)
+    let zBefore = 0
+
+    while (run.state.status === 'running' && run.state.squad.z < 62) {
+      zBefore = run.state.squad.z
+      run.step(noSteering)
+    }
+
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+    expect(zBefore).toBeLessThan(60)
+    expect(run.state.squad.z).toBeGreaterThanOrEqual(60)
+  })
+
+  it('squad_centre_steered_into_an_unbroken_block_while_it_passes_loses_the_run', () => {
+    const run = startRun([buffBlock(60, 'left', unbreakable, 'add')])
+    stepUntil(run, (state) => state.squad.z >= 60.2, 6000)
+    expect(run.state.status).toBe('running')
+
+    steerTo(run, -3)
+    stepUntil(run, (state) => state.squad.z > 60 + tuning.buffBlock.depth, 6000)
+
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+  })
+
+  it('squad_centre_steered_into_the_block_lane_once_past_its_back_edge_is_safe', () => {
+    // 25 cats reach about 1.5 units behind the centre, so the block still stands while the centre steers into its lane.
+    const run = startRun([...squadOf(25), buffBlock(60, 'left', unbreakable, 'add')])
+    stepUntil(run, (state) => state.squad.z > 60 + tuning.buffBlock.depth + 0.2, 6000)
+
+    steerTo(run, -3)
+    stepUntil(run, (state) => state.squad.z > 66, 6000)
+
+    expect(run.state.status).toBe('running')
+    expect(run.state.squad.x).toBeLessThan(-5 / 3)
+  })
+
+  it('squad_centre_exactly_at_the_block_front_edge_is_in_the_block', () => {
+    // A block's front edge reaches the squad's centre when the distance travelled is its z: the block stands where an
+    // empty run's squad is after 300 ticks.
+    const emptyRun = startRun([])
+    stepTicks(emptyRun, 300)
+    const frontEdge = emptyRun.state.squad.z
+    const run = startRun([buffBlock(frontEdge, 'centre', unbreakable, 'add')])
+
+    stepUntil(run, (state) => state.squad.z >= frontEdge, 6000)
+
+    expect(run.state.squad.z).toBe(frontEdge)
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+  })
+
+  it('squad_centre_steered_into_the_block_lane_exactly_at_its_back_edge_is_in_the_block', () => {
+    // An empty run's squad is at the back edge after 300 ticks. The squad waits in the centre lane and steers into the left
+    // lane on tick 300, so its centre first lies in the block's lane when the distance travelled is the block's z + its depth.
+    const emptyRun = startRun([])
+    stepTicks(emptyRun, 300)
+    const backEdge = emptyRun.state.squad.z
+    const frontEdge = backEdge - tuning.buffBlock.depth
+    expect(frontEdge + tuning.buffBlock.depth).toBe(backEdge)
+    const run = startRun([buffBlock(frontEdge, 'left', unbreakable, 'add')], -1)
+    stepTicks(run, 298)
+    expect(run.state.status).toBe('running')
+
+    steerTo(run, -3)
+
+    expect(run.state.squad.z).toBe(backEdge)
+    expect(run.state.squad.x).toBeLessThan(-5 / 3)
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+  })
+
+  it('cats_reaching_into_the_block_lane_are_not_lost_while_the_squad_centre_is_beside_it', () => {
     // 25 cats around x = −1.4, in the centre lane, stand up to about 1.5 units to each side, so some reach into the left lane.
     const run = startRun([...squadOf(25), buffBlock(60, 'left', unbreakable, 'add')], -1.4)
 
     const events = stepUntil(run, (state) => state.squad.z > 66, 6000)
 
-    expect(eventsOf(events, 'catsLost')).toEqual([{ type: 'catsLost', count: 10 }])
+    expect(Math.min(...run.state.cats.map((cat) => cat.x))).toBeLessThan(-5 / 3)
+    expect(eventsOf(events, 'catsLost')).toEqual([])
+    expect(run.state.squad.count).toBe(25)
+    expect(run.state.status).toBe('running')
+  })
+
+  it('block_the_squad_centre_misses_stays_until_past_the_last_cat', () => {
+    const run = startRun([...squadOf(25), buffBlock(60, 'left', unbreakable, 'add')], -1.4)
+
+    stepUntil(run, (state) => state.squad.z > 60.5, 6000)
+    expect(run.state.buffBlocks).toHaveLength(1)
+
+    stepUntil(run, (state) => state.squad.z > 66, 6000)
+    expect(run.state.buffBlocks).toEqual([])
+  })
+
+  it('broken_block_is_no_obstacle', () => {
+    const run = startRun([buffBlock(60, 'centre', 3, 'add')])
+
+    const events = stepUntil(run, (state) => state.squad.z > 62, 6000)
+
+    expect(eventsOf(events, 'buffBlockBroken')).toHaveLength(1)
+    expect(run.state.status).toBe('running')
+  })
+
+  it('block_in_the_gate_tick_loses_the_run_before_the_gate_applies', () => {
+    // Collisions come before gates, so the −30 gate the squad reaches in the same tick never takes its cats.
+    const run = startRun([
+      { type: 'gates', z: 60, ...everyLane({ op: 'subtract', value: 30 }) },
+      buffBlock(60, 'centre', unbreakable, 'add'),
+    ])
+
+    stepUntil(run, (state) => state.squad.z > 62, 6000)
+
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+    expect(run.state.squad.count).toBe(1)
   })
 })
 
 // 200 cats fire about 400 yarn balls a second, so the block takes damage in nearly every tick near it.
 describe('buff block tick order', () => {
   const blockZ = 40
-  const level = (hp: number) => [...squadOf(200), buffBlock(blockZ, 'centre', hp, 'add')]
 
-  // Per tick of a run through an unbreakable block, until the block is past the last cat: the damage dealt to it by the end
-  // of the tick, the squad's z before and after it, and its events.
-  function damageLog() {
-    const run = startRun(level(unbreakable))
-    const ticks: { damage: number; zBefore: number; zAfter: number; events: GameEvent[] }[] = []
+  // Per tick of a run of 200 cats at x towards an unbreakable block, until the run is lost or the block is past the last
+  // cat: the damage dealt to the block by the end of the tick, the squad's z before and after it, and the run's status.
+  function damageLog(lane: Lane, x: number) {
+    const run = startRun([...squadOf(200), buffBlock(blockZ, lane, unbreakable, 'add')], x)
+    const ticks: { damage: number; zBefore: number; zAfter: number; status: string }[] = []
     while (run.state.status === 'running') {
       const zBefore = run.state.squad.z
-      const events = copied(run.step(noSteering))
+      run.step(noSteering)
       const block = run.state.buffBlocks[0]
       if (block === undefined) break
-      ticks.push({ damage: unbreakable - block.hp, zBefore, zAfter: run.state.squad.z, events })
+      ticks.push({ damage: unbreakable - block.hp, zBefore, zAfter: run.state.squad.z, status: run.state.status })
     }
     return ticks
   }
 
-  function playWithHp(hp: number) {
-    const run = startRun(level(hp))
-    return stepUntil(run, (state) => state.squad.z >= blockZ + 5, 6000)
+  function playWithHp(hp: number, lane: Lane, x: number) {
+    const run = startRun([...squadOf(200), buffBlock(blockZ, lane, hp, 'add')], x)
+    const events = stepUntil(run, (state) => state.squad.z >= blockZ + 5, 6000)
+    return { run, events }
   }
 
-  it('yarn_ball_that_breaks_a_block_in_the_tick_the_squad_first_touches_it_saves_the_cats', () => {
-    const ticks = damageLog()
-    const touchTick = ticks.findIndex((tick) => tick.events.some((event) => event.type === 'catsLost'))
-    expect(touchTick).toBeGreaterThan(0)
-    const before = ticks[touchTick - 1].damage
-    const during = ticks[touchTick].damage
-    expect(during).toBeGreaterThan(before)
+  it('yarn_ball_that_breaks_a_block_in_the_tick_the_squad_centre_reaches_it_saves_the_run', () => {
+    const ticks = damageLog('centre', 0)
+    const contactTick = ticks.length - 1
+    expect(ticks[contactTick].status).toBe('lost')
+    expect(ticks[contactTick].zBefore).toBeLessThan(blockZ)
+    expect(ticks[contactTick].zAfter).toBeGreaterThanOrEqual(blockZ)
+    const during = ticks[contactTick].damage
+    expect(during).toBeGreaterThan(ticks[contactTick - 1].damage)
 
-    // Broken in the touch tick: yarn ball hits come before contacts, so it costs nothing.
-    const brokenInTheTouchTick = playWithHp(during)
-    expect(eventsOf(brokenInTheTouchTick, 'buffBlockBroken')).toHaveLength(1)
-    expect(eventsOf(brokenInTheTouchTick, 'catsLost')).toEqual([])
+    // Broken in the contact tick: yarn ball hits come before contacts, so the run goes on, and the big buff it uncovers
+    // at the squad's centre is collected in that tick.
+    const brokenInTheContactTick = playWithHp(during, 'centre', 0)
+    expect(eventsOf(brokenInTheContactTick.events, 'buffBlockBroken')).toHaveLength(1)
+    expect(eventsOf(brokenInTheContactTick.events, 'bigBuffCollected')).toHaveLength(1)
+    expect(brokenInTheContactTick.run.state.status).toBe('running')
 
-    // Still standing after the touch tick: it costs 10 cats.
-    const standingAtTheTouch = playWithHp(during + 1)
-    expect(eventsOf(standingAtTheTouch, 'catsLost')).toEqual([{ type: 'catsLost', count: 10 }])
-  })
-
-  // decisions.md: shots come before pickups in a tick, so a block broken in the tick the squad's centre reaches it gives the buff.
-  it('big_buff_uncovered_in_the_tick_it_reaches_the_squad_centre_is_collected', () => {
-    const ticks = damageLog()
-    const reachedTick = ticks.findIndex((tick) => tick.zAfter >= blockZ)
-    expect(ticks[reachedTick].zBefore).toBeLessThan(blockZ)
-    const damageWhenReached = ticks[reachedTick].damage
-    expect(damageWhenReached).toBeGreaterThan(ticks[reachedTick - 1].damage)
-
-    const run = startRun(level(damageWhenReached))
-    let breakTick = -1
-    const events: GameEvent[] = []
-    for (let tick = 0; run.state.squad.z < blockZ + 5 && run.state.status === 'running'; tick++) {
-      const tickEvents = copied(run.step(noSteering))
-      if (tickEvents.some((event) => event.type === 'buffBlockBroken')) breakTick = tick
-      events.push(...tickEvents)
-    }
-
-    expect(breakTick).toBe(reachedTick)
-    expect(eventsOf(events, 'bigBuffCollected')).toHaveLength(1)
+    // Still standing after the contact tick: the run is lost.
+    const standingAtTheContact = playWithHp(during + 1, 'centre', 0)
+    expect(standingAtTheContact.run.state.status).toBe('lost')
+    expect(standingAtTheContact.run.state.lossCause).toBe('ranIntoBlock')
   })
 
   it('big_buff_uncovered_after_it_reached_the_squad_centre_is_lost', () => {
-    const ticks = damageLog()
+    // The squad's centre passes beside a left lane block, while its cats in the left lane go on hitting it.
+    const ticks = damageLog('left', -1.4)
     const reachedTick = ticks.findIndex((tick) => tick.zAfter >= blockZ)
-    const lastTickBeforeTheCentre = reachedTick - 1
     expect(ticks[reachedTick].zBefore).toBeLessThan(blockZ)
-    // The squad's rear cats, still behind the block, go on hitting it after the centre has passed its front edge.
     const damageWhenReached = ticks[reachedTick].damage
     expect(ticks.at(-1)?.damage).toBeGreaterThan(damageWhenReached)
+    expect(ticks.at(-1)?.status).toBe('running')
 
-    const uncoveredLate = playWithHp(damageWhenReached + 1)
-    expect(eventsOf(uncoveredLate, 'buffBlockBroken')).toHaveLength(1)
-    expect(eventsOf(uncoveredLate, 'bigBuffCollected')).toEqual([])
-
-    const uncoveredEarly = playWithHp(ticks[lastTickBeforeTheCentre].damage)
-    expect(eventsOf(uncoveredEarly, 'bigBuffCollected')).toHaveLength(1)
+    const uncoveredLate = playWithHp(damageWhenReached + 1, 'left', -1.4)
+    expect(eventsOf(uncoveredLate.events, 'buffBlockBroken')).toHaveLength(1)
+    expect(eventsOf(uncoveredLate.events, 'bigBuffCollected')).toEqual([])
+    expect(uncoveredLate.run.state.squad.count).toBe(200)
   })
 })

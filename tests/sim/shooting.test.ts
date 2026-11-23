@@ -62,7 +62,7 @@ describe('yarn balls', () => {
     }
 
     expect(flown).toBeLessThanOrEqual(30 + 1e-9)
-    expect(flown).toBeGreaterThanOrEqual(29.5)
+    expect(flown).toBeGreaterThanOrEqual(29.5 - 1e-9)
   })
 
   it('yarn_ball_deals_1_damage_to_the_puppy_it_hits', () => {
@@ -102,20 +102,14 @@ describe('yarn balls', () => {
     expect(damagedPuppiesBehindTheFront).toBe(0)
   })
 
-  it('yarn_balls_miss_a_puppy_outside_the_lane_they_fly_in', () => {
-    const run = createRun({
-      level: levelOf([{ type: 'wave', z: 60, enemy: 'puppy', pattern: 'column', count: 1, x: 2.5, spacing: 1 }]),
-      seed: 1,
-    })
+  // Enemies chase the squad onto its line of fire, so a barrel stands in for the target beside it.
+  it('yarn_balls_miss_a_barrel_outside_the_lane_they_fly_in', () => {
+    const run = createRun({ level: levelOf([{ type: 'barrel', z: 60, x: 2.5 }]), seed: 1 })
     steerTo(run, -2.5)
 
-    let hpSeen = 3
-    while (run.state.squad.z < 60 && run.state.status === 'running') {
-      run.step(noSteering)
-      for (const puppy of run.state.enemies) hpSeen = Math.min(hpSeen, puppy.hp)
-    }
+    stepUntil(run, (state) => state.squad.z >= 59, 6000)
 
-    expect(hpSeen).toBe(3)
+    expect(run.state.barrels).toEqual([expect.objectContaining({ hp: 10 })])
   })
 
   it('yarn_ball_stops_at_the_nearer_of_two_close_puppies', () => {

@@ -1,19 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
-import { createRun, type GameEvent } from '../../src/sim/run'
-import { copied, everyLane, levelOf, noSteering, steerTo, stepUntil } from './runHarness'
+import { createRun, type Run } from '../../src/sim/run'
+import { everyLane, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 // A squad of exactly count cats.
 function squadOf(count: number): Level['events'] {
   return [{ type: 'gates', z: 10, ...everyLane({ op: 'add', value: count - 1 }) }]
 }
 
-function runThrough(events: Level['events'], x: number, untilZ: number, level = 1) {
-  const run = createRun({ level: levelOf(events, 300, level), seed: 1 })
-  steerTo(run, x)
+function runThrough(events: Level['events'], x: number, untilZ: number) {
+  const run = createRun({ level: levelOf(events), seed: 1 })
+  if (x !== 0) steerTo(run, x)
   const gameEvents = stepUntil(run, (state) => state.squad.z > untilZ, 6000)
   return { run, catsLost: gameEvents.filter((event) => event.type === 'catsLost') }
+}
+
+// The squad's distance travelled before and after the tick in which the run was lost.
+function lossTick(run: Run, untilZ: number) {
+  while (run.state.status === 'running' && run.state.squad.z < untilZ) {
+    const zBefore = run.state.squad.z
+    run.step(noSteering)
+    if (run.state.lossCause !== null) return { zBefore, zAfter: run.state.squad.z }
+  }
+  return undefined
 }
 
 const leftHalfWall = { type: 'wall', z: 60, x: -2.5, width: 5 } as const
@@ -25,59 +35,108 @@ describe('wall', () => {
     expect(run.state.walls).toEqual([expect.objectContaining({ x: -2.5, z: 160, width: 5 })])
   })
 
-  it('squad_of_25_touching_a_wall_loses_10_cats_once_and_runs_on_through_it', () => {
-    const { run, catsLost } = runThrough([...squadOf(25), leftHalfWall], -2.5, 70)
+  it.each([1, 25])('squad_of_%i_whose_centre_runs_into_a_wall_loses_the_run_at_once', (count) => {
+    const { run, catsLost } = runThrough([...squadOf(count), leftHalfWall], -2.5, 70)
 
-    expect(catsLost).toEqual([{ type: 'catsLost', count: 10 }])
-    expect(run.state.squad.count).toBe(15)
-    expect(run.state.status).toBe('running')
-    expect(run.state.squad.z).toBeGreaterThan(70)
-  })
-
-  it('wall_cat_loss_does_not_scale_with_the_level_number', () => {
-    const { run, catsLost } = runThrough([...squadOf(25), leftHalfWall], -2.5, 70, 5)
-
-    expect(catsLost).toEqual([{ type: 'catsLost', count: 10 }])
-    expect(run.state.squad.count).toBe(15)
-  })
-
-  it('squad_of_6_touching_a_wall_drops_to_0_and_loses_the_run', () => {
-    const { run, catsLost } = runThrough([...squadOf(6), leftHalfWall], -2.5, 70)
-
-    expect(catsLost).toEqual([{ type: 'catsLost', count: 6 }])
-    expect(run.state.squad.count).toBe(0)
     expect(run.state.status).toBe('lost')
+    expect(run.state.lossCause).toBe('ranIntoWall')
+    expect(run.state.squad.count).toBe(count)
+    expect(catsLost).toEqual([])
   })
 
-  it('each_wall_costs_cats_once', () => {
-    const { run, catsLost } = runThrough([...squadOf(25), leftHalfWall, { ...leftHalfWall, z: 80 }], -2.5, 90)
+  // The example from docs/domain/run.md: a wall over x −5..0 at z = 160.
+  it.each([-1, 0])('squad_at_x_%s_is_lost_when_the_distance_travelled_reaches_the_wall', (x) => {
+    const run = createRun({ level: levelOf([{ type: 'wall', z: 160, x: -2.5, width: 5 }]), seed: 1 })
+    if (x !== 0) steerTo(run, x)
 
-    expect(catsLost).toEqual([
-      { type: 'catsLost', count: 10 },
-      { type: 'catsLost', count: 10 },
-    ])
-    expect(run.state.squad.count).toBe(5)
+    const tick = lossTick(run, 170)
+
+    expect(tick?.zBefore).toBeLessThan(160)
+    expect(tick?.zAfter).toBeGreaterThanOrEqual(160)
+    expect(run.state.lossCause).toBe('ranIntoWall')
   })
 
-  it('squad_beside_a_wall_loses_nothing', () => {
-    const { run, catsLost } = runThrough([...squadOf(25), leftHalfWall], 2.5, 70)
+  it('squad_at_x_0_5_passes_a_wall_over_x_minus_5_to_0', () => {
+    const { run, catsLost } = runThrough([{ type: 'wall', z: 160, x: -2.5, width: 5 }], 0.5, 170)
+
+    expect(run.state.status).toBe('running')
+    expect(run.state.squad.count).toBe(1)
+    expect(catsLost).toEqual([])
+  })
+
+  it('wall_right_edge_is_part_of_the_wall', () => {
+    const { run } = runThrough([{ type: 'wall', z: 60, x: 2.5, width: 5 }], 0, 70)
+
+    expect(run.state.status).toBe('lost')
+    expect(run.state.lossCause).toBe('ranIntoWall')
+  })
+
+  it('squad_centre_steered_into_a_wall_while_it_passes_loses_the_run', () => {
+    const run = createRun({ level: levelOf([leftHalfWall]), seed: 1 })
+    steerTo(run, 1)
+    stepUntil(run, (state) => state.squad.z >= leftHalfWall.z + 0.2, 6000)
+    expect(run.state.status).toBe('running')
+
+    steerTo(run, -2.5)
+    stepUntil(run, (state) => state.squad.z > leftHalfWall.z + tuning.wall.depth, 6000)
+
+    expect(run.state.status).toBe('lost')
+    expect(run.state.lossCause).toBe('ranIntoWall')
+  })
+
+  it('squad_centre_steered_behind_a_wall_once_past_its_back_edge_is_safe', () => {
+    const run = createRun({ level: levelOf([leftHalfWall]), seed: 1 })
+    steerTo(run, 1)
+    stepUntil(run, (state) => state.squad.z > leftHalfWall.z + tuning.wall.depth + 0.2, 6000)
+
+    steerTo(run, -2.5)
+    stepUntil(run, (state) => state.squad.z > 70, 6000)
+
+    expect(run.state.status).toBe('running')
+  })
+
+  it('squad_centre_exactly_at_the_wall_front_edge_is_in_the_wall', () => {
+    // A wall's front edge reaches the squad's centre when the distance travelled is its z: the wall stands where an empty
+    // run's squad is after 300 ticks.
+    const emptyRun = createRun({ level: levelOf([]), seed: 1 })
+    stepTicks(emptyRun, 300)
+    const frontEdge = emptyRun.state.squad.z
+    const run = createRun({ level: levelOf([{ type: 'wall', z: frontEdge, x: 0, width: 2 }]), seed: 1 })
+
+    const tick = lossTick(run, frontEdge + 2)
+
+    expect(tick?.zAfter).toBe(frontEdge)
+    expect(run.state.lossCause).toBe('ranIntoWall')
+  })
+
+  it('squad_centre_steered_into_a_wall_exactly_at_its_back_edge_is_in_the_wall', () => {
+    // An empty run's squad is at the back edge after 300 ticks. The squad waits beside the wall and steers in on tick 300,
+    // so its centre first lies in the wall's x-range when the distance travelled is the wall's z + its depth.
+    const emptyRun = createRun({ level: levelOf([]), seed: 1 })
+    stepTicks(emptyRun, 300)
+    const backEdge = emptyRun.state.squad.z
+    const wall = { type: 'wall', z: backEdge - tuning.wall.depth, x: -2.5, width: 5 } as const
+    expect(wall.z + tuning.wall.depth).toBe(backEdge)
+    const run = createRun({ level: levelOf([wall]), seed: 1 })
+    steerTo(run, 0.5)
+    stepTicks(run, 298)
+    expect(run.state.status).toBe('running')
+
+    steerTo(run, -2.5)
+
+    expect(run.state.squad.z).toBe(backEdge)
+    expect(run.state.squad.x).toBeLessThanOrEqual(0)
+    expect(run.state.lossCause).toBe('ranIntoWall')
+  })
+
+  it('cats_at_the_side_of_the_squad_that_clip_a_wall_are_not_lost', () => {
+    // 25 cats around x = 1 stand up to about 1.5 units to each side, so some reach into the wall over x −5..0.
+    const { run, catsLost } = runThrough([...squadOf(25), leftHalfWall], 1, 70)
 
     expect(catsLost).toEqual([])
     expect(run.state.squad.count).toBe(25)
-  })
-
-  // The wall covers x −5..0; a single cat at x touches it when its hit radius reaches past x = 0.
-  it('cat_overlapping_the_wall_edge_touches_it', () => {
-    const { run } = runThrough([leftHalfWall], tuning.hitRadius.cat - 0.02, 70)
-
-    expect(run.state.status).toBe('lost')
-  })
-
-  it('cat_just_clear_of_the_wall_edge_does_not_touch_it', () => {
-    const { run, catsLost } = runThrough([leftHalfWall], tuning.hitRadius.cat + 0.02, 70)
-
-    expect(catsLost).toEqual([])
-    expect(run.state.squad.count).toBe(1)
+    expect(run.state.status).toBe('running')
+    expect(Math.min(...run.state.cats.map((cat) => cat.x))).toBeLessThan(0)
   })
 
   it('wall_disappears_once_past_the_last_cat', () => {
@@ -93,73 +152,63 @@ describe('wall', () => {
   it('wall_stays_while_the_last_cat_is_inside_its_depth', () => {
     const run = createRun({ level: levelOf([{ type: 'wall', z: 60, x: 4, width: 2 }]), seed: 1 })
 
-    stepUntil(run, (state) => state.squad.z > 60 + tuning.wall.depth - 0.2, 6000)
+    stepUntil(run, (state) => state.squad.z > 60 + tuning.wall.depth - 0.25, 6000)
 
     expect(run.state.squad.z).toBeLessThan(60 + tuning.wall.depth)
     expect(run.state.walls).toHaveLength(1)
   })
 
-  it('wall_contact_and_a_gate_in_the_same_tick_both_apply_in_that_tick', () => {
-    // 31 cats, then a DMG +1 row every 0.1 units, so the squad takes at least one gate in every tick it touches the wall.
-    const run = createRun({
-      level: levelOf([
-        { type: 'gates', z: 0.5, ...everyLane({ op: 'add', value: 30 }) },
-        ...Array.from({ length: 150 }, (_, index) => ({
-          type: 'gates' as const,
-          z: 1 + index / 10,
-          ...everyLane({ op: 'damage', value: 1 }),
-        })),
-        { type: 'wall', z: 10, x: 0, width: 10 },
-      ]),
-      seed: 1,
-    })
-    let wallTick: GameEvent[] | undefined
-
-    while (wallTick === undefined && run.state.squad.z < 15 && run.state.status === 'running') {
-      const events = copied(run.step(noSteering))
-      if (events.some((event) => event.type === 'catsLost')) wallTick = events
-    }
-
-    expect(wallTick).toContainEqual({ type: 'catsLost', count: 10 })
-    expect(wallTick?.some((event) => event.type === 'gateTaken')).toBe(true)
-    expect(run.state.squad.count).toBe(21)
-  })
-
-  it('single_cat_first_touches_a_wall_at_its_front_edge', () => {
-    // The cat's hit circle reaches z = 60 once the squad's centre is at 60 − 0.3; a tick moves it 8 / 60 units.
-    const run = createRun({ level: levelOf([{ type: 'wall', z: 60, x: 0, width: 10 }]), seed: 1 })
-    let zAtTheTouch: number | undefined
-
-    while (zAtTheTouch === undefined && run.state.squad.z < 62 && run.state.status === 'running') {
-      if (run.step(noSteering).some((event) => event.type === 'catsLost')) zAtTheTouch = run.state.squad.z
-    }
-
-    expect(zAtTheTouch).toBeGreaterThanOrEqual(60 - tuning.hitRadius.cat)
-    expect(zAtTheTouch).toBeLessThan(60 - tuning.hitRadius.cat + 8 / 60)
-  })
-
-  it('wall_contact_in_the_gate_tick_applies_before_the_gate', () => {
-    // A single cat touches the wall's front edge when the squad reaches z = 60.05, the same tick it takes
-    // the +10 gate. Wall first: 1 − 10 leaves 0 and loses the run before the gate could add 10.
-    const gateZ = 60.05
+  it('wall_in_the_gate_tick_loses_the_run_before_the_gate_applies', () => {
+    // Collisions come before gates, so the −30 gate the squad reaches in the same tick never takes its cats.
     const { run } = runThrough(
       [
-        { type: 'gates', z: gateZ, ...everyLane({ op: 'add', value: 10 }) },
-        { type: 'wall', z: gateZ + tuning.hitRadius.cat, x: 0, width: 10 },
+        { type: 'gates', z: 60, ...everyLane({ op: 'subtract', value: 30 }) },
+        { type: 'wall', z: 60, x: 0, width: 10 },
       ],
       0,
       70,
     )
 
-    expect(run.state.status).toBe('lost')
-    expect(run.state.squad.count).toBe(0)
+    expect(run.state.lossCause).toBe('ranIntoWall')
+    expect(run.state.squad.count).toBe(1)
+  })
+
+  it('enemy_contact_in_the_wall_tick_comes_before_the_wall', () => {
+    // Contacts in one tick are checked enemies first. A first run finds the tick a bulldog touches a squad of 1; the wall
+    // is put where the squad's centre reaches it in that same tick. A wall moves no enemy, so the bulldog touches the
+    // squad in that tick again and loses the run first, by its cats.
+    const bulldog = { type: 'wave', z: 100, enemy: 'bulldog', pattern: 'column', count: 1, x: 0, spacing: 1 } as const
+    const withoutWall = createRun({ level: levelOf([bulldog]), seed: 1 })
+    const contact = lossTick(withoutWall, 120)
+    expect(withoutWall.state.lossCause).toBe('outOfCats')
+    if (contact === undefined) throw new Error('the bulldog did not touch the squad')
+
+    const run = createRun({ level: levelOf([{ type: 'wall', z: contact.zAfter, x: 0, width: 10 }, bulldog]), seed: 1 })
+    const events = stepUntil(run, () => false, 6000)
+
+    expect(run.state.squad.z).toBe(contact.zAfter)
+    expect(run.state.lossCause).toBe('outOfCats')
+    expect(events.filter((event) => event.type === 'catsLost')).toEqual([{ type: 'catsLost', count: 1 }])
+  })
+
+  it('wall_and_buff_block_reached_in_the_same_tick_lose_the_run_to_the_wall', () => {
+    const { run } = runThrough(
+      [
+        { type: 'wall', z: 60, x: 0, width: 1 },
+        { type: 'buffBlock', z: 60, lane: 'centre', hp: 1_000_000, buff: 'add' },
+      ],
+      0,
+      70,
+    )
+
+    expect(run.state.lossCause).toBe('ranIntoWall')
   })
 })
 
 describe('yarn balls and walls', () => {
   it('yarn_ball_stops_at_a_wall_in_front_of_a_puppy', () => {
     const run = createRun({
-      level: levelOf([leftHalfWall, { type: 'wave', z: 70, enemy: 'puppy', pattern: 'column', count: 1, x: -2.5, spacing: 1 }]),
+      level: levelOf([leftHalfWall, { type: 'wave', z: 64, enemy: 'puppy', pattern: 'column', count: 1, x: -2.5, spacing: 1 }]),
       seed: 1,
     })
     steerTo(run, -2.5)
@@ -250,9 +299,10 @@ describe('yarn balls around a wall', () => {
   })
 
   it('yarn_balls_fired_from_beyond_a_wall_fly_on_while_it_stands', () => {
-    // 25 cats run through the wall; while the last of them is still at it, the front cats already fire from beyond it.
+    // 25 cats around x = 0.3 pass the wall, those on the left clipping it; while some of them are still at it, others
+    // on its side of the track already fire from beyond it.
     const run = createRun({ level: levelOf([...squadOf(25), leftHalfWall]), seed: 1 })
-    steerTo(run, leftHalfWall.x)
+    steerTo(run, 0.3)
     let inside = 0
     let beyondTheWall = 0
 
@@ -266,7 +316,7 @@ describe('yarn balls around a wall', () => {
       return state.squad.z > 70
     }, 6000)
 
-    expect(run.state.squad.count).toBe(15)
+    expect(run.state.squad.count).toBe(25)
     expect(beyondTheWall).toBeGreaterThan(0)
     expect(inside).toBe(0)
   })

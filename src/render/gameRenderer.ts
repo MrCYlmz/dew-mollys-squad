@@ -31,6 +31,7 @@ import { renderConfig, type Fur, type GraphicsQuality } from '../content/renderC
 import { tuning } from '../content/tuning'
 import { formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
 import { laneBorder, laneCentreX } from '../sim/gates'
+import { shownHp } from '../sim/hp'
 import type { BuffBlockState, RunState } from '../sim/run'
 import { createBigBuffMaterial, createGatePanelMaterial, disposePanelMaterial } from './gatePanel'
 import { createDigitMaterial, HpLabels } from './hpLabels'
@@ -99,6 +100,7 @@ const matrix = new Matrix4()
 // Per-frame code passes positions to setPosition and makeTranslation in this vector, never as numbers: those overloads test
 // x.isVector3, which boxes a number argument on every call.
 const position = new Vector3()
+const labelPlace = new Vector3()
 const scale = new Vector3()
 const rotation = new Quaternion()
 const viewDirection = new Vector3()
@@ -711,10 +713,9 @@ export class GameRenderer {
     this.sky.position.copy(this.camera.position)
   }
 
-  // Cats keep their places in the squad, so they move with its interpolated position; lost cats jump sideways off the track, unhurt.
+  // Cats keep their places in the squad, so they move with its interpolated position.
   private drawCats(state: RunState, squadX: number, squadZ: number, frameSeconds: number): void {
     const { bobHeight, bobSpeed, bobLean, furOrder } = look.cat
-    const { sideSpeeds, riseSpeeds, tumbleSpeed } = look.scatter
     const catMeshes = this.catMeshes
     for (let i = 0; i < catMeshes.length; i++) catMeshes[i].count = 0
     const cats = state.cats
@@ -728,7 +729,14 @@ export class GameRenderer {
       const mesh = this.cats[furOrder[slot % furOrder.length]]
       mesh.setMatrixAt(mesh.count++, matrix)
     }
+    this.drawLostCats(state, squadX, squadZ, frameSeconds)
+    for (let i = 0; i < catMeshes.length; i++) catMeshes[i].instanceMatrix.needsUpdate = true
+  }
 
+  // Lost cats jump sideways off the track and tumble until their scatter lifetime is over.
+  private drawLostCats(state: RunState, squadX: number, squadZ: number, frameSeconds: number): void {
+    const { sideSpeeds, riseSpeeds, tumbleSpeed } = look.scatter
+    const furOrder = look.cat.furOrder
     const scatter = this.scatter
     const lost = this.catsToScatter
     this.catsToScatter = 0
@@ -769,7 +777,6 @@ export class GameRenderer {
       const mesh = this.cats[furOrder[scatter.slot[i] % furOrder.length]]
       mesh.setMatrixAt(mesh.count++, matrix)
     }
-    for (let i = 0; i < catMeshes.length; i++) catMeshes[i].instanceMatrix.needsUpdate = true
   }
 
   private drawEnemies(state: RunState, alpha: number): void {
@@ -789,11 +796,11 @@ export class GameRenderer {
       matrix.setPosition(position.set(x, bob, z))
       mesh.setMatrixAt(mesh.count++, matrix)
       const labelY = hpLabelHeight[enemy.kind]
-      this.hpLabels?.add(enemy.hp, x, labelY, z, bodyHpColour)
+      this.hpLabels?.add(shownHp(enemy.hp), labelPlace.set(x, labelY, z), bodyHpColour)
       if (enemy.shield > 0) {
         matrix.setPosition(position.set(x, look.shield.height + bob, z + look.shield.ahead))
         this.shields.setMatrixAt(this.shields.count++, matrix)
-        this.hpLabels?.add(enemy.shield, x, labelY + look.hpLabel.shieldRise, z, shieldHpColour)
+        this.hpLabels?.add(shownHp(enemy.shield), labelPlace.set(x, labelY + look.hpLabel.shieldRise, z), shieldHpColour)
       }
     }
     for (let i = 0; i < enemyMeshes.length; i++) enemyMeshes[i].instanceMatrix.needsUpdate = true
@@ -807,7 +814,7 @@ export class GameRenderer {
       const z = this.worldZ(barrels[i].z)
       matrix.makeTranslation(position.set(barrels[i].x, 0, z))
       this.barrels.setMatrixAt(i, matrix)
-      this.hpLabels?.add(barrels[i].hp, barrels[i].x, hpLabelHeight.barrel, z, barrelHpColour)
+      this.hpLabels?.add(shownHp(barrels[i].hp), labelPlace.set(barrels[i].x, hpLabelHeight.barrel, z), barrelHpColour)
     }
     this.barrels.count = barrels.length
     this.barrels.instanceMatrix.needsUpdate = true
@@ -884,7 +891,7 @@ export class GameRenderer {
       if (startHp === undefined) throw new Error('A buff block of the run was not there at its start')
       const lost = 1 - buffBlock.hp / startHp
       this.buffBlockDamage.setX(i, Math.min(Math.floor(lost * damageStages), damageStages - 1))
-      this.hpLabels?.add(buffBlock.hp, x, height / 2, frontZ + 0.3, buffBlockHpColour, look.hpLabel.buffBlockSize)
+      this.hpLabels?.add(shownHp(buffBlock.hp), labelPlace.set(x, height / 2, frontZ + 0.3), buffBlockHpColour, look.hpLabel.buffBlockSize)
       this.showBuffLabel(i, buffBlock.buff, x, height + look.bigBuff.labelGapOverBlock + panelHeight / 2, frontZ)
     }
     this.buffBlocks.count = buffBlocks.length

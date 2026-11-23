@@ -73,6 +73,13 @@ button {
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+.load-failed {
+  margin: 0 16px;
+  font-size: clamp(18px, 4.5vw, 28px);
+  font-weight: 700;
+  text-align: center;
+}
+
 @keyframes pulse {
   50% {
     opacity: 0.45;

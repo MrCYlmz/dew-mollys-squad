@@ -3,6 +3,7 @@
 export const strings = {
   gameName: "Molly's Squad",
   tapToPlay: 'Tap to play',
+  loadFailed: "Couldn't load the game. Tap to retry.",
   levelProgress: 'Level progress',
   bossHp: 'Boss HP',
   pause: 'Pause',

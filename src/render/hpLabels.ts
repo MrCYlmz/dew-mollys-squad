@@ -9,7 +9,6 @@ import {
   type Quaternion,
 } from 'three'
 import { renderConfig } from '../content/renderConfig'
-import { shownHp } from '../sim/hp'
 import { createCanvasTexture, cssColour } from './canvasTexture'
 
 const glyphWidth = 32
@@ -72,16 +71,17 @@ export class HpLabels {
     this.mesh.count = 0
   }
 
-  // Shows hp rounded up, centred on (x, y, z) in world units, size times the normal digit size.
-  add(hp: number, x: number, y: number, z: number, colour: Color, size = 1): void {
-    const shown = Math.min(shownHp(hp), 10 ** maxDigits - 1)
+  // Shows a shown HP, from shownHp, centred on place in world units, size times the normal digit size. Callers pass a whole
+  // number and a vector, because doubles passed as arguments are boxed on every call of the per-frame path.
+  add(shownHp: number, place: Vector3, colour: Color, size = 1): void {
+    const shown = Math.min(shownHp, 10 ** maxDigits - 1)
     const digits = shown >= 100 ? 3 : shown >= 10 ? 2 : 1
     let rest = shown
     for (let i = digits - 1; i >= 0; i--) {
       const index = this.mesh.count++
       this.glyphs.setX(index, rest % 10)
       rest = Math.floor(rest / 10)
-      matrix.compose(position.set(x + (i - (digits - 1) / 2) * digitWidth * 0.8 * size, y, z), this.facing, scale.setScalar(size))
+      matrix.compose(position.set(place.x + (i - (digits - 1) / 2) * digitWidth * 0.8 * size, place.y, place.z), this.facing, scale.setScalar(size))
       this.mesh.setMatrixAt(index, matrix)
       this.mesh.setColorAt(index, colour)
     }

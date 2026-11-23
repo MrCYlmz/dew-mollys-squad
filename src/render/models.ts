@@ -27,6 +27,8 @@ interface Part {
   scale?: [number, number, number]
   // Euler angles in radians, applied z first, then y, then x.
   rotation?: [number, number, number]
+  // Takes the instance colour; a model with such a part gets a wallTint attribute, 1 on these parts and 0 elsewhere.
+  tinted?: boolean
 }
 
 function mergeParts(parts: Part[]): BufferGeometry {
@@ -34,6 +36,7 @@ function mergeParts(parts: Part[]): BufferGeometry {
   const rotation = new Quaternion()
   const euler = new Euler()
   const colour = new Color()
+  const anyTinted = parts.some((part) => part.tinted === true)
   const placed = parts.map((part) => {
     const scale = part.scale ?? [1, 1, 1]
     rotation.setFromEuler(euler.set(...(part.rotation ?? [0, 0, 0])))
@@ -45,6 +48,10 @@ function mergeParts(parts: Part[]): BufferGeometry {
     const vertexColours = new Float32Array(geometry.getAttribute('position').count * 3)
     for (let i = 0; i < vertexColours.length; i += 3) colour.toArray(vertexColours, i)
     geometry.setAttribute('color', new Float32BufferAttribute(vertexColours, 3))
+    if (anyTinted) {
+      const wallTint = new Float32Array(vertexColours.length / 3).fill(part.tinted === true ? 1 : 0)
+      geometry.setAttribute('wallTint', new Float32BufferAttribute(wallTint, 1))
+    }
     // Icosahedra carry no uv; merging needs the same attributes on every part.
     geometry.deleteAttribute('uv')
     return geometry
@@ -193,11 +200,11 @@ export function createShieldGeometry(): BufferGeometry {
   const { lid, ring, handle, scale } = renderConfig.shield
   return scaled(
     mergeParts([
-    { geometry: new CylinderGeometry(0.42, 0.42, 0.05, 16), colour: lid, position: [0, 0, 0], rotation: [Math.PI / 2, 0, 0] },
-    { geometry: new TorusGeometry(0.42, 0.03, 3, 18), colour: ring, position: [0, 0, 0] },
-    { geometry: new TorusGeometry(0.3, 0.022, 3, 14), colour: ring, position: [0, 0, 0.03] },
-    { geometry: new TorusGeometry(0.17, 0.02, 3, 10), colour: ring, position: [0, 0, 0.03] },
-    { geometry: new TorusGeometry(0.09, 0.022, 3, 6, Math.PI), colour: handle, position: [0, 0, 0.03], rotation: [Math.PI / 2, 0, 0] },
+      { geometry: new CylinderGeometry(0.42, 0.42, 0.05, 16), colour: lid, position: [0, 0, 0], rotation: [Math.PI / 2, 0, 0] },
+      { geometry: new TorusGeometry(0.42, 0.03, 3, 18), colour: ring, position: [0, 0, 0] },
+      { geometry: new TorusGeometry(0.3, 0.022, 3, 14), colour: ring, position: [0, 0, 0.03] },
+      { geometry: new TorusGeometry(0.17, 0.02, 3, 10), colour: ring, position: [0, 0, 0.03] },
+      { geometry: new TorusGeometry(0.09, 0.022, 3, 6, Math.PI), colour: handle, position: [0, 0, 0.03], rotation: [Math.PI / 2, 0, 0] },
     ]),
     scale,
   )
@@ -208,12 +215,12 @@ export function createBarrelGeometry(): BufferGeometry {
   const { bucket, band, rim, water, handle, scale } = renderConfig.barrel
   return scaled(
     mergeParts([
-    { geometry: new CylinderGeometry(0.42, 0.33, 0.78, 16), colour: bucket, position: [0, 0.39, 0] },
-    { geometry: new CylinderGeometry(0.395, 0.395, 0.06, 16), colour: band, position: [0, 0.5, 0] },
-    { geometry: new CylinderGeometry(0.36, 0.36, 0.06, 16), colour: band, position: [0, 0.2, 0] },
-    { geometry: new CylinderGeometry(0.39, 0.39, 0.02, 16), colour: water, position: [0, 0.785, 0] },
-    { geometry: new TorusGeometry(0.42, 0.035, 6, 20), colour: rim, position: [0, 0.78, 0], rotation: [Math.PI / 2, 0, 0] },
-    { geometry: new TorusGeometry(0.42, 0.02, 5, 16, Math.PI), colour: handle, position: [0, 0.78, 0], rotation: [-0.3, 0, 0] },
+      { geometry: new CylinderGeometry(0.42, 0.33, 0.78, 16), colour: bucket, position: [0, 0.39, 0] },
+      { geometry: new CylinderGeometry(0.395, 0.395, 0.06, 16), colour: band, position: [0, 0.5, 0] },
+      { geometry: new CylinderGeometry(0.36, 0.36, 0.06, 16), colour: band, position: [0, 0.2, 0] },
+      { geometry: new CylinderGeometry(0.39, 0.39, 0.02, 16), colour: water, position: [0, 0.785, 0] },
+      { geometry: new TorusGeometry(0.42, 0.035, 6, 20), colour: rim, position: [0, 0.78, 0], rotation: [Math.PI / 2, 0, 0] },
+      { geometry: new TorusGeometry(0.42, 0.02, 5, 16, Math.PI), colour: handle, position: [0, 0.78, 0], rotation: [-0.3, 0, 0] },
     ]),
     scale,
   )
@@ -287,9 +294,9 @@ export function createDustBallGeometry(): BufferGeometry {
   const [middle, light, dark] = colours
   return scaled(
     mergeParts([
-    { geometry: new SphereGeometry(0.5, 10, 8), colour: middle, position: [0, 0, 0] },
-    { geometry: new SphereGeometry(0.28, 8, 6), colour: light, position: [0.3, 0.2, 0.15] },
-    { geometry: new SphereGeometry(0.24, 8, 6), colour: dark, position: [-0.28, -0.1, 0.2] },
+      { geometry: new SphereGeometry(0.5, 10, 8), colour: middle, position: [0, 0, 0] },
+      { geometry: new SphereGeometry(0.28, 8, 6), colour: light, position: [0.3, 0.2, 0.15] },
+      { geometry: new SphereGeometry(0.24, 8, 6), colour: dark, position: [-0.28, -0.1, 0.2] },
     ]),
     scale,
   )
@@ -342,35 +349,31 @@ export function createTreeGeometry(): BufferGeometry {
   const { trunk, leaves, leavesLight, scale } = renderConfig.scenery.tree
   return scaled(
     mergeParts([
-    { geometry: new CylinderGeometry(0.13, 0.18, 1.1, 6), colour: trunk, position: [0, 0.55, 0] },
-    { geometry: new IcosahedronGeometry(0.85, 0), colour: leaves, position: [0, 1.6, 0] },
-    { geometry: new IcosahedronGeometry(0.6, 0), colour: leavesLight, position: [0.3, 2.2, 0.15] },
-    { geometry: new IcosahedronGeometry(0.55, 0), colour: leavesLight, position: [-0.35, 1.95, -0.2] },
+      { geometry: new CylinderGeometry(0.13, 0.18, 1.1, 6), colour: trunk, position: [0, 0.55, 0] },
+      { geometry: new IcosahedronGeometry(0.85, 0), colour: leaves, position: [0, 1.6, 0] },
+      { geometry: new IcosahedronGeometry(0.6, 0), colour: leavesLight, position: [0.3, 2.2, 0.15] },
+      { geometry: new IcosahedronGeometry(0.55, 0), colour: leavesLight, position: [-0.35, 1.95, -0.2] },
     ]),
     scale,
   )
 }
 
-// A small house with its door facing +z. Its wallTint attribute is 1 on the plaster walls, which take the house's tint, and 0 elsewhere.
+// A small house with its door facing +z. Only its plaster walls take the house's tint.
 export function createHouseGeometry(): BufferGeometry {
   const { plaster, roof, door, window, scale } = renderConfig.scenery.house
-  const geometry = mergeParts([
-    { geometry: new BoxGeometry(2.4, 1.7, 2.2), colour: plaster, position: [0, 0.85, 0] },
-    { geometry: new ConeGeometry(1.95, 1.2, 4), colour: roof, position: [0, 2.3, 0], rotation: [0, Math.PI / 4, 0] },
-    { geometry: new BoxGeometry(0.3, 0.6, 0.3), colour: roof, position: [0.6, 2.6, -0.3] },
-    { geometry: new BoxGeometry(0.5, 0.9, 0.06), colour: door, position: [0, 0.45, 1.11] },
-    { geometry: new BoxGeometry(0.45, 0.45, 0.06), colour: window, position: [-0.75, 1.05, 1.11] },
-    { geometry: new BoxGeometry(0.45, 0.45, 0.06), colour: window, position: [0.75, 1.05, 1.11] },
-    { geometry: new BoxGeometry(0.06, 0.45, 0.45), colour: window, position: [-1.21, 1.05, 0] },
-    { geometry: new BoxGeometry(0.06, 0.45, 0.45), colour: window, position: [1.21, 1.05, 0] },
-  ])
-  const colours = geometry.getAttribute('color')
-  const plasterColour = new Color(plaster)
-  const vertexColour = new Color()
-  const wallTint = new Float32Array(colours.count)
-  for (let i = 0; i < colours.count; i++) wallTint[i] = vertexColour.fromBufferAttribute(colours, i).equals(plasterColour) ? 1 : 0
-  geometry.setAttribute('wallTint', new Float32BufferAttribute(wallTint, 1))
-  return scaled(geometry, scale)
+  return scaled(
+    mergeParts([
+      { geometry: new BoxGeometry(2.4, 1.7, 2.2), colour: plaster, position: [0, 0.85, 0], tinted: true },
+      { geometry: new ConeGeometry(1.95, 1.2, 4), colour: roof, position: [0, 2.3, 0], rotation: [0, Math.PI / 4, 0] },
+      { geometry: new BoxGeometry(0.3, 0.6, 0.3), colour: roof, position: [0.6, 2.6, -0.3] },
+      { geometry: new BoxGeometry(0.5, 0.9, 0.06), colour: door, position: [0, 0.45, 1.11] },
+      { geometry: new BoxGeometry(0.45, 0.45, 0.06), colour: window, position: [-0.75, 1.05, 1.11] },
+      { geometry: new BoxGeometry(0.45, 0.45, 0.06), colour: window, position: [0.75, 1.05, 1.11] },
+      { geometry: new BoxGeometry(0.06, 0.45, 0.45), colour: window, position: [-1.21, 1.05, 0] },
+      { geometry: new BoxGeometry(0.06, 0.45, 0.45), colour: window, position: [1.21, 1.05, 0] },
+    ]),
+    scale,
+  )
 }
 
 // One post and the two rails running from it towards −z, to the next segment's post. The scale sets its height and

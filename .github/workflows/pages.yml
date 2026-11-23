@@ -4,11 +4,8 @@ on:
   push:
     branches: [main]
 
-# Least privilege: read the code, write the Pages site, and prove the deploy's origin with an OIDC token.
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Least privilege: no job gets more than it names below.
+permissions: {}
 
 # Only the latest push deploys; a deploy already running finishes, so the site is never left half-written.
 concurrency:
@@ -18,6 +15,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Reads the code only.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -38,6 +38,10 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Writes the Pages site, and proves the deploy's origin with an OIDC token.
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -35,8 +35,8 @@ Stress run, 60 s, high graphics:
 | Enemies | 136 on average, often 150 |
 | Yarn balls | 299 on average, 273 at least, up to about 365 |
 | Particles | about 150 |
-| JS heap after a forced GC | 4.9 MB at the start, 5.2 MB after 60 s; 5.0, 5.3, 5.4 and 5.5 MB at the same point of four runs in a row. The growth is V8's compiled code, not game objects. |
-| Short-lived allocations | about 1 MB/s, mostly numbers boxed in the sim's and renderer's float maths; they never reach the old generation |
+| JS heap after a forced GC | 4.9 MB at the start, 5.2 MB after 60 s; 5.0, 5.3, 5.4 and 5.6 MB at the same point of four runs in a row. Heap snapshots of the second and fourth run differ only in V8's optimised code and its number cache, with no more game, Three.js or DOM objects. |
+| Short-lived allocations | about 0.8 MB/s, sampled with Chrome's allocation profiler: 0.22 MB/s in the sim's yarn ball movement, 0.26 MB/s inside Three.js's render call, 0.06 MB/s drawing lost cats and 0.03 MB/s starting kill puffs. They are numbers V8 boxes and die young. |
 | GPU memory | 28 geometries and 21 textures after each restart |
 
 The same at low graphics: 30 draw calls at most, about 290,000 triangles, work 2.1 ms.
@@ -56,7 +56,8 @@ Built sizes, minified:
 
 | File | Size | Gzipped |
 |---|---|---|
-| `index-*.js`: start code, Preact, screens, levels | 24.0 kB | 9.2 kB |
+| `index-*.js`: start code, Preact, screens, levels | 23.9 kB | 9.2 kB |
 | `game-*.js`: the game and Three.js, loaded after the title shows | 615.2 kB | 157.0 kB |
-| JS total | 639.2 kB | 166.2 kB |
+| `stressLevel-*.js`: loaded only with `?stress` | 0.6 kB | 0.4 kB |
+| JS total | 639.7 kB | 166.5 kB |
 | `dist/` total | 0.64 MB (budget: 5 MB) | |

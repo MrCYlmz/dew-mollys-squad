@@ -52,6 +52,11 @@ describe('graphics quality', () => {
   it('high_graphics_renders_at_least_the_low_resolution', () => {
     expect(renderConfig.graphics.high.maxPixelRatio).toBeGreaterThanOrEqual(renderConfig.graphics.low.maxPixelRatio)
   })
+
+  // requirements S-7 (7): "high" caps devicePixelRatio at 2.
+  it('high_graphics_caps_pixel_ratio_at_2', () => {
+    expect(renderConfig.graphics.high.maxPixelRatio).toBe(2)
+  })
 })
 
 // Colours are the look values a source scan can find; sizes and light strengths are left to review.

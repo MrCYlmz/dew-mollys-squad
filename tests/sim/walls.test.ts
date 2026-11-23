@@ -109,6 +109,26 @@ describe('wall', () => {
     expect(run.state.lossCause).toBe('ranIntoWall')
   })
 
+  it('squad_centre_steered_into_a_wall_exactly_at_its_back_edge_is_in_the_wall', () => {
+    // An empty run's squad is at the back edge after 300 ticks. The squad waits beside the wall and steers in on tick 300,
+    // so its centre first lies in the wall's x-range when the distance travelled is the wall's z + its depth.
+    const emptyRun = createRun({ level: levelOf([]), seed: 1 })
+    stepTicks(emptyRun, 300)
+    const backEdge = emptyRun.state.squad.z
+    const wall = { type: 'wall', z: backEdge - tuning.wall.depth, x: -2.5, width: 5 } as const
+    expect(wall.z + tuning.wall.depth).toBe(backEdge)
+    const run = createRun({ level: levelOf([wall]), seed: 1 })
+    steerTo(run, 0.5)
+    stepTicks(run, 298)
+    expect(run.state.status).toBe('running')
+
+    steerTo(run, -2.5)
+
+    expect(run.state.squad.z).toBe(backEdge)
+    expect(run.state.squad.x).toBeLessThanOrEqual(0)
+    expect(run.state.lossCause).toBe('ranIntoWall')
+  })
+
   it('cats_at_the_side_of_the_squad_that_clip_a_wall_are_not_lost', () => {
     // 25 cats around x = 1 stand up to about 1.5 units to each side, so some reach into the wall over x −5..0.
     const { run, catsLost } = runThrough([...squadOf(25), leftHalfWall], 1, 70)

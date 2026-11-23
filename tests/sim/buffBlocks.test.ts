@@ -346,6 +346,25 @@ describe('running into a buff block', () => {
     expect(run.state.lossCause).toBe('ranIntoBlock')
   })
 
+  it('squad_centre_steered_into_the_block_lane_exactly_at_its_back_edge_is_in_the_block', () => {
+    // An empty run's squad is at the back edge after 300 ticks. The squad waits in the centre lane and steers into the left
+    // lane on tick 300, so its centre first lies in the block's lane when the distance travelled is the block's z + its depth.
+    const emptyRun = startRun([])
+    stepTicks(emptyRun, 300)
+    const backEdge = emptyRun.state.squad.z
+    const frontEdge = backEdge - tuning.buffBlock.depth
+    expect(frontEdge + tuning.buffBlock.depth).toBe(backEdge)
+    const run = startRun([buffBlock(frontEdge, 'left', unbreakable, 'add')], -1)
+    stepTicks(run, 298)
+    expect(run.state.status).toBe('running')
+
+    steerTo(run, -3)
+
+    expect(run.state.squad.z).toBe(backEdge)
+    expect(run.state.squad.x).toBeLessThan(-5 / 3)
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+  })
+
   it('cats_reaching_into_the_block_lane_are_not_lost_while_the_squad_centre_is_beside_it', () => {
     // 25 cats around x = −1.4, in the centre lane, stand up to about 1.5 units to each side, so some reach into the left lane.
     const run = startRun([...squadOf(25), buffBlock(60, 'left', unbreakable, 'add')], -1.4)

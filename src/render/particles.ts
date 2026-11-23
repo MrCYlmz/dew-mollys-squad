@@ -10,10 +10,9 @@ interface Burst {
   rise: number
   size: number
   lifetime: number
+  height: number
 }
 
-const killHeight = 0.4
-const splashHeight = 0.7
 const matrix = new Matrix4()
 const position = new Vector3()
 const scale = new Vector3()
@@ -47,11 +46,11 @@ export class Particles {
   }
 
   emitKill(x: number, z: number): void {
-    this.emit(kill, 0, x, killHeight, z)
+    this.emit(kill, 0, x, z)
   }
 
   emitSplash(x: number, z: number): void {
-    this.emit(splash, kill.colours.length, x, splashHeight, z)
+    this.emit(splash, kill.colours.length, x, z)
   }
 
   clear(): void {
@@ -89,13 +88,13 @@ export class Particles {
     this.mesh.dispose()
   }
 
-  private emit(burst: Burst, firstColour: number, x: number, y: number, z: number): void {
+  private emit(burst: Burst, firstColour: number, x: number, z: number): void {
     for (let i = 0; i < burst.count && this.count < capacity; i++) {
       const index = this.count++
       const angle = Math.random() * Math.PI * 2
       const speed = burst.speed * (0.5 + Math.random() * 0.5)
       this.x[index] = x
-      this.y[index] = y
+      this.y[index] = burst.height
       this.z[index] = z
       this.velocityX[index] = Math.cos(angle) * speed
       this.velocityY[index] = burst.rise * (0.6 + Math.random() * 0.4)

@@ -16,6 +16,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { BossKind } from '../content/level'
 import { renderConfig, type FurColours } from '../content/renderConfig'
+import { tuning } from '../content/tuning'
 
 // Low-poly models built from primitives, merged into one geometry each with vertex colours, so each kind is one draw call.
 
@@ -189,27 +190,33 @@ export function createShieldDogGeometry(): BufferGeometry {
 
 // A trash-can lid held upright, facing +z, with its handle to the front.
 export function createShieldGeometry(): BufferGeometry {
-  const { lid, ring, handle } = renderConfig.shield
-  return mergeParts([
+  const { lid, ring, handle, scale } = renderConfig.shield
+  return scaled(
+    mergeParts([
     { geometry: new CylinderGeometry(0.42, 0.42, 0.05, 16), colour: lid, position: [0, 0, 0], rotation: [Math.PI / 2, 0, 0] },
     { geometry: new TorusGeometry(0.42, 0.03, 3, 18), colour: ring, position: [0, 0, 0] },
     { geometry: new TorusGeometry(0.3, 0.022, 3, 14), colour: ring, position: [0, 0, 0.03] },
     { geometry: new TorusGeometry(0.17, 0.02, 3, 10), colour: ring, position: [0, 0, 0.03] },
     { geometry: new TorusGeometry(0.09, 0.022, 3, 6, Math.PI), colour: handle, position: [0, 0, 0.03], rotation: [Math.PI / 2, 0, 0] },
-  ])
+    ]),
+    scale,
+  )
 }
 
 // A water bucket with a handle.
 export function createBarrelGeometry(): BufferGeometry {
-  const { bucket, band, rim, water, handle } = renderConfig.barrel
-  return mergeParts([
+  const { bucket, band, rim, water, handle, scale } = renderConfig.barrel
+  return scaled(
+    mergeParts([
     { geometry: new CylinderGeometry(0.42, 0.33, 0.78, 16), colour: bucket, position: [0, 0.39, 0] },
     { geometry: new CylinderGeometry(0.395, 0.395, 0.06, 16), colour: band, position: [0, 0.5, 0] },
     { geometry: new CylinderGeometry(0.36, 0.36, 0.06, 16), colour: band, position: [0, 0.2, 0] },
     { geometry: new CylinderGeometry(0.39, 0.39, 0.02, 16), colour: water, position: [0, 0.785, 0] },
     { geometry: new TorusGeometry(0.42, 0.035, 6, 20), colour: rim, position: [0, 0.78, 0], rotation: [Math.PI / 2, 0, 0] },
     { geometry: new TorusGeometry(0.42, 0.02, 5, 16, Math.PI), colour: handle, position: [0, 0.78, 0], rotation: [-0.3, 0, 0] },
-  ])
+    ]),
+    scale,
+  )
 }
 
 // Where a boss's two side brushes turn, as a fraction of its radius to each side and to the front.
@@ -217,7 +224,8 @@ export const bossBrushPlace = 0.72
 
 // The round body of a robot vacuum. Faces +z, towards the squad. Its lights and brushes are drawn separately.
 export function createBossBodyGeometry(kind: BossKind): BufferGeometry {
-  const { body, trim, top, radius } = renderConfig.boss[kind]
+  const { body, trim, top } = renderConfig.boss[kind]
+  const radius = tuning.hitRadius[kind]
   const parts: Part[] = [
     { geometry: new CylinderGeometry(1, 1, 0.3, 32), colour: body, position: [0, 0.22, 0] },
     { geometry: new CylinderGeometry(1.025, 1.025, 0.14, 32), colour: trim, position: [0, 0.12, 0] },
@@ -238,7 +246,8 @@ export function createBossBodyGeometry(kind: BossKind): BufferGeometry {
 
 // The glowing light strip and eyes, drawn unlit; the world boss squints.
 export function createBossLightsGeometry(kind: BossKind): BufferGeometry {
-  const { light, radius } = renderConfig.boss[kind]
+  const { light } = renderConfig.boss[kind]
+  const radius = tuning.hitRadius[kind]
   const stripArc = 1
   const eyes: Part[] =
     kind === 'megaDustbot'
@@ -262,7 +271,8 @@ export function createBossLightsGeometry(kind: BossKind): BufferGeometry {
 
 // A side brush: a hub with three bristle arms, turning about y.
 export function createBossBrushGeometry(kind: BossKind): BufferGeometry {
-  const { brush, bristle, radius } = renderConfig.boss[kind]
+  const { brush, bristle } = renderConfig.boss[kind]
+  const radius = tuning.hitRadius[kind]
   const parts: Part[] = [{ geometry: new CylinderGeometry(0.07, 0.07, 0.04, 10), colour: brush, position: [0, 0, 0] }]
   for (let arm = 0; arm < 3; arm++) {
     const angle = (arm * 2 * Math.PI) / 3
@@ -271,14 +281,18 @@ export function createBossBrushGeometry(kind: BossKind): BufferGeometry {
   return scaled(mergeParts(parts), radius)
 }
 
-// A grey clump of dust, 1 unit across.
+// A grey clump of dust, 1 unit across at scale 1.
 export function createDustBallGeometry(): BufferGeometry {
-  const [middle, light, dark] = renderConfig.dustBall.colours
-  return mergeParts([
+  const { colours, scale } = renderConfig.dustBall
+  const [middle, light, dark] = colours
+  return scaled(
+    mergeParts([
     { geometry: new SphereGeometry(0.5, 10, 8), colour: middle, position: [0, 0, 0] },
     { geometry: new SphereGeometry(0.28, 8, 6), colour: light, position: [0.3, 0.2, 0.15] },
     { geometry: new SphereGeometry(0.24, 8, 6), colour: dark, position: [-0.28, -0.1, 0.2] },
-  ])
+    ]),
+    scale,
+  )
 }
 
 // A ball of yarn with slanted strands, so its spin shows.
@@ -306,7 +320,7 @@ export function createYarnBallGeometry(): BufferGeometry {
 
 // A standing gold coin with a paw print on both faces, facing ±z.
 export function createBigBuffGeometry(): BufferGeometry {
-  const { token, tokenFace } = renderConfig.bigBuff
+  const { token, tokenFace, scale } = renderConfig.bigBuff
   const parts: Part[] = [
     { geometry: new CylinderGeometry(0.55, 0.55, 0.14, 24), colour: token, position: [0, 0, 0], rotation: [Math.PI / 2, 0, 0] },
     { geometry: new CylinderGeometry(0.42, 0.42, 0.16, 24), colour: tokenFace, position: [0, 0, 0], rotation: [Math.PI / 2, 0, 0] },
@@ -320,24 +334,27 @@ export function createBigBuffGeometry(): BufferGeometry {
       { geometry: new SphereGeometry(0.06, 8, 5), colour: token, position: [0.14, 0.09, z], scale: [1, 1, 0.25] },
     )
   }
-  return mergeParts(parts)
+  return scaled(mergeParts(parts), scale)
 }
 
-// A low-poly tree about 2.5 units tall.
+// A low-poly tree about 2.5 units tall at scale 1.
 export function createTreeGeometry(): BufferGeometry {
-  const { trunk, leaves, leavesLight } = renderConfig.scenery.tree
-  return mergeParts([
+  const { trunk, leaves, leavesLight, scale } = renderConfig.scenery.tree
+  return scaled(
+    mergeParts([
     { geometry: new CylinderGeometry(0.13, 0.18, 1.1, 6), colour: trunk, position: [0, 0.55, 0] },
     { geometry: new IcosahedronGeometry(0.85, 0), colour: leaves, position: [0, 1.6, 0] },
     { geometry: new IcosahedronGeometry(0.6, 0), colour: leavesLight, position: [0.3, 2.2, 0.15] },
     { geometry: new IcosahedronGeometry(0.55, 0), colour: leavesLight, position: [-0.35, 1.95, -0.2] },
-  ])
+    ]),
+    scale,
+  )
 }
 
-// A small house with its door facing +z.
+// A small house with its door facing +z. Its wallTint attribute is 1 on the plaster walls, which take the house's tint, and 0 elsewhere.
 export function createHouseGeometry(): BufferGeometry {
-  const { plaster, roof, door, window } = renderConfig.scenery.house
-  return mergeParts([
+  const { plaster, roof, door, window, scale } = renderConfig.scenery.house
+  const geometry = mergeParts([
     { geometry: new BoxGeometry(2.4, 1.7, 2.2), colour: plaster, position: [0, 0.85, 0] },
     { geometry: new ConeGeometry(1.95, 1.2, 4), colour: roof, position: [0, 2.3, 0], rotation: [0, Math.PI / 4, 0] },
     { geometry: new BoxGeometry(0.3, 0.6, 0.3), colour: roof, position: [0.6, 2.6, -0.3] },
@@ -347,16 +364,24 @@ export function createHouseGeometry(): BufferGeometry {
     { geometry: new BoxGeometry(0.06, 0.45, 0.45), colour: window, position: [-1.21, 1.05, 0] },
     { geometry: new BoxGeometry(0.06, 0.45, 0.45), colour: window, position: [1.21, 1.05, 0] },
   ])
+  const colours = geometry.getAttribute('color')
+  const plasterColour = new Color(plaster)
+  const vertexColour = new Color()
+  const wallTint = new Float32Array(colours.count)
+  for (let i = 0; i < colours.count; i++) wallTint[i] = vertexColour.fromBufferAttribute(colours, i).equals(plasterColour) ? 1 : 0
+  geometry.setAttribute('wallTint', new Float32BufferAttribute(wallTint, 1))
+  return scaled(geometry, scale)
 }
 
-// One post and the two rails running from it towards −z, to the next segment's post.
+// One post and the two rails running from it towards −z, to the next segment's post. The scale sets its height and
+// thickness; its length stays the segment length, so the segments meet.
 export function createFenceGeometry(): BufferGeometry {
-  const { colour, post, segmentLength } = renderConfig.scenery.fence
+  const { colour, post, segmentLength, scale } = renderConfig.scenery.fence
   return mergeParts([
     { geometry: new BoxGeometry(0.12, 0.7, 0.12), colour: post, position: [0, 0.35, 0] },
     { geometry: new BoxGeometry(0.06, 0.09, segmentLength), colour, position: [0, 0.28, -segmentLength / 2] },
     { geometry: new BoxGeometry(0.06, 0.09, segmentLength), colour, position: [0, 0.52, -segmentLength / 2] },
-  ])
+  ]).scale(scale, scale, 1)
 }
 
 // The upper half of a sphere around the camera, from the horizon colour up to the top colour.

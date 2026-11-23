@@ -11,7 +11,7 @@ const panelColours = { blue: renderConfig.gate.good, red: renderConfig.gate.bad 
 // Matches the panel's shape on the track, so labels are not stretched.
 const canvasWidth = 256
 const canvasHeight = 150
-const glowBlur = 12
+const glowBlur = panel.glowBlur
 
 // value is signed for add and subtract, as in GateState.
 function gateLabel(op: GateOp, value: number): string {

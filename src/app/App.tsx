@@ -5,15 +5,33 @@ import { Hud } from '../ui/screens/Hud'
 import { PauseScreen } from '../ui/screens/PauseScreen'
 import { TitleScreen } from '../ui/screens/TitleScreen'
 import { VictoryScreen } from '../ui/screens/VictoryScreen'
-import type { Game } from './game'
+import type { Game, GameView } from './game'
 
 interface AppProps {
-  game: Game
+  // Resolves once the game's chunk, with Three.js, has loaded.
+  game: Promise<Game>
 }
 
-export function App({ game }: AppProps) {
-  const [view, setView] = useState(game.view)
-  useEffect(() => game.subscribe(setView), [game])
+export function App({ game: loadingGame }: AppProps) {
+  const [game, setGame] = useState<Game | null>(null)
+  const [view, setView] = useState<GameView | null>(null)
+  useEffect(() => {
+    let stopListening = () => {}
+    let unmounted = false
+    void loadingGame.then((loaded) => {
+      if (unmounted) return
+      setGame(loaded)
+      setView(loaded.view)
+      stopListening = loaded.subscribe(setView)
+    })
+    return () => {
+      unmounted = true
+      stopListening()
+    }
+  }, [loadingGame])
+
+  // A tap on play before the game has loaded starts the run once it has.
+  if (game === null || view === null) return <TitleScreen onPlay={() => void loadingGame.then((loaded) => loaded.play())} />
 
   const inRun = view.screen === 'playing' || view.screen === 'paused'
   return (

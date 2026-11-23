@@ -1,11 +1,15 @@
 import type { BossKind, Level } from '../content/level'
+import { renderConfig, type GraphicsQuality } from '../content/renderConfig'
 import { tuning } from '../content/tuning'
-import { watchFocus } from '../platform/focus'
+import { watchFocus, watchVisibility } from '../platform/focus'
 import { createInput, type PlayerInput } from '../platform/input'
 import { GameRenderer, type ScreenPoint } from '../render/gameRenderer'
 import { firstLevel, levelAfter } from '../sim/levelOrder'
 import { createRun, type Run, type SteerInput } from '../sim/run'
 import { bossHpPercent, type BossHp } from '../ui/screens/Hud'
+import { chooseGraphicsQuality } from './graphicsQuality'
+import type { LaunchFlags } from './launchFlags'
+import { PerfOverlay } from './perfOverlay'
 
 export type Screen = 'title' | 'playing' | 'paused' | 'victory' | 'defeat'
 
@@ -24,11 +28,13 @@ export interface GameView {
 const tickSeconds = 1 / tuning.tickRate
 // Longer frames, such as after a stall, are cut short instead of being caught up tick by tick.
 const maxFrameSeconds = 0.25
+const normalPlay: LaunchFlags = { perf: false, stress: false, graphics: null }
 
 export class Game {
   private readonly renderer: GameRenderer
   private readonly input: PlayerInput
   private readonly stopWatchingFocus: () => void
+  private readonly stopWatchingVisibility: () => void
   private readonly resizeObserver: ResizeObserver
   private readonly listeners = new Set<(view: GameView) => void>()
   private readonly steerInput: SteerInput = { drag: 0, left: false, right: false }
@@ -41,17 +47,31 @@ export class Game {
   private accumulator = 0
   private lastTimestamp: number | null = null
   private frameRequest = 0
+  // False while the tab is hidden, when no frame is requested.
+  private looping = true
+  // Null once the graphics quality is chosen; until then the start-up check counts the frames of play.
+  private startupCheck: { frames: number; seconds: number } | null
+  private readonly forcedGraphics: GraphicsQuality | null
+  // The stress run starts at once and starts again when it ends.
+  private readonly stress: boolean
+  private readonly perfOverlay: PerfOverlay | null
   view: GameView
 
   constructor(
     private readonly levels: readonly Level[],
     canvas: HTMLCanvasElement,
     gameElement: HTMLElement,
+    flags: LaunchFlags = normalPlay,
   ) {
-    // Until the settings screen offers the choice, the game draws at high graphics quality.
-    this.renderer = new GameRenderer(canvas, 'high')
+    // The stress run measures the budget's heaviest case, which is at high graphics unless forced otherwise.
+    this.forcedGraphics = flags.graphics ?? (flags.stress ? 'high' : null)
+    this.startupCheck = this.forcedGraphics === null ? { frames: 0, seconds: 0 } : null
+    this.stress = flags.stress
+    this.renderer = new GameRenderer(canvas, this.forcedGraphics ?? 'high')
+    this.perfOverlay = flags.perf ? new PerfOverlay(gameElement) : null
     this.input = createInput(gameElement, () => this.pause())
     this.stopWatchingFocus = watchFocus(() => this.pause())
+    this.stopWatchingVisibility = watchVisibility((visible) => (visible ? this.wake() : this.sleep()))
     this.resizeObserver = new ResizeObserver(() => this.resize(gameElement))
     this.resizeObserver.observe(gameElement)
     this.resize(gameElement)
@@ -59,6 +79,7 @@ export class Game {
     this.run = this.newRun()
     this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, distanceReached: 0, caughtBy: null, boss: null }
     this.frameRequest = requestAnimationFrame(this.frame)
+    if (this.stress) this.play()
   }
 
   subscribe(listener: (view: GameView) => void): () => void {
@@ -117,6 +138,8 @@ export class Game {
     cancelAnimationFrame(this.frameRequest)
     this.resizeObserver.disconnect()
     this.stopWatchingFocus()
+    this.stopWatchingVisibility()
+    this.perfOverlay?.dispose()
     this.input.dispose()
     this.renderer.dispose()
   }
@@ -131,16 +154,46 @@ export class Game {
     this.renderer.resize(gameElement.clientWidth, gameElement.clientHeight, window.devicePixelRatio)
   }
 
+  // A hidden tab gets no frames, and on its return the run goes on from where it was, without catching up the time away.
+  private sleep(): void {
+    if (!this.looping) return
+    this.looping = false
+    cancelAnimationFrame(this.frameRequest)
+  }
+
+  private wake(): void {
+    if (this.looping) return
+    this.looping = true
+    this.lastTimestamp = null
+    this.frameRequest = requestAnimationFrame(this.frame)
+  }
+
   private readonly frame = (timestamp: number): void => {
     this.frameRequest = requestAnimationFrame(this.frame)
-    const frameSeconds = this.lastTimestamp === null ? 0 : Math.min((timestamp - this.lastTimestamp) / 1000, maxFrameSeconds)
+    const elapsedSeconds = this.lastTimestamp === null ? 0 : (timestamp - this.lastTimestamp) / 1000
+    const frameSeconds = Math.min(elapsedSeconds, maxFrameSeconds)
+    const firstFrame = this.lastTimestamp === null
     this.lastTimestamp = timestamp
 
     const playing = this.view.screen === 'playing'
     if (playing) this.advance(frameSeconds)
+    if (playing && !firstFrame) this.checkStartupSpeed(elapsedSeconds)
     const alpha = playing ? this.accumulator / tickSeconds : 1
     this.renderer.draw(this.run.state, alpha, playing ? frameSeconds : 0)
     this.placeSquadLabel(alpha)
+    this.perfOverlay?.frame(timestamp, this.renderer, this.run.state)
+  }
+
+  // Until the settings screen, the frames of the first seconds of play choose the graphics quality, once per session.
+  private checkStartupSpeed(elapsedSeconds: number): void {
+    const check = this.startupCheck
+    if (check === null) return
+    check.frames++
+    check.seconds += elapsedSeconds
+    if (check.seconds < renderConfig.graphics.autoCheckSeconds) return
+    this.startupCheck = null
+    const quality = chooseGraphicsQuality(this.forcedGraphics, check.frames / check.seconds)
+    if (quality === 'low') this.renderer.setQuality('low')
   }
 
   private advance(frameSeconds: number): void {
@@ -161,7 +214,9 @@ export class Game {
     }
 
     const progress = Math.floor(Math.min(state.squad.z / state.level.length, 1) * 100) / 100
-    if (state.status === 'won') {
+    if (this.stress && state.status !== 'running') {
+      this.restart()
+    } else if (state.status === 'won') {
       this.accumulator = 0
       this.publish({ screen: 'victory', squadCount: state.squad.count, progress: 1 })
     } else if (state.status === 'lost') {

@@ -185,3 +185,16 @@ button {
     0 3px 8px rgba(0, 0, 0, 0.4);
   will-change: transform;
 }
+
+/* The developer's performance overlay, shown only with the ?perf flag. */
+.perf-overlay {
+  position: absolute;
+  top: 56px;
+  left: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  font: 12px/1.35 ui-monospace, monospace;
+  pointer-events: none;
+}

@@ -12,6 +12,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshDepthMaterial,
   MeshLambertMaterial,
   Object3D,
   PCFShadowMap,
@@ -30,7 +31,7 @@ import { renderConfig, type Fur, type GraphicsQuality } from '../content/renderC
 import { tuning } from '../content/tuning'
 import { formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
 import { laneBorder, laneCentreX } from '../sim/gates'
-import type { RunState } from '../sim/run'
+import type { BuffBlockState, RunState } from '../sim/run'
 import { createBigBuffMaterial, createGatePanelMaterial, disposePanelMaterial } from './gatePanel'
 import { createDigitMaterial, HpLabels } from './hpLabels'
 import {
@@ -65,8 +66,8 @@ const lanes: readonly Lane[] = ['left', 'centre', 'right']
 const bossKinds: readonly BossKind[] = ['dustbot', 'megaDustbot']
 const panelWidth = 2 * laneBorder - look.panel.gap
 const panelHeight = look.panel.height
-// How far the road reaches behind the squad, and beyond the level's end so the camera never sees it stop.
-const roadBehind = 60
+const roadBehind = look.track.roadBehind
+// How far the road reaches beyond the level's end, so the camera never sees it stop.
 const roadBeyond = cameraLook.far
 const catCapacity = tuning.squad.formationSlots + look.scatter.capacity
 const hpLabelHeight = look.hpLabel.heights
@@ -84,7 +85,19 @@ export interface ScreenPoint {
   y: number
 }
 
+// What the last drawn frame cost and showed, for the performance overlay.
+export interface FrameStats {
+  drawCalls: number
+  triangles: number
+  geometries: number
+  textures: number
+  catsDrawn: number
+  particles: number
+}
+
 const matrix = new Matrix4()
+// Per-frame code passes positions to setPosition and makeTranslation in this vector, never as numbers: those overloads test
+// x.isVector3, which boxes a number argument on every call.
 const position = new Vector3()
 const scale = new Vector3()
 const rotation = new Quaternion()
@@ -129,6 +142,17 @@ function createCrateMaterial(map: Texture): MeshLambertMaterial {
   return material
 }
 
+// Only the plaster walls take a house's instance colour, as its wallTint attribute marks them; roof, door and windows keep theirs.
+function createHouseMaterial(): MeshLambertMaterial {
+  const material = new MeshLambertMaterial({ vertexColors: true })
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'attribute float wallTint;\nvoid main() {')
+      .replace('#include <color_vertex>', 'vColor = vec4(color, 1.0);\n\tvColor.rgb *= mix(vec3(1.0), instanceColor.rgb, wallTint);')
+  }
+  return material
+}
+
 interface Boss {
   group: Group
   brushes: [Mesh, Mesh]
@@ -139,7 +163,8 @@ export class GameRenderer {
   private readonly renderer: WebGLRenderer
   private readonly scene = new Scene()
   private readonly camera = new PerspectiveCamera(cameraLook.fov, 1, cameraLook.near, cameraLook.far)
-  private readonly maxPixelRatio: number
+  private maxPixelRatio: number
+  private pixelRatio = 1
   private readonly geometries: BufferGeometry[] = []
   private readonly materials: Material[] = []
   private readonly textures: Texture[] = []
@@ -179,6 +204,10 @@ export class GameRenderer {
   private readonly houseGeometry = this.ownGeometry(createHouseGeometry())
   private readonly fenceGeometry = this.ownGeometry(createFenceGeometry())
   private readonly sceneryMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
+  private readonly houseMaterial = this.ownMaterial(createHouseMaterial())
+  // The shadow pass shares one depth material among all casters; the houses' instance colours would switch its program back and
+  // forth every frame, so they cast with their own.
+  private readonly houseDepthMaterial = this.ownMaterial(new MeshDepthMaterial())
   private readonly crateMaterial = this.ownMaterial(createCrateMaterial(this.ownTexture(createCrateTexture())))
   private readonly bigBuffGeometry = this.ownGeometry(createBigBuffGeometry())
   private readonly bigBuffMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true, emissive: look.bigBuff.emissive }))
@@ -199,10 +228,8 @@ export class GameRenderer {
   private gatePanelLanes: Lane[] = []
   // One label per buff block of the level, shown on the block and then on its big buff.
   private buffLabels: Mesh[] = []
-  // Each buff block's HP at the start of the run, found by its lane and front edge, so its cracks follow the HP lost.
-  private buffBlockStartLanes: Lane[] = []
-  private buffBlockStartZ: number[] = []
-  private buffBlockStartHp: number[] = []
+  // Each buff block's HP at the start of the run, so its cracks follow the HP lost.
+  private readonly buffBlockStartHp = new Map<BuffBlockState, number>()
   private buffBlockDamage: InstancedBufferAttribute | null = null
   // Sized to the level's barrels, walls and buff blocks, so they are made again for each run.
   private barrels: InstancedMesh | null = null
@@ -240,7 +267,7 @@ export class GameRenderer {
     this.scene.fog = new Fog(look.sky.horizon, look.fog.near, look.fog.far)
     this.scene.background = new Color(look.sky.horizon)
     this.sky = new Mesh(
-      this.ownGeometry(createSkyGeometry(cameraLook.far * 0.9)),
+      this.ownGeometry(createSkyGeometry(cameraLook.far * look.sky.farShare)),
       this.ownMaterial(new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false })),
     )
     this.sky.renderOrder = -1
@@ -297,6 +324,7 @@ export class GameRenderer {
   resize(cssWidth: number, cssHeight: number, pixelRatio: number): void {
     this.cssWidth = Math.max(cssWidth, 1)
     this.cssHeight = Math.max(cssHeight, 1)
+    this.pixelRatio = pixelRatio
     this.renderer.setPixelRatio(Math.min(pixelRatio, this.maxPixelRatio))
     this.renderer.setSize(this.cssWidth, this.cssHeight, false)
     this.camera.aspect = this.cssWidth / this.cssHeight
@@ -311,6 +339,27 @@ export class GameRenderer {
     const squadDepth = this.cameraDistance - this.lookAhead * Math.cos(pitch)
     this.unitsPerPixel = (2 * squadDepth * halfHeightTan) / this.cssHeight
     this.placeCamera()
+  }
+
+  // Turning shadows on or off recompiles the lit materials once, at the next frame.
+  setQuality(quality: GraphicsQuality): void {
+    const graphics = look.graphics[quality]
+    this.maxPixelRatio = graphics.maxPixelRatio
+    this.renderer.shadowMap.enabled = graphics.shadows
+    this.sun.castShadow = graphics.shadows
+    if (!graphics.shadows) this.sun.shadow.dispose()
+    this.resize(this.cssWidth, this.cssHeight, this.pixelRatio)
+  }
+
+  readFrameStats(out: FrameStats): void {
+    const { render, memory } = this.renderer.info
+    out.drawCalls = render.calls
+    out.triangles = render.triangles
+    out.geometries = memory.geometries
+    out.textures = memory.textures
+    out.catsDrawn = 0
+    for (let i = 0; i < this.catMeshes.length; i++) out.catsDrawn += this.catMeshes[i].count
+    out.particles = this.particles.mesh.count
   }
 
   // Track units per CSS pixel at the squad's distance, so a drag moves the squad as far as the finger moved on screen.
@@ -368,11 +417,7 @@ export class GameRenderer {
     this.buffBlocks = this.instanced(crateGeometry, this.crateMaterial, state.buffBlocks.length, true)
     this.bigBuffs = this.instanced(this.bigBuffGeometry, this.bigBuffMaterial, state.buffBlocks.length, true)
     this.bigBuffGlows = this.instanced(this.glowGeometry, this.glowMaterial, state.buffBlocks.length, false)
-    for (const buffBlock of state.buffBlocks) {
-      this.buffBlockStartLanes.push(buffBlock.lane)
-      this.buffBlockStartZ.push(buffBlock.z)
-      this.buffBlockStartHp.push(buffBlock.hp)
-    }
+    for (const buffBlock of state.buffBlocks) this.buffBlockStartHp.set(buffBlock, buffBlock.hp)
     // A shield dog shows two numbers, its shield's and its body's.
     this.hpLabels = new HpLabels(this.digitMaterial, tuning.limits.enemies * 2 + state.barrels.length + state.buffBlocks.length, facingCamera)
     this.scene.add(this.hpLabels.mesh)
@@ -547,7 +592,7 @@ export class GameRenderer {
     body.castShadow = true
     const brushGeometry = this.ownGeometry(createBossBrushGeometry(kind))
     const brushes: [Mesh, Mesh] = [new Mesh(brushGeometry, brushMaterial), new Mesh(brushGeometry, brushMaterial)]
-    const radius = look.boss[kind].radius
+    const radius = tuning.hitRadius[kind]
     brushes[0].position.set(-bossBrushPlace * radius, 0.03 * radius, bossBrushPlace * radius)
     brushes[1].position.set(bossBrushPlace * radius, 0.03 * radius, bossBrushPlace * radius)
     group.add(body, new Mesh(this.ownGeometry(createBossLightsGeometry(kind)), lightsMaterial), ...brushes)
@@ -567,18 +612,18 @@ export class GameRenderer {
 
   // A chequered line across the track under a banner on two posts.
   private addFinishLine(z: number): void {
+    const { finishBannerHeight: bannerHeight, finishLineDepth, finishBannerThickness, finishBannerDepth, finishPostWidth, finishPostOutside } = look.track
     const halfWidth = tuning.track.halfWidth
-    const bannerHeight = look.track.finishBannerHeight
-    this.addLevelPlane(halfWidth * 2, 1.2, this.finishMaterial, 0, 0.01, z)
-    const banner = new BoxGeometry(halfWidth * 2 + 0.6, 0.5, 0.3)
-    const post = new BoxGeometry(0.25, bannerHeight, 0.25)
+    this.addLevelPlane(halfWidth * 2, finishLineDepth, this.finishMaterial, 0, 0.01, z)
+    const banner = new BoxGeometry((halfWidth + finishPostOutside) * 2, finishBannerThickness, finishBannerDepth)
+    const post = new BoxGeometry(finishPostWidth, bannerHeight, finishPostWidth)
     this.levelGeometries.push(banner, post)
     const bannerMesh = new Mesh(banner, this.finishBannerMaterial)
     bannerMesh.position.set(0, bannerHeight, z)
     this.levelGroup.add(bannerMesh)
     for (const edge of [-1, 1]) {
       const postMesh = new Mesh(post, this.finishPostMaterial)
-      postMesh.position.set(edge * (halfWidth + 0.3), bannerHeight / 2, z)
+      postMesh.position.set(edge * (halfWidth + finishPostOutside), bannerHeight / 2, z)
       postMesh.castShadow = true
       this.levelGroup.add(postMesh)
     }
@@ -612,7 +657,7 @@ export class GameRenderer {
     trees.castShadow = true
 
     const housesPerSide = Math.ceil(roadLength / house.spacing)
-    const houses = this.levelInstanced(this.houseGeometry, this.sceneryMaterial, housesPerSide * 2)
+    const houses = this.levelInstanced(this.houseGeometry, this.houseMaterial, housesPerSide * 2)
     scale.setScalar(1)
     for (let i = 0; i < housesPerSide; i++) {
       for (const side of [-1, 1]) {
@@ -626,6 +671,7 @@ export class GameRenderer {
       }
     }
     houses.castShadow = true
+    houses.customDepthMaterial = this.houseDepthMaterial
   }
 
   private disposeLevel(): void {
@@ -652,9 +698,7 @@ export class GameRenderer {
     this.gatePanelRows = []
     this.gatePanelLanes = []
     this.buffLabels = []
-    this.buffBlockStartLanes = []
-    this.buffBlockStartZ = []
-    this.buffBlockStartHp = []
+    this.buffBlockStartHp.clear()
   }
 
   // The camera stands still and frames the squad at the origin and the road ahead of it.
@@ -670,7 +714,9 @@ export class GameRenderer {
   // Cats keep their places in the squad, so they move with its interpolated position; lost cats jump sideways off the track, unhurt.
   private drawCats(state: RunState, squadX: number, squadZ: number, frameSeconds: number): void {
     const { bobHeight, bobSpeed, bobLean, furOrder } = look.cat
-    for (const mesh of this.catMeshes) mesh.count = 0
+    const { sideSpeeds, riseSpeeds, tumbleSpeed } = look.scatter
+    const catMeshes = this.catMeshes
+    for (let i = 0; i < catMeshes.length; i++) catMeshes[i].count = 0
     const cats = state.cats
     const shiftX = squadX - state.squad.x
     const shiftZ = squadZ - state.squad.z
@@ -678,7 +724,7 @@ export class GameRenderer {
       const bob = Math.abs(Math.sin(this.seconds * bobSpeed + slot * 1.7))
       // Leaning forward, towards −z, at the top of the bob.
       matrix.makeRotationX(-bob * bobLean)
-      matrix.setPosition(cats[slot].x + shiftX, bob * bobHeight, this.worldZ(cats[slot].z + shiftZ))
+      matrix.setPosition(position.set(cats[slot].x + shiftX, bob * bobHeight, this.worldZ(cats[slot].z + shiftZ)))
       const mesh = this.cats[furOrder[slot % furOrder.length]]
       mesh.setMatrixAt(mesh.count++, matrix)
     }
@@ -693,8 +739,8 @@ export class GameRenderer {
       scatter.x[index] = squadX + formationOffsetX[slot]
       scatter.y[index] = 0
       scatter.z[index] = squadZ + formationOffsetZ[slot]
-      scatter.velocityX[index] = side * (6 + (i % 3))
-      scatter.velocityY[index] = 5 + (i % 2)
+      scatter.velocityX[index] = side * sideSpeeds[i % sideSpeeds.length]
+      scatter.velocityY[index] = riseSpeeds[i % riseSpeeds.length]
       scatter.age[index] = 0
       scatter.slot[index] = slot
     }
@@ -718,18 +764,19 @@ export class GameRenderer {
     }
     for (let i = 0; i < scatter.count; i++) {
       // Tumbling the way it jumps.
-      matrix.makeRotationZ(-Math.sign(scatter.velocityX[i]) * scatter.age[i] * 8)
-      matrix.setPosition(scatter.x[i], scatter.y[i], this.worldZ(scatter.z[i]))
+      matrix.makeRotationZ(-Math.sign(scatter.velocityX[i]) * scatter.age[i] * tumbleSpeed)
+      matrix.setPosition(position.set(scatter.x[i], scatter.y[i], this.worldZ(scatter.z[i])))
       const mesh = this.cats[furOrder[scatter.slot[i] % furOrder.length]]
       mesh.setMatrixAt(mesh.count++, matrix)
     }
-    for (const mesh of this.catMeshes) mesh.instanceMatrix.needsUpdate = true
+    for (let i = 0; i < catMeshes.length; i++) catMeshes[i].instanceMatrix.needsUpdate = true
   }
 
   private drawEnemies(state: RunState, alpha: number): void {
     const { waddleAngle, waddleSpeed, waddleBob } = look.dogs
     const enemies = state.enemies
-    for (const mesh of this.enemyMeshes) mesh.count = 0
+    const enemyMeshes = this.enemyMeshes
+    for (let i = 0; i < enemyMeshes.length; i++) enemyMeshes[i].count = 0
     this.shields.count = 0
     for (let i = 0; i < enemies.length; i++) {
       const enemy = enemies[i]
@@ -739,17 +786,17 @@ export class GameRenderer {
       const waddle = Math.sin(this.seconds * waddleSpeed + i * 1.3)
       const bob = Math.abs(waddle) * waddleBob
       matrix.makeRotationZ(waddle * waddleAngle)
-      matrix.setPosition(x, bob, z)
+      matrix.setPosition(position.set(x, bob, z))
       mesh.setMatrixAt(mesh.count++, matrix)
       const labelY = hpLabelHeight[enemy.kind]
       this.hpLabels?.add(enemy.hp, x, labelY, z, bodyHpColour)
       if (enemy.shield > 0) {
-        matrix.setPosition(x, look.shield.height + bob, z + look.shield.ahead)
+        matrix.setPosition(position.set(x, look.shield.height + bob, z + look.shield.ahead))
         this.shields.setMatrixAt(this.shields.count++, matrix)
         this.hpLabels?.add(enemy.shield, x, labelY + look.hpLabel.shieldRise, z, shieldHpColour)
       }
     }
-    for (const mesh of this.enemyMeshes) mesh.instanceMatrix.needsUpdate = true
+    for (let i = 0; i < enemyMeshes.length; i++) enemyMeshes[i].instanceMatrix.needsUpdate = true
     this.shields.instanceMatrix.needsUpdate = true
   }
 
@@ -758,7 +805,7 @@ export class GameRenderer {
     const barrels = state.barrels
     for (let i = 0; i < barrels.length; i++) {
       const z = this.worldZ(barrels[i].z)
-      matrix.makeTranslation(barrels[i].x, 0, z)
+      matrix.makeTranslation(position.set(barrels[i].x, 0, z))
       this.barrels.setMatrixAt(i, matrix)
       this.hpLabels?.add(barrels[i].hp, barrels[i].x, hpLabelHeight.barrel, z, barrelHpColour)
     }
@@ -787,7 +834,7 @@ export class GameRenderer {
     for (let i = 0; i < yarnBalls.length; i++) {
       const yarnBall = yarnBalls[i]
       matrix.makeRotationX(-(this.seconds * spinSpeed + i))
-      matrix.setPosition(lerp(yarnBall.previousX, yarnBall.x, alpha), height, this.worldZ(lerp(yarnBall.previousZ, yarnBall.z, alpha)))
+      matrix.setPosition(position.set(lerp(yarnBall.previousX, yarnBall.x, alpha), height, this.worldZ(lerp(yarnBall.previousZ, yarnBall.z, alpha))))
       this.yarnBalls.setMatrixAt(i, matrix)
     }
     this.yarnBalls.count = yarnBalls.length
@@ -796,7 +843,7 @@ export class GameRenderer {
 
   private drawBoss(state: RunState, alpha: number, frameSeconds: number): void {
     const boss = state.boss
-    for (const kind of bossKinds) this.bosses[kind].group.visible = boss !== null && boss.kind === kind
+    for (let i = 0; i < bossKinds.length; i++) this.bosses[bossKinds[i]].group.visible = boss !== null && boss.kind === bossKinds[i]
     if (boss === null) return
     const model = this.bosses[boss.kind]
     model.group.position.set(lerp(boss.previousX, boss.x, alpha), 0, this.worldZ(lerp(boss.previousZ, boss.z, alpha)))
@@ -816,7 +863,7 @@ export class GameRenderer {
     for (let i = 0; i < dustBalls.length; i++) {
       const dustBall = dustBalls[i]
       matrix.makeRotationX(this.seconds * spinSpeed + i)
-      matrix.setPosition(lerp(dustBall.previousX, dustBall.x, alpha), height, this.worldZ(lerp(dustBall.previousZ, dustBall.z, alpha)))
+      matrix.setPosition(position.set(lerp(dustBall.previousX, dustBall.x, alpha), height, this.worldZ(lerp(dustBall.previousZ, dustBall.z, alpha))))
       this.dustBalls.setMatrixAt(i, matrix)
     }
     this.dustBalls.count = dustBalls.length
@@ -831,33 +878,28 @@ export class GameRenderer {
       const buffBlock = buffBlocks[i]
       const x = laneCentreX(buffBlock.lane)
       const frontZ = this.worldZ(buffBlock.z)
-      matrix.makeTranslation(x, height / 2, frontZ - tuning.buffBlock.depth / 2)
+      matrix.makeTranslation(position.set(x, height / 2, frontZ - tuning.buffBlock.depth / 2))
       this.buffBlocks.setMatrixAt(i, matrix)
-      const lost = 1 - buffBlock.hp / this.buffBlockStartHpOf(buffBlock.lane, buffBlock.z)
+      const startHp = this.buffBlockStartHp.get(buffBlock)
+      if (startHp === undefined) throw new Error('A buff block of the run was not there at its start')
+      const lost = 1 - buffBlock.hp / startHp
       this.buffBlockDamage.setX(i, Math.min(Math.floor(lost * damageStages), damageStages - 1))
       this.hpLabels?.add(buffBlock.hp, x, height / 2, frontZ + 0.3, buffBlockHpColour, look.hpLabel.buffBlockSize)
-      this.showBuffLabel(i, buffBlock.buff, x, height + panelHeight / 2 + 0.2, frontZ)
+      this.showBuffLabel(i, buffBlock.buff, x, height + look.bigBuff.labelGapOverBlock + panelHeight / 2, frontZ)
     }
     this.buffBlocks.count = buffBlocks.length
     this.buffBlocks.instanceMatrix.needsUpdate = true
     this.buffBlockDamage.needsUpdate = true
   }
 
-  private buffBlockStartHpOf(lane: Lane, z: number): number {
-    for (let i = 0; i < this.buffBlockStartHp.length; i++) {
-      if (this.buffBlockStartLanes[i] === lane && this.buffBlockStartZ[i] === z) return this.buffBlockStartHp[i]
-    }
-    return 1
-  }
-
   // Swinging, bobbing gold tokens in a pulsing glow. Labels after the blocks' go to the uncovered big buffs, and the rest are hidden.
   private drawBigBuffs(state: RunState): void {
     if (this.bigBuffs === null || this.bigBuffGlows === null) return
-    const { height, bobHeight, swingAngle, swingSpeed, pulseSpeed } = look.bigBuff
+    const { height, bobHeight, bobPerPulse, swingAngle, swingSpeed, pulseSpeed, glowPulse, glowBehind, labelGapOverCoin } = look.bigBuff
     const bigBuffs = state.bigBuffs
     const firstLabel = state.buffBlocks.length
-    const y = height + Math.sin(this.seconds * pulseSpeed * 0.5) * bobHeight
-    scale.setScalar(1 + Math.sin(this.seconds * pulseSpeed) * 0.12)
+    const y = height + Math.sin(this.seconds * pulseSpeed * bobPerPulse) * bobHeight
+    scale.setScalar(1 + Math.sin(this.seconds * pulseSpeed) * glowPulse)
     for (let i = 0; i < bigBuffs.length; i++) {
       const bigBuff = bigBuffs[i]
       const x = laneCentreX(bigBuff.lane)
@@ -865,9 +907,8 @@ export class GameRenderer {
       matrix.makeRotationY(Math.sin(this.seconds * swingSpeed) * swingAngle)
       matrix.setPosition(position.set(x, y, z))
       this.bigBuffs.setMatrixAt(i, matrix)
-      // Just behind the token, so the token draws over it.
-      this.bigBuffGlows.setMatrixAt(i, matrix.compose(position.set(x, y, z - 0.3), facingCamera, scale))
-      this.showBuffLabel(firstLabel + i, bigBuff.buff, x, height + 0.8 + panelHeight / 2, z)
+      this.bigBuffGlows.setMatrixAt(i, matrix.compose(position.set(x, y, z - glowBehind), facingCamera, scale))
+      this.showBuffLabel(firstLabel + i, bigBuff.buff, x, height + labelGapOverCoin + panelHeight / 2, z)
     }
     this.bigBuffs.count = bigBuffs.length
     this.bigBuffGlows.count = bigBuffs.length

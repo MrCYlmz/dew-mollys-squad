@@ -1,22 +1,34 @@
 import type { BossKind } from '../../content/level'
 import { strings } from '../../content/strings'
+import type { LossCause } from '../../sim/run'
 
 const caughtByHeading: Record<BossKind, string> = {
   dustbot: strings.caughtByDustbot,
   megaDustbot: strings.caughtByMegaDustbot,
 }
 
+const obstacleHeading = {
+  ranIntoWall: strings.ranIntoWall,
+  ranIntoBlock: strings.ranIntoBlock,
+}
+
 interface DefeatScreenProps {
   distanceReached: number
-  // The boss that touched the squad, or null when the squad ran out of cats.
+  lossCause: LossCause
+  // The boss that touched the squad, or null when no boss did.
   caughtBy: BossKind | null
   onRetry: () => void
 }
 
-export function DefeatScreen({ distanceReached, caughtBy, onRetry }: DefeatScreenProps) {
+function heading(lossCause: LossCause, caughtBy: BossKind | null): string {
+  if (lossCause === 'ranIntoWall' || lossCause === 'ranIntoBlock') return obstacleHeading[lossCause]
+  return caughtBy === null ? strings.defeat : caughtByHeading[caughtBy]
+}
+
+export function DefeatScreen({ distanceReached, lossCause, caughtBy, onRetry }: DefeatScreenProps) {
   return (
     <div class="screen overlay">
-      <h2>{caughtBy === null ? strings.defeat : caughtByHeading[caughtBy]}</h2>
+      <h2>{heading(lossCause, caughtBy)}</h2>
       <p class="result">
         {strings.distanceReached}: {distanceReached}
       </p>

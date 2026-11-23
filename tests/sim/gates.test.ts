@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Gate, Level } from '../../src/content/level'
+import { tuning } from '../../src/content/tuning'
 import { applyGate, laneAt } from '../../src/sim/gates'
 import { createRun } from '../../src/sim/run'
 import { everyLane, levelOf, noSteering, steerTo, stepUntil } from './runHarness'
@@ -255,19 +256,20 @@ describe('gates in a run', () => {
 })
 
 describe('tick order', () => {
-  // A wave appears 40 units ahead and closes at 8 + 2.5 units/s, so the bulldog meets the squad about
-  // 9.5 units before the wave's z. Sweeping the wave's z around gate z + 9.5 makes some runs touch the
+  // A wave appears 40 units ahead and closes at the run speed + 2.5 units/s, so the bulldog meets the squad about
+  // 2.5 × 40 ÷ (run speed + 2.5) units before the wave's z. Sweeping the wave's z around there makes some runs touch the
   // bulldog in the very tick the squad runs through the gate. Yarn balls fly through the gate, and a
   // bulldog's 40 HP outlasts the shots of 1 cat, so it always reaches the squad.
   it('bulldog_contact_in_the_gate_tick_applies_before_the_gate', () => {
     const gateZ = 60
+    const bulldogWalk = (2.5 * 40) / (tuning.squad.forwardSpeed + 2.5)
     let sameTickRuns = 0
 
     for (let offset = -1.5; offset <= 1.5; offset += 0.05) {
       const run = createRun({
         level: levelOf([
           gateRow(gateZ, everyLane(addTen)),
-          { type: 'wave', z: gateZ + 9.5 + offset, enemy: 'bulldog', pattern: 'line', count: 1 },
+          { type: 'wave', z: gateZ + bulldogWalk + offset, enemy: 'bulldog', pattern: 'line', count: 1 },
         ]),
         seed: 1,
       })

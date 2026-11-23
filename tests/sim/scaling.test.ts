@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
+import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent } from '../../src/sim/run'
 import { copied, levelOf, noSteering, stepUntil } from './runHarness'
 
 type WaveEvent = Extract<Level['events'][number], { type: 'wave' }>
+
+// At the spawn tick an enemy may already have chased the squad's centre one step across the track.
+const chaseStep = tuning.enemyChaseSpeed / 60 + 1e-9
 
 function spawnWave(wave: WaveEvent, level: number) {
   const run = createRun({ level: levelOf([wave], 300, level), seed: 1 })
@@ -65,7 +69,7 @@ describe('wave size scaling', () => {
 
     const xs = run.state.enemies.map((enemy) => enemy.x).sort((a, b) => a - b)
     expect(xs).toHaveLength(11)
-    xs.forEach((x, index) => expect(x).toBeCloseTo(-5 + (10 * (index + 0.5)) / 11, 9))
+    xs.forEach((x, index) => expect(Math.abs(x - (-5 + (10 * (index + 0.5)) / 11))).toBeLessThanOrEqual(chaseStep))
   })
 
   it('line_of_5_on_level_2_keeps_5_enemies', () => {
@@ -85,10 +89,12 @@ describe('wave size scaling', () => {
     // 4 × 1.05⁴ = 4.86, so 5 rows of 5
     const run = spawnWave({ type: 'wave', z: 130, enemy: 'puppy', pattern: 'block', columns: 5, rows: 4, x: 0, spacing: 1.5 }, 5)
 
-    const xs = new Set(run.state.enemies.map((enemy) => Math.round(enemy.x * 100) / 100))
+    const columns = [-3, -1.5, 0, 1.5, 3]
     const rowZs = [...new Set(run.state.enemies.map((enemy) => Math.round(enemy.z * 10) / 10))].sort((a, b) => a - b)
     expect(run.state.enemies).toHaveLength(25)
-    expect(xs).toEqual(new Set([-3, -1.5, 0, 1.5, 3]))
+    for (const column of columns) {
+      expect(run.state.enemies.filter((enemy) => Math.abs(enemy.x - column) <= chaseStep)).toHaveLength(5)
+    }
     expect(rowZs).toHaveLength(5)
     rowZs.slice(1).forEach((z, index) => expect(z - rowZs[index]).toBeCloseTo(1.5, 1))
     expect(Math.abs(rowZs[0] - 130)).toBeLessThanOrEqual(0.15)
@@ -101,7 +107,7 @@ describe('wave size scaling', () => {
     const zs = run.state.enemies.map((enemy) => enemy.z).sort((a, b) => a - b)
     expect(zs).toHaveLength(9)
     zs.forEach((z, index) => expect(Math.abs(z - (180 + 2 * index))).toBeLessThanOrEqual(0.15))
-    for (const enemy of run.state.enemies) expect(enemy.x).toBe(-3)
+    for (const enemy of run.state.enemies) expect(Math.abs(enemy.x - -3)).toBeLessThanOrEqual(chaseStep)
   })
 
   it('flank_of_4_on_level_5_has_5_enemies_per_side', () => {

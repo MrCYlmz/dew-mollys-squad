@@ -24,7 +24,7 @@ export interface SteerInput {
 
 export type RunStatus = 'running' | 'won' | 'lost'
 
-export type LossCause = 'outOfCats' | 'caughtByBoss'
+export type LossCause = 'outOfCats' | 'caughtByBoss' | 'ranIntoWall' | 'ranIntoBlock'
 
 // previousX and previousZ hold the position at the end of the tick before, for drawing between ticks.
 export interface SquadState {
@@ -248,8 +248,6 @@ interface Enemy {
   previousZ: number
   hp: number
   shield: number
-  // +1 while a flank enemy walks right towards the centre, −1 while it walks left, 0 once it runs straight.
-  sideways: number
 }
 
 interface Barrel {
@@ -262,8 +260,6 @@ interface Wall {
   x: number
   z: number
   width: number
-  // Each wall costs cats once.
-  touched: boolean
 }
 
 interface Boss {
@@ -283,8 +279,6 @@ interface BuffBlock {
   z: number
   hp: number
   buff: BigBuff
-  // Each block costs cats once.
-  touched: boolean
 }
 
 interface BigBuffPickup {
@@ -344,6 +338,7 @@ const barrelShotReach = tuning.hitRadius.yarnBall + tuning.hitRadius.barrel
 const barrelContactReach = tuning.hitRadius.cat + tuning.hitRadius.barrel
 const catRadius = tuning.hitRadius.cat
 const dustBallStep = tuning.dustBall.speed * dt
+const enemyChaseStep = tuning.enemyChaseSpeed * dt
 const dustBallContactReach = catRadius + tuning.hitRadius.dustBall
 const bossHitEvent: BossHitEvent = { type: 'bossHit' }
 const dustBallThrownEvent: DustBallThrownEvent = { type: 'dustBallThrown' }
@@ -421,6 +416,7 @@ class RunSimulation implements Run {
   private readonly boss: Boss | null = null
   private readonly gateRows: GateRow[]
   private readonly waves: WaveEvent[]
+  private readonly streamTicks: number
   private readonly enemyHpFactor: number
   private readonly waveSizeFactor: number
   private readonly events: GameEvent[] = []
@@ -457,6 +453,9 @@ class RunSimulation implements Run {
   private pendingCatShots = 0
   private nextWave = 0
   private nextGateRow = 0
+  // Ticks stepped while running, counting the first as 1.
+  private tick = 0
+  private nextStreamEnemy = 0
 
   readonly state: RunState & { status: RunStatus; lossCause: LossCause | null; cats: readonly CatState[]; boss: Boss | null }
 
@@ -469,10 +468,10 @@ class RunSimulation implements Run {
     this.waveSizeFactor = Math.pow(tuning.scaling.waveSizeGrowth, level.level - 1)
     this.enemies = new Pool<Enemy>(
       tuning.limits.enemies,
-      () => ({ kind: 'puppy', x: 0, z: 0, previousX: 0, previousZ: 0, hp: 0, shield: 0, sideways: 0 }),
+      () => ({ kind: 'puppy', x: 0, z: 0, previousX: 0, previousZ: 0, hp: 0, shield: 0 }),
       (enemy) => {
         enemy.kind = 'puppy'
-        enemy.x = enemy.z = enemy.previousX = enemy.previousZ = enemy.hp = enemy.shield = enemy.sideways = 0
+        enemy.x = enemy.z = enemy.previousX = enemy.previousZ = enemy.hp = enemy.shield = 0
       },
     )
     this.yarnBalls = new Pool<YarnBall>(
@@ -492,21 +491,19 @@ class RunSimulation implements Run {
     )
     this.walls = new Pool<Wall>(
       level.events.filter((event) => event.type === 'wall').length,
-      () => ({ x: 0, z: 0, width: 0, touched: false }),
+      () => ({ x: 0, z: 0, width: 0 }),
       (wall) => {
         wall.x = wall.z = wall.width = 0
-        wall.touched = false
       },
     )
     const buffBlockCount = level.events.filter((event) => event.type === 'buffBlock').length
     this.buffBlocks = new Pool<BuffBlock>(
       buffBlockCount,
-      () => ({ lane: 'left', z: 0, hp: 0, buff: 'add', touched: false }),
+      () => ({ lane: 'left', z: 0, hp: 0, buff: 'add' }),
       (buffBlock) => {
         buffBlock.lane = 'left'
         buffBlock.z = buffBlock.hp = 0
         buffBlock.buff = 'add'
-        buffBlock.touched = false
       },
     )
     this.bigBuffs = new Pool<BigBuffPickup>(
@@ -528,6 +525,8 @@ class RunSimulation implements Run {
     )
     this.gateRows = []
     this.waves = []
+    // Whole ticks, rounded half up, and at least 1.
+    this.streamTicks = Math.max(Math.floor(level.stream.interval * tuning.tickRate + 0.5), 1)
     for (const event of level.events) {
       switch (event.type) {
         case 'gates':
@@ -583,8 +582,10 @@ class RunSimulation implements Run {
     this.bigBuffCollectedEvents.reset()
     if (this.state.status !== 'running') return this.events
 
+    this.tick++
     this.moveSquad(input)
     this.spawnWaves()
+    this.spawnStreamEnemy()
     this.enterBoss()
     this.shoot()
     this.moveYarnBalls()
@@ -656,6 +657,14 @@ class RunSimulation implements Run {
     }
   }
 
+  private spawnStreamEnemy(): void {
+    if (this.tick % this.streamTicks !== 0 || this.squad.z >= this.state.level.length) return
+    const streamEnemies = this.state.level.stream.enemies
+    const kind = streamEnemies[this.nextStreamEnemy]
+    this.nextStreamEnemy = (this.nextStreamEnemy + 1) % streamEnemies.length
+    this.spawnEnemy(kind, -halfWidth + this.random() * 2 * halfWidth, this.squad.z + tuning.stream.spawnDistance)
+  }
+
   private enterBoss(): void {
     const boss = this.boss
     if (boss === null || this.state.boss !== null || this.squad.z < this.state.level.length) return
@@ -678,7 +687,7 @@ class RunSimulation implements Run {
       case 'line': {
         const count = this.scaledWaveSize(wave.count)
         for (let i = 0; i < count; i++) {
-          this.spawnEnemy(kind, -halfWidth + (2 * halfWidth * (i + 0.5)) / count, wave.z, 0)
+          this.spawnEnemy(kind, -halfWidth + (2 * halfWidth * (i + 0.5)) / count, wave.z)
         }
         break
       }
@@ -687,28 +696,29 @@ class RunSimulation implements Run {
         const firstX = wave.x - ((wave.columns - 1) * wave.spacing) / 2
         for (let row = 0; row < rows; row++) {
           for (let column = 0; column < wave.columns; column++) {
-            this.spawnEnemy(kind, firstX + column * wave.spacing, wave.z + row * wave.spacing, 0)
+            this.spawnEnemy(kind, firstX + column * wave.spacing, wave.z + row * wave.spacing)
           }
         }
         break
       }
       case 'column': {
         const count = this.scaledWaveSize(wave.count)
-        for (let i = 0; i < count; i++) this.spawnEnemy(kind, wave.x, wave.z + i * wave.spacing, 0)
+        for (let i = 0; i < count; i++) this.spawnEnemy(kind, wave.x, wave.z + i * wave.spacing)
         break
       }
       case 'flank': {
         const count = this.scaledWaveSize(wave.count)
         for (let i = 0; i < count; i++) {
-          this.spawnEnemy(kind, -halfWidth, wave.z + i * wave.spacing, 1)
-          this.spawnEnemy(kind, halfWidth, wave.z + i * wave.spacing, -1)
+          this.spawnEnemy(kind, -halfWidth, wave.z + i * wave.spacing)
+          this.spawnEnemy(kind, halfWidth, wave.z + i * wave.spacing)
         }
         break
       }
     }
   }
 
-  private spawnEnemy(kind: EnemyKind, x: number, z: number, sideways: number): void {
+  // An enemy that would spawn while the enemy cap is reached is dropped.
+  private spawnEnemy(kind: EnemyKind, x: number, z: number): void {
     const enemy = this.enemies.acquire()
     if (enemy === undefined) return
     enemy.kind = kind
@@ -716,7 +726,6 @@ class RunSimulation implements Run {
     enemy.z = enemy.previousZ = z
     enemy.hp = tuning.enemies[kind].hp * this.enemyHpFactor
     enemy.shield = tuning.enemies[kind].shield * this.enemyHpFactor
-    enemy.sideways = sideways
   }
 
   private shoot(): void {
@@ -983,34 +992,25 @@ class RunSimulation implements Run {
     return true
   }
 
-  // Returns true when the run is lost.
+  // Returns true when the run is lost. Only the squad's centre running into a wall loses it; cats the wall clips are safe.
   private resolveWalls(): boolean {
+    const squad = this.squad
     for (const wall of this.walls.active) {
       const halfWallWidth = wall.width / 2
-      if (wall.touched || !this.catTouchesRectangle(wall.x - halfWallWidth, wall.x + halfWallWidth, wall.z, wall.z + tuning.wall.depth)) continue
-      wall.touched = true
-      if (this.loseCats(tuning.wall.catLoss)) return true
+      if (Math.abs(squad.x - wall.x) > halfWallWidth || squad.z < wall.z || squad.z > wall.z + tuning.wall.depth) continue
+      this.lose('ranIntoWall')
+      return true
     }
     return false
   }
 
   // Returns true when the run is lost.
   private resolveBuffBlocks(): boolean {
+    const squad = this.squad
     for (const buffBlock of this.buffBlocks.active) {
-      if (buffBlock.touched) continue
-      const centreX = laneCentreX(buffBlock.lane)
-      if (!this.catTouchesRectangle(centreX - laneBorder, centreX + laneBorder, buffBlock.z, buffBlock.z + tuning.buffBlock.depth)) continue
-      buffBlock.touched = true
-      if (this.loseCats(tuning.buffBlock.catLoss)) return true
-    }
-    return false
-  }
-
-  private catTouchesRectangle(minX: number, maxX: number, minZ: number, maxZ: number): boolean {
-    for (const cat of this.state.cats) {
-      const dx = cat.x - Math.min(Math.max(cat.x, minX), maxX)
-      const dz = cat.z - Math.min(Math.max(cat.z, minZ), maxZ)
-      if (dx * dx + dz * dz <= catRadius * catRadius) return true
+      if (laneAt(squad.x) !== buffBlock.lane || squad.z < buffBlock.z || squad.z > buffBlock.z + tuning.buffBlock.depth) continue
+      this.lose('ranIntoBlock')
+      return true
     }
     return false
   }
@@ -1104,20 +1104,12 @@ class RunSimulation implements Run {
     const enemies = this.enemies.active
     for (let i = enemies.length - 1; i >= 0; i--) {
       const enemy = enemies[i]
-      const speed = tuning.enemies[enemy.kind].speed
+      const runStep = tuning.enemies[enemy.kind].speed * dt
       enemy.previousX = enemy.x
       enemy.previousZ = enemy.z
-      if (enemy.sideways === 0) {
-        enemy.z -= speed * dt
-      } else {
-        const flankStep = (speed * dt) / Math.SQRT2
-        enemy.x += enemy.sideways * flankStep
-        enemy.z -= flankStep
-        if (enemy.x * enemy.sideways >= 0) {
-          enemy.x = 0
-          enemy.sideways = 0
-        }
-      }
+      enemy.z += enemy.z >= this.squad.z ? -runStep : runStep
+      const toSquadX = this.squad.x - enemy.x
+      enemy.x += Math.abs(toSquadX) <= enemyChaseStep ? toSquadX : Math.sign(toSquadX) * enemyChaseStep
       // Past the last cat it can touch no cat any more.
       if (enemy.z < lastCatZ - catRadius - tuning.hitRadius[enemy.kind]) this.enemies.release(i)
     }

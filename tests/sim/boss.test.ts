@@ -125,18 +125,24 @@ describe('boss arena', () => {
   })
 
   it('enemies_alive_when_the_squad_reaches_the_arena_keep_coming', () => {
-    // The second puppy stands 30 units behind the first, so it is still ahead when the squad stops; at x = 3 the cats do not hit it.
-    const run = bossRun('dustbot', unbeatable, [{ type: 'wave', z: 299, enemy: 'puppy', pattern: 'column', count: 2, x: 3, spacing: 30 }])
+    // The second bulldog stands 30 units behind the first, so it is still ahead when the squad stops. 11 cats survive the
+    // first and do not shoot the second down in time; in the arena it closes in at its own speed and still chases the
+    // squad's centre across the track.
+    const run = bossRun('dustbot', unbeatable, [
+      { type: 'gates', z: 10, ...everyLane({ op: 'add', value: 10 }) },
+      { type: 'wave', z: 299, enemy: 'bulldog', pattern: 'column', count: 2, x: 0, spacing: 30 },
+    ])
     stepToArena(run)
     expect(run.state.enemies).toHaveLength(1)
     const start = { ...run.state.enemies[0] }
     expect(start.z).toBeGreaterThan(length)
+    steerTo(run, -4)
 
-    stepTicks(run, 60)
+    stepTicks(run, 19)
 
     expect(run.state.enemies).toHaveLength(1)
-    expect(start.z - run.state.enemies[0].z).toBeCloseTo(4, 6)
-    expect(run.state.enemies[0].x).toBe(3)
+    expect(start.z - run.state.enemies[0].z).toBeCloseTo((20 * 2.5) / 60, 6)
+    expect(run.state.enemies[0].x).toBeCloseTo(start.x - 20 * (6 / 60), 6)
   })
 })
 

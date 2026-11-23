@@ -3,8 +3,11 @@ import type { GameEvent, Run, RunState, SteerInput } from '../../src/sim/run'
 
 export const noSteering: SteerInput = { drag: 0, left: false, right: false }
 
-export function levelOf(events: Level['events'], length = 300, level = 1): Level {
-  return { id: 'test-level', level, length, events }
+// A stream too slow to send an enemy within any test, for tests about other rules.
+export const quietStream: Level['stream'] = { interval: 1_000_000, enemies: ['puppy'] }
+
+export function levelOf(events: Level['events'], length = 300, level = 1, stream = quietStream): Level {
+  return { id: 'test-level', level, length, stream, events }
 }
 
 // Stops early once the run is won or lost, so no test depends on what a finished run does.
@@ -56,9 +59,15 @@ export function repeatedRows(gate: Gate, times: number, start = 5): Level['event
 // A boss level ends with the boss event at z = length, the arena start.
 export function bossLevelOf(
   events: Level['events'],
-  { boss, expectedSquadAtBoss, length = 300, level = 1 }: { boss: BossKind; expectedSquadAtBoss: number; length?: number; level?: number },
+  {
+    boss,
+    expectedSquadAtBoss,
+    length = 300,
+    level = 1,
+    stream = quietStream,
+  }: { boss: BossKind; expectedSquadAtBoss: number; length?: number; level?: number; stream?: Level['stream'] },
 ): Level {
-  return { id: 'test-boss-level', level, length, expectedSquadAtBoss, events: [...events, { type: 'boss', z: length, boss }] }
+  return { id: 'test-boss-level', level, length, expectedSquadAtBoss, stream, events: [...events, { type: 'boss', z: length, boss }] }
 }
 
 // Steps until the squad reaches the arena and the boss enters; returns the events of those ticks.

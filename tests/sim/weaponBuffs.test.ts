@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Gate, Level } from '../../src/content/level'
+import { tuning } from '../../src/content/tuning'
 import { createRun, type Run } from '../../src/sim/run'
 import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
@@ -192,7 +193,7 @@ describe('range gate', () => {
 
   it('yarn_ball_after_a_range_gate_flies_40_units', () => {
     // A yarn ball fired from the single cat at the squad's z has flown f units when it is
-    // f − 8 × f / 30 ahead of the squad, so at 40 units of range it gets at most 29.33 ahead.
+    // f − run speed × f / 30 ahead of the squad, so at 40 units of range it gets at most 40 − run speed × 4/3 ahead.
     const run = oneCatAfter(repeatedRows(range, 1))
     let farthestAhead = 0
 
@@ -201,7 +202,7 @@ describe('range gate', () => {
       for (const yarnBall of run.state.yarnBalls) farthestAhead = Math.max(farthestAhead, yarnBall.z - run.state.squad.z)
     }
 
-    const expected = 40 - (8 * 40) / 30
+    const expected = 40 - (tuning.squad.forwardSpeed * 40) / 30
     expect(farthestAhead).toBeLessThanOrEqual(expected + 1e-9)
     expect(farthestAhead).toBeGreaterThanOrEqual(expected - 0.5)
   })

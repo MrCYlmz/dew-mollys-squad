@@ -16,14 +16,14 @@ describe('squad start', () => {
 })
 
 describe('forward movement', () => {
-  it('squad_moves_forward_8_units_per_second_on_its_own', () => {
+  it('squad_moves_forward_12_units_per_second_on_its_own', () => {
     const run = createRun({ level: emptyLevel, seed: 1 })
 
     stepTicks(run, 60)
-    expect(run.state.squad.z).toBeCloseTo(8, 6)
+    expect(run.state.squad.z).toBeCloseTo(12, 6)
 
     stepTicks(run, 60)
-    expect(run.state.squad.z).toBeCloseTo(16, 6)
+    expect(run.state.squad.z).toBeCloseTo(24, 6)
   })
 })
 

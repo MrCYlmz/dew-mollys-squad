@@ -125,6 +125,37 @@ describe('enemy movement', () => {
     expect(run.state.enemies[0].x).toBeCloseTo(before - 10 * chaseStep, 6)
   })
 
+  it('chihuahua_from_one_track_edge_reaches_a_squad_at_the_other', () => {
+    // The binding case of docs/domain/run.md: the fastest kind closes the 40 units in 40 ÷ (12 + 9) ≈ 1.9 s and in that time
+    // moves up to 11.4 units across, more than the 10 units of the track. On level 30 a chihuahua has 1.08^29 ≈ 9.3 HP,
+    // which the few yarn balls 1 cat lands in that time do not break, and the column of 1 grows to 4.
+    const run = createRun({
+      level: levelOf([{ type: 'wave', z: 100, enemy: 'chihuahua', pattern: 'column', count: 1, x: -5, spacing: 1 }], 300, 30),
+      seed: 1,
+    })
+    steerTo(run, 5)
+    stepUntil(run, (state) => state.enemies.length > 0, 6000)
+    expect(run.state.squad.x).toBeCloseTo(5, 6)
+    let ticks = 0
+
+    const events = stepUntil(
+      run,
+      () => {
+        ticks++
+        return false
+      },
+      600,
+    )
+
+    // It has crossed the whole track and touches the squad on its line.
+    expect(events.filter((event) => event.type === 'enemyKilled')).toEqual([
+      expect.objectContaining({ type: 'enemyKilled', enemy: 'chihuahua', cause: 'contact', x: run.state.squad.x }),
+    ])
+    expect(run.state.lossCause).toBe('outOfCats')
+    expect(ticks / 60).toBeGreaterThan(1.7)
+    expect(ticks / 60).toBeLessThan(2)
+  })
+
   it('bulldog_from_the_left_lane_reaches_a_squad_in_the_right_lane', () => {
     // As the puppy example in docs/domain/run.md, with a bulldog whose 40 HP outlast the shots of 1 cat. It crosses the
     // 20/3 units in about 1.1 s and touches the squad when about 0.9 units away, (40 − 0.9) ÷ (12 + 2.5) ≈ 2.7 s after it appeared.

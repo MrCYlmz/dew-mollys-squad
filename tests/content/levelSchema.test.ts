@@ -161,6 +161,14 @@ describe('boss level schema', () => {
     expect(levelSchema.safeParse(megaDustbotLevel).success).toBe(true)
   })
 
+  // decisions.md: walls and buff blocks end at least 5 units before the arena start, z + depth ≤ length − 5.
+  it.each([
+    ['wall', { type: 'wall', z: 394, x: 0, width: 2 }],
+    ['buff block', { type: 'buffBlock', z: 394, lane: 'centre', hp: 40, buff: 'add' }],
+  ])('accepts_a_%s_that_ends_5_units_before_the_arena_start', (_case, event) => {
+    expect(levelSchema.safeParse(withEventsBeforeTheBoss(event)).success).toBe(true)
+  })
+
   it('accepts_an_expected_squad_at_boss_of_1', () => {
     expect(levelSchema.safeParse(bossLevelWith({ expectedSquadAtBoss: 1 })).success).toBe(true)
   })
@@ -176,6 +184,11 @@ describe('boss level schema', () => {
     [
       'with two bosses',
       bossLevelWith({ events: [...documentedLevel.events, { type: 'boss', z: 400, boss: 'dustbot' }, { type: 'boss', z: 400, boss: 'megaDustbot' }] }),
+    ],
+    ['with a wall ending less than 5 units before the arena start', withEventsBeforeTheBoss({ type: 'wall', z: 394.5, x: 0, width: 2 })],
+    [
+      'with a buff block ending less than 5 units before the arena start',
+      withEventsBeforeTheBoss({ type: 'buffBlock', z: 394.5, lane: 'centre', hp: 40, buff: 'add' }),
     ],
     ['with a gate row at the arena start', withEventsBeforeTheBoss({ type: 'gates', z: 400, centre: { op: 'add', value: 1 } })],
     ['with a wave at the arena start', withEventsBeforeTheBoss({ type: 'wave', z: 400, enemy: 'puppy', pattern: 'line', count: 1 })],

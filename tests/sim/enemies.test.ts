@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
-import { createRun, type GameEvent, type Run } from '../../src/sim/run'
+import { createRun, type EnemyKilledEvent, type GameEvent, type Run } from '../../src/sim/run'
 import { copied, doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type WaveEvent = Extract<Level['events'][number], { type: 'wave' }>
@@ -221,6 +221,49 @@ describe('enemy movement', () => {
     }
 
     expect(ticksBehind).toBeGreaterThan(0)
+  })
+
+  it('enemy_behind_the_squad_centre_costs_cats_until_past_the_last_cat', () => {
+    // A squad of 4 at x = −4 waits for a shield dog in its lane, whose 45 HP outlast the shots of 4 cats, and steps aside
+    // when the shield dog is `gap` units ahead. Some steps let it pass the squad's centre, and some even the last cat's hit
+    // circle, before it reaches a cat: still touching that cat, it is not past the last cat yet.
+    const runStep = tuning.squad.forwardSpeed / 60
+    const contacts: { behindTheCentre: boolean; behindTheLastCatBy: number; events: GameEvent[]; squadCount: number; status: string }[] = []
+    for (let gap = 1.2; gap <= 1.6; gap += 0.05) {
+      for (let step = 1.4; step <= 1.8; step += 0.05) {
+        const run = createRun({
+          level: levelOf([...doublingRows(2), { type: 'wave', z: 100, enemy: 'shieldDog', pattern: 'column', count: 1, x: -4, spacing: 1 }]),
+          seed: 1,
+        })
+        steerTo(run, -4)
+        stepUntil(run, (state) => state.enemies.length > 0 && state.enemies[0].z - state.squad.z < gap, 6000)
+        steerTo(run, -4 + step)
+        while (run.state.status === 'running' && run.state.enemies.length > 0 && run.state.squad.z < 100) {
+          // Where the last cat stands in the coming tick, before a contact shrinks the squad.
+          const lastCatZ = Math.min(...run.state.cats.map((cat) => cat.z)) + runStep
+          const events = copied(run.step(noSteering))
+          const contact = events.find((event): event is EnemyKilledEvent => event.type === 'enemyKilled' && event.cause === 'contact')
+          if (contact === undefined) continue
+          contacts.push({
+            behindTheCentre: contact.z < run.state.squad.z,
+            behindTheLastCatBy: lastCatZ - contact.z,
+            events,
+            squadCount: run.state.squad.count,
+            status: run.state.status,
+          })
+          break
+        }
+      }
+    }
+    const behind = contacts.filter((contact) => contact.behindTheCentre)
+
+    expect(behind.length).toBeGreaterThan(0)
+    expect(behind.some((contact) => contact.behindTheLastCatBy > tuning.hitRadius.cat)).toBe(true)
+    for (const { events, squadCount, status } of behind) {
+      expect(events.filter((event) => event.type === 'catsLost')).toEqual([{ type: 'catsLost', count: 3 }])
+      expect(squadCount).toBe(1)
+      expect(status).toBe('running')
+    }
   })
 
   it('enemy_that_gets_past_the_squad_disappears_without_damage', () => {

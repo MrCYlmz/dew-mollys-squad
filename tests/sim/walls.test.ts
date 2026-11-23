@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type Run } from '../../src/sim/run'
-import { everyLane, levelOf, noSteering, steerTo, stepUntil } from './runHarness'
+import { everyLane, levelOf, noSteering, steerTo, stepTicks, stepUntil } from './runHarness'
 
 // A squad of exactly count cats.
 function squadOf(count: number): Level['events'] {
@@ -93,6 +93,20 @@ describe('wall', () => {
     stepUntil(run, (state) => state.squad.z > 70, 6000)
 
     expect(run.state.status).toBe('running')
+  })
+
+  it('squad_centre_exactly_at_the_wall_front_edge_is_in_the_wall', () => {
+    // A wall's front edge reaches the squad's centre when the distance travelled is its z: the wall stands where an empty
+    // run's squad is after 300 ticks.
+    const emptyRun = createRun({ level: levelOf([]), seed: 1 })
+    stepTicks(emptyRun, 300)
+    const frontEdge = emptyRun.state.squad.z
+    const run = createRun({ level: levelOf([{ type: 'wall', z: frontEdge, x: 0, width: 2 }]), seed: 1 })
+
+    const tick = lossTick(run, frontEdge + 2)
+
+    expect(tick?.zAfter).toBe(frontEdge)
+    expect(run.state.lossCause).toBe('ranIntoWall')
   })
 
   it('cats_at_the_side_of_the_squad_that_clip_a_wall_are_not_lost', () => {

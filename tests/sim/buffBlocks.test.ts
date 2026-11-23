@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Gate, Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
-import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepUntil } from './runHarness'
+import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type BuffBlockEvent = Extract<Level['events'][number], { type: 'buffBlock' }>
 type Lane = BuffBlockEvent['lane']
@@ -317,6 +317,32 @@ describe('running into a buff block', () => {
     steerTo(run, -3)
     stepUntil(run, (state) => state.squad.z > 60 + tuning.buffBlock.depth, 6000)
 
+    expect(run.state.lossCause).toBe('ranIntoBlock')
+  })
+
+  it('squad_centre_steered_into_the_block_lane_once_past_its_back_edge_is_safe', () => {
+    // 25 cats reach about 1.5 units behind the centre, so the block still stands while the centre steers into its lane.
+    const run = startRun([...squadOf(25), buffBlock(60, 'left', unbreakable, 'add')])
+    stepUntil(run, (state) => state.squad.z > 60 + tuning.buffBlock.depth + 0.2, 6000)
+
+    steerTo(run, -3)
+    stepUntil(run, (state) => state.squad.z > 66, 6000)
+
+    expect(run.state.status).toBe('running')
+    expect(run.state.squad.x).toBeLessThan(-5 / 3)
+  })
+
+  it('squad_centre_exactly_at_the_block_front_edge_is_in_the_block', () => {
+    // A block's front edge reaches the squad's centre when the distance travelled is its z: the block stands where an
+    // empty run's squad is after 300 ticks.
+    const emptyRun = startRun([])
+    stepTicks(emptyRun, 300)
+    const frontEdge = emptyRun.state.squad.z
+    const run = startRun([buffBlock(frontEdge, 'centre', unbreakable, 'add')])
+
+    stepUntil(run, (state) => state.squad.z >= frontEdge, 6000)
+
+    expect(run.state.squad.z).toBe(frontEdge)
     expect(run.state.lossCause).toBe('ranIntoBlock')
   })
 

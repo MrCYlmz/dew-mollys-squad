@@ -1,4 +1,4 @@
-import type { BigBuff, BossKind, EnemyKind, Gate, GateOp, Lane, Level, Stream, WaveEvent } from '../content/level'
+import type { BigBuff, BossKind, EnemyKind, Gate, GateOp, Lane, Level, WaveEvent } from '../content/level'
 import { tuning } from '../content/tuning'
 import { drawnCats, formationOffsetX, formationOffsetZ, formationRadius } from './formation'
 import {
@@ -416,7 +416,6 @@ class RunSimulation implements Run {
   private readonly boss: Boss | null = null
   private readonly gateRows: GateRow[]
   private readonly waves: WaveEvent[]
-  private readonly stream: Stream
   private readonly streamTicks: number
   private readonly enemyHpFactor: number
   private readonly waveSizeFactor: number
@@ -526,7 +525,6 @@ class RunSimulation implements Run {
     )
     this.gateRows = []
     this.waves = []
-    this.stream = level.stream
     // Whole ticks, rounded half up, and at least 1.
     this.streamTicks = Math.max(Math.floor(level.stream.interval * tuning.tickRate + 0.5), 1)
     for (const event of level.events) {
@@ -661,8 +659,9 @@ class RunSimulation implements Run {
 
   private spawnStreamEnemy(): void {
     if (this.tick % this.streamTicks !== 0 || this.squad.z >= this.state.level.length) return
-    const kind = this.stream.enemies[this.nextStreamEnemy]
-    this.nextStreamEnemy = (this.nextStreamEnemy + 1) % this.stream.enemies.length
+    const streamEnemies = this.state.level.stream.enemies
+    const kind = streamEnemies[this.nextStreamEnemy]
+    this.nextStreamEnemy = (this.nextStreamEnemy + 1) % streamEnemies.length
     this.spawnEnemy(kind, -halfWidth + this.random() * 2 * halfWidth, this.squad.z + tuning.stream.spawnDistance)
   }
 

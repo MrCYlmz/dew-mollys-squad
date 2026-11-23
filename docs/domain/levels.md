@@ -37,6 +37,7 @@ Each level is one JSON file. Distances are in track units: x runs across the tra
 - A level without a boss ends at the finish line at z = `length`.
 - A level with a boss ends at the boss arena at z = `length`, and has no finish line.
 - Every event has a `type` and a `z` greater than 0 and less than `length`, except the boss event, whose `z` equals `length`. So no gate row, wave, barrel, wall or buff block starts past the arena start.
+- In a level with a boss, every wall and buff block ends at least 5 units before the arena start: its `z` + its depth is at most `length` − 5. So no obstacle stands in the boss arena, where the road has stopped. Example: with `"length": 400`, a wall or buff block 1 unit deep has a `z` of at most 394.
 - Gate rows and buff blocks are placed by [lane](run.md#lanes): `"left"`, `"centre"` or `"right"`.
 - Coins are added to this format when they are built.
 

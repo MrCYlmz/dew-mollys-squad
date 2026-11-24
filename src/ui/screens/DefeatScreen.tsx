@@ -12,6 +12,13 @@ const obstacleHeading = {
   ranIntoBlock: strings.ranIntoBlock,
 }
 
+const tip: Record<LossCause, string> = {
+  outOfCats: strings.tipOutOfCats,
+  ranIntoWall: strings.tipRanIntoObstacle,
+  ranIntoBlock: strings.tipRanIntoObstacle,
+  caughtByBoss: strings.tipCaughtByBoss,
+}
+
 interface DefeatScreenProps {
   distanceReached: number
   lossCause: LossCause
@@ -29,6 +36,7 @@ export function DefeatScreen({ distanceReached, lossCause, caughtBy, onRetry }: 
   return (
     <div class="screen overlay">
       <h2>{heading(lossCause, caughtBy)}</h2>
+      <p class="tip">{tip[lossCause]}</p>
       <p class="result">
         {strings.distanceReached}: {distanceReached}
       </p>

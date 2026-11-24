@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { BossKind, Level } from '../../src/content/level'
+import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent, type Run, type RunState } from '../../src/sim/run'
 import { bossLevelOf, copied, doublingRows, everyLane, noSteering, repeatedRows, steerTo, stepTicks, stepToArena, stepUntil } from './runHarness'
 
@@ -147,19 +148,42 @@ describe('boss arena', () => {
 })
 
 describe('boss HP', () => {
-  // Expected squad at boss × 2 yarn balls/s × 1 damage × 1 yarn ball per shot × 8 s.
+  // Expected squad at boss × 2 yarn balls/s × 1 damage × 1 yarn ball per shot × the boss HP time: 8 s for the Dustbot,
+  // 20 s for the Mega Dustbot. 60 → 960 and 2,400 is the example in docs/domain/levels.md.
   it.each<[BossKind, number, number]>([
     ['dustbot', 60, 960],
     ['dustbot', 1, 16],
     ['dustbot', 25, 400],
     ['dustbot', 999, 15984],
-    ['megaDustbot', 60, 960],
+    ['megaDustbot', 60, 2400],
+    ['megaDustbot', 1, 40],
+    ['megaDustbot', 999, 39960],
   ])('%s_with_an_expected_squad_of_%i_has_%i_hp', (boss, expectedSquadAtBoss, hp) => {
     const run = bossRun(boss, expectedSquadAtBoss)
 
     stepToArena(run)
 
     expect(run.state.boss).toEqual(expect.objectContaining({ hp, fullHp: hp }))
+  })
+
+  describe('with other base weapon values', () => {
+    const baseWeapon = { ...tuning.cat }
+    afterEach(() => Object.assign(tuning.cat, baseWeapon))
+
+    // Every base value counts: 60 × 2 yarn balls/s × 2 damage × 3 yarn balls per shot × 8 s for the Dustbot, × 20 s for
+    // the Mega Dustbot.
+    it.each<[BossKind, number]>([
+      ['dustbot', 5760],
+      ['megaDustbot', 14400],
+    ])('%s_hp_counts_the_base_damage_and_yarn_balls_per_shot', (boss, hp) => {
+      tuning.cat.damage = 2
+      tuning.cat.yarnBallsPerShot = 3
+      const run = bossRun(boss, 60)
+
+      stepToArena(run)
+
+      expect(run.state.boss).toEqual(expect.objectContaining({ hp, fullHp: hp }))
+    })
   })
 
   it('boss_hp_does_not_scale_with_the_level_number', () => {

@@ -235,12 +235,12 @@ A buff block is a block filling one [lane](#lanes), with HP, that hides a big bu
 
 A boss level ends in a boss arena instead of a finish line (see the [level file](levels.md#boss)). Bosses are giant robot vacuum cleaners.
 
-| Boss | World 1 level | Hit radius (units) | Walk speed (units/s) | Throws dust balls |
-| --- | --- | --- | --- | --- |
-| Dustbot | 5 | 2 | 1.5 | No |
-| Mega Dustbot (the world boss) | 10 | 2.5 | 1.5 | Yes |
+| Boss | World 1 level | Hit radius (units) | Walk speed (units/s) | Boss HP time (s) | Throws dust balls |
+| --- | --- | --- | --- | --- | --- |
+| Dustbot | 5 | 2 | 1.5 | 8 | No |
+| Mega Dustbot (the world boss) | 10 | 2.5 | 1.5 | 20 | Yes |
 
-The hit radii and walk speeds are in the tuning config.
+The hit radii, walk speeds and boss HP times are in the tuning config.
 
 ### The boss arena
 

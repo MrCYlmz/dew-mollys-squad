@@ -74,14 +74,12 @@ export const tuning = {
     // How far ahead of the squad's centre a stream enemy appears.
     spawnDistance: 40,
   },
-  // Walk speed in units/s.
+  // Walk speed in units/s. The boss HP time is the seconds the expected squad at boss needs to defeat the boss at the base weapon values.
   bosses: {
-    dustbot: { walkSpeed: 1.5 },
-    megaDustbot: { walkSpeed: 1.5 },
+    dustbot: { walkSpeed: 1.5, hpTime: 8 },
+    megaDustbot: { walkSpeed: 1.5, hpTime: 20 },
   },
   boss: {
-    // Seconds the expected squad at boss needs to defeat the boss at the base weapon values.
-    hpTime: 8,
     // How far beyond the arena start the boss enters.
     startDistance: 35,
   },
@@ -103,6 +101,8 @@ export const tuning = {
     megaDustbot: 2.5,
     dustBall: 0.5,
   },
+  // Seconds into a run of level 1 after which the hand icon that shows how to steer disappears, if the player has not steered.
+  handIconTime: 4,
   // Most yarn balls in flight; above it, one yarn ball stands for several cats.
   yarnBallCap: 400,
   // Most enemies alive at once, from the playbook's performance budget.

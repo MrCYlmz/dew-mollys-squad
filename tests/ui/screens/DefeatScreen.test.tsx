@@ -52,3 +52,39 @@ describe('defeat screen', () => {
     expect(screen.queryByText(strings.defeat)).toBeNull()
   })
 })
+
+// requirements S-6 (14, 15) and docs/domain/screens.md: one tip under the loss reason, chosen by why the run was lost.
+const outOfCatsTip = 'Take the blue gates and shoot the dogs before they reach you.'
+const obstacleTip = 'Steer into a free lane early: walls and blocks end the run.'
+const bossTip = 'Grow your squad before the boss: more cats, more yarn.'
+const tips = [outOfCatsTip, obstacleTip, bossTip]
+
+describe('defeat tip', () => {
+  it.each([
+    ['out_of_cats', 'outOfCats', null, strings.defeat, outOfCatsTip],
+    ['running_into_a_wall', 'ranIntoWall', null, strings.ranIntoWall, obstacleTip],
+    ['running_into_a_block', 'ranIntoBlock', null, strings.ranIntoBlock, obstacleTip],
+    ['the_dustbot', 'caughtByBoss', 'dustbot', strings.caughtByDustbot, bossTip],
+    ['the_mega_dustbot', 'caughtByBoss', 'megaDustbot', strings.caughtByMegaDustbot, bossTip],
+  ] as const)('defeat_by_%s_shows_its_tip_under_the_loss_reason', (_case, lossCause, caughtBy, reason, tip) => {
+    render(<DefeatScreen distanceReached={160} lossCause={lossCause} caughtBy={caughtBy} onRetry={() => {}} />)
+
+    const shownTip = screen.getByText(tip)
+    const heading = screen.getByRole('heading', { name: reason })
+    expect(heading.compareDocumentPosition(shownTip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it.each([
+    ['outOfCats', null, outOfCatsTip],
+    ['ranIntoWall', null, obstacleTip],
+    ['caughtByBoss', 'megaDustbot', bossTip],
+  ] as const)('defeat_by_%s_shows_no_other_tip', (lossCause, caughtBy, tip) => {
+    render(<DefeatScreen distanceReached={160} lossCause={lossCause} caughtBy={caughtBy} onRetry={() => {}} />)
+
+    for (const otherTip of tips.filter((shown) => shown !== tip)) expect(screen.queryByText(otherTip)).toBeNull()
+  })
+
+  it.each(tips)('tip_%s_lives_in_the_string_table', (tip) => {
+    expect(Object.values(strings)).toContain(tip)
+  })
+})

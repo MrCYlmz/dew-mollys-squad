@@ -46,7 +46,7 @@ One term per concept. Code, tests and docs use these words exactly.
 | Dust ball | A projectile the Mega Dustbot throws at the squad. It removes cats when it touches the squad. |
 | Boss arena | The end of a boss level's track, from z = `length` on, where the squad stops and fights the boss. |
 | Arena start | Where the boss arena begins, at z = `length`. The road stops there. |
-| Boss HP time | The seconds the expected squad needs to defeat the boss at the base weapon values. Boss HP is worked out from it. |
+| Boss HP time | The seconds the expected squad needs to defeat the boss at the base weapon values, set per boss. Boss HP is worked out from it. |
 | Finish line | The end of a level that has no boss. |
 | Level | A hand-made sequence of events placed at distances along the track. |
 | Level number | A level's number, stated in its level file. It sets how much enemy HP and wave size grow. |

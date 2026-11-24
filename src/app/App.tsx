@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { HandIcon } from '../ui/components/HandIcon'
 import { SquadCountLabel } from '../ui/components/SquadCountLabel'
 import { DefeatScreen } from '../ui/screens/DefeatScreen'
 import { Hud } from '../ui/screens/Hud'
@@ -61,7 +62,8 @@ export function App({ loadGame }: AppProps) {
   return (
     <>
       {inRun && <SquadCountLabel count={view.squadCount} ref={game.setSquadLabel} />}
-      {inRun && <Hud progress={view.progress} boss={view.boss} onPause={() => game.pause()} />}
+      {inRun && <Hud level={view.level} progress={view.progress} boss={view.boss} onPause={() => game.pause()} />}
+      {view.screen === 'playing' && view.handIcon && <HandIcon />}
       {view.screen === 'title' && <TitleScreen onPlay={() => game.play()} />}
       {view.screen === 'paused' && (
         <PauseScreen onResume={() => game.resume()} onRestart={() => game.restart()} onQuit={() => game.quitToTitle()} />

@@ -11,6 +11,8 @@ export function bossHpPercent({ hp, fullHp }: BossHp): number {
 }
 
 interface HudProps {
+  // The level file's level number.
+  level: number
   // Share of the level behind the squad, 0..1.
   progress: number
   // Null outside the boss arena.
@@ -18,7 +20,7 @@ interface HudProps {
   onPause: () => void
 }
 
-export function Hud({ progress, boss, onPause }: HudProps) {
+export function Hud({ level, progress, boss, onPause }: HudProps) {
   const percent = Math.round(progress * 100)
   const bossPercent = boss === null ? 0 : bossHpPercent(boss)
   return (
@@ -26,6 +28,7 @@ export function Hud({ progress, boss, onPause }: HudProps) {
       <button type="button" class="pause-button" aria-label={strings.pause} onClick={onPause}>
         <span class="pause-icon" />
       </button>
+      <span class="level-number">{strings.levelNumber.replace('{level}', String(level))}</span>
       <div
         class="progress-bar"
         role="progressbar"

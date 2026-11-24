@@ -1,0 +1,23 @@
+{
+  "id": "level-3",
+  "level": 3,
+  "length": 360,
+  "stream": { "interval": 2, "enemies": ["puppy"] },
+  "events": [
+    { "type": "gates", "z": 30, "left": { "op": "add", "value": 5 }, "centre": { "op": "add", "value": 10 }, "right": { "op": "add", "value": 5 } },
+    { "type": "wave", "z": 55, "enemy": "puppy", "pattern": "line", "count": 6 },
+    { "type": "buffBlock", "z": 65, "lane": "left", "hp": 20, "buff": "add" },
+    { "type": "gates", "z": 85, "left": { "op": "add", "value": 5 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "add", "value": 10 } },
+    { "type": "wave", "z": 110, "enemy": "puppy", "pattern": "block", "columns": 4, "rows": 3, "x": 0, "spacing": 1.5 },
+    { "type": "buffBlock", "z": 120, "lane": "right", "hp": 30, "buff": "multiply" },
+    { "type": "gates", "z": 140, "left": { "op": "add", "value": 15 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "subtract", "value": 5 } },
+    { "type": "wave", "z": 165, "enemy": "puppy", "pattern": "line", "count": 12 },
+    { "type": "gates", "z": 195, "left": { "op": "multiply", "value": 2 }, "centre": { "op": "add", "value": 10 }, "right": { "op": "add", "value": 10 } },
+    { "type": "wave", "z": 220, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 3, "x": 0, "spacing": 1.5 },
+    { "type": "buffBlock", "z": 230, "lane": "centre", "hp": 40, "buff": "add" },
+    { "type": "gates", "z": 250, "left": { "op": "add", "value": 10 }, "centre": { "op": "subtract", "value": 10 }, "right": { "op": "multiply", "value": 2 } },
+    { "type": "wave", "z": 275, "enemy": "puppy", "pattern": "line", "count": 14 },
+    { "type": "gates", "z": 305, "left": { "op": "multiply", "value": 2 }, "centre": { "op": "add", "value": 20 }, "right": { "op": "divide", "value": 2 } },
+    { "type": "wave", "z": 330, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": 0, "spacing": 1.5 }
+  ]
+}

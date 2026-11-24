@@ -18,6 +18,8 @@ interface RunView {
   progress: number
   // Null outside the boss arena.
   boss: BossHp | null
+  // The hand icon that shows how to steer on level 1.
+  handIcon: boolean
 }
 
 // What the Defeat screen shows about the lost run.
@@ -35,6 +37,7 @@ export type GameView = RunView & ({ screen: Exclude<Screen, 'defeat'> } | Defeat
 const tickSeconds = 1 / tuning.tickRate
 // Longer frames, such as after a stall, are cut short instead of being caught up tick by tick.
 const maxFrameSeconds = 0.25
+const handIconTicks = tuning.handIconTime * tuning.tickRate
 const normalPlay: LaunchFlags = { perf: false, stress: false, graphics: null }
 
 export class Game {
@@ -53,6 +56,10 @@ export class Game {
   private squadLabel: HTMLElement | null = null
   private accumulator = 0
   private lastTimestamp: number | null = null
+  // Ticks stepped in this run, so paused time does not count toward the hand icon time.
+  private runTicks = 0
+  // Until the first steer input or the hand icon time, on every start of level 1.
+  private handIconShown = false
   private frameRequest = 0
   // False while the tab is hidden, when no frame is requested.
   private looping = true
@@ -84,7 +91,7 @@ export class Game {
     this.resize(gameElement)
     this.level = firstLevel(levels)
     this.run = this.newRun()
-    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null }
+    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false }
     this.frameRequest = requestAnimationFrame(this.frame)
     if (this.stress) this.play()
   }
@@ -131,14 +138,16 @@ export class Game {
     this.run = this.newRun()
     this.lastTimestamp = null
     this.accumulator = 0
+    this.runTicks = 0
+    this.handIconShown = this.level.level === 1
     this.input.takeDragPixels()
-    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, boss: null })
+    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: this.handIconShown })
   }
 
   quitToTitle(): void {
     this.level = firstLevel(this.levels)
     this.run = this.newRun()
-    this.publish({ screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null })
+    this.publish({ screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false })
   }
 
   dispose(): void {
@@ -211,6 +220,10 @@ export class Game {
       this.steerInput.drag = this.input.takeDragPixels() * this.renderer.trackUnitsPerPixel()
       this.steerInput.left = this.input.left
       this.steerInput.right = this.input.right
+      this.runTicks++
+      if (this.steerInput.drag !== 0 || this.steerInput.left || this.steerInput.right || this.runTicks >= handIconTicks) {
+        this.handIconShown = false
+      }
       for (const event of this.run.step(this.steerInput)) {
         if (event.type === 'catsLost') this.renderer.scatterCats(event.count)
         else if (event.type === 'bossHit') this.renderer.flashBoss()
@@ -230,8 +243,18 @@ export class Game {
       this.accumulator = 0
       const caughtBy = state.lossCause === 'caughtByBoss' && state.boss !== null ? state.boss.kind : null
       this.publish({ screen: 'defeat', squadCount: 0, distanceReached: Math.floor(state.squad.z), lossCause: state.lossCause, caughtBy })
-    } else if (state.squad.count !== this.view.squadCount || progress !== this.view.progress || this.bossBarChanged()) {
-      this.publish({ squadCount: state.squad.count, progress, boss: state.boss === null ? null : { hp: state.boss.hp, fullHp: state.boss.fullHp } })
+    } else if (
+      state.squad.count !== this.view.squadCount ||
+      progress !== this.view.progress ||
+      this.bossBarChanged() ||
+      this.handIconShown !== this.view.handIcon
+    ) {
+      this.publish({
+        squadCount: state.squad.count,
+        progress,
+        boss: state.boss === null ? null : { hp: state.boss.hp, fullHp: state.boss.fullHp },
+        handIcon: this.handIconShown,
+      })
     }
   }
 

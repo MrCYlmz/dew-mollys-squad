@@ -21,8 +21,13 @@ export const strings = {
   ranIntoWall: 'Ran into a wall',
   ranIntoBlock: 'Ran into a block',
   distanceReached: 'Distance reached',
+  tipOutOfCats: 'Take the blue gates and shoot the dogs before they reach you.',
+  tipRanIntoObstacle: 'Steer into a free lane early: walls and blocks end the run.',
+  tipCaughtByBoss: 'Grow your squad before the boss: more cats, more yarn.',
   retry: 'Tap to retry',
   squadCount: 'Squad count',
+  // The hand icon's accessible name; the icon itself shows no text.
+  howToSteer: 'Drag left and right to steer',
   gatePlus: '+',
   gateMinus: '−',
   gateTimes: '×',

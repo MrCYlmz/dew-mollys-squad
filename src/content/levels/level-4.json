@@ -1,0 +1,25 @@
+{
+  "id": "level-4",
+  "level": 4,
+  "length": 390,
+  "stream": { "interval": 1.8, "enemies": ["puppy", "puppy", "chihuahua"] },
+  "events": [
+    { "type": "gates", "z": 30, "left": { "op": "add", "value": 10 }, "centre": { "op": "add", "value": 5 }, "right": { "op": "add", "value": 20 } },
+    { "type": "wave", "z": 55, "enemy": "puppy", "pattern": "line", "count": 5 },
+    { "type": "gates", "z": 85, "left": { "op": "fireRate", "value": 20 }, "centre": { "op": "damage", "value": 1 }, "right": { "op": "multiShot", "value": 1 } },
+    { "type": "barrel", "z": 108, "x": 0 },
+    { "type": "wave", "z": 110, "enemy": "chihuahua", "pattern": "block", "columns": 4, "rows": 2, "x": 0, "spacing": 1.5 },
+    { "type": "gates", "z": 140, "left": { "op": "add", "value": 20 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "subtract", "value": 10 } },
+    { "type": "wave", "z": 165, "enemy": "chihuahua", "pattern": "line", "count": 8 },
+    { "type": "wave", "z": 180, "enemy": "puppy", "pattern": "column", "count": 8, "x": 0, "spacing": 1.5 },
+    { "type": "gates", "z": 195, "left": { "op": "multiply", "value": 2 }, "centre": { "op": "add", "value": 30 }, "right": { "op": "divide", "value": 2 } },
+    { "type": "barrel", "z": 218, "x": 0 },
+    { "type": "wave", "z": 220, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": 0, "spacing": 1.5 },
+    { "type": "gates", "z": 250, "left": { "op": "damage", "value": 1 }, "centre": { "op": "subtract", "value": 10 }, "right": { "op": "fireRate", "value": 20 } },
+    { "type": "wave", "z": 275, "enemy": "chihuahua", "pattern": "flank", "count": 6, "spacing": 2 },
+    { "type": "gates", "z": 305, "left": { "op": "add", "value": 30 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "subtract", "value": 20 } },
+    { "type": "wave", "z": 330, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": 0, "spacing": 1.5 },
+    { "type": "gates", "z": 360, "left": { "op": "add", "value": 20 }, "centre": { "op": "add", "value": 40 }, "right": { "op": "divide", "value": 2 } },
+    { "type": "wave", "z": 375, "enemy": "chihuahua", "pattern": "line", "count": 10 }
+  ]
+}

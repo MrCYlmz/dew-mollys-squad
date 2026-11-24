@@ -103,6 +103,8 @@ export const tuning = {
     megaDustbot: 2.5,
     dustBall: 0.5,
   },
+  // Seconds into a run of level 1 after which the hand icon that shows how to steer disappears, if the player has not steered.
+  handIconTime: 4,
   // Most yarn balls in flight; above it, one yarn ball stands for several cats.
   yarnBallCap: 400,
   // Most enemies alive at once, from the playbook's performance budget.

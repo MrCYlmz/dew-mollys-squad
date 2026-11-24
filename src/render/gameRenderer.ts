@@ -372,7 +372,7 @@ export class GameRenderer {
   // Builds the track, scenery, lanes and gates of a new run, freeing those of the run before.
   startRun(state: RunState): void {
     this.disposeLevel()
-    const length = state.level.length
+    const length = state.length
     const roadLength = roadBehind + length + roadBeyond
     const roadMiddleZ = (roadBehind - length - roadBeyond) / 2
     const halfWidth = tuning.track.halfWidth

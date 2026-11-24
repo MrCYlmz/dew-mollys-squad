@@ -235,7 +235,7 @@ export class Game {
       if (state.status !== 'running') break
     }
 
-    const progress = Math.floor(Math.min(state.squad.z / state.level.length, 1) * 100) / 100
+    const progress = Math.floor(Math.min(state.squad.z / state.length, 1) * 100) / 100
     if (this.stress && state.status !== 'running') {
       this.restart()
     } else if (state.status === 'won') {

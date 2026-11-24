@@ -188,7 +188,7 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 
 | Levels | Content |
 | --- | --- |
-| 1 | Teaches gates across the three lanes. Puppies only, generous gates, no boss. A hand icon shows how to steer; there is no text tutorial. |
+| 1 | Teaches gates across the three lanes. Puppies only, generous gates, no boss. A [hand icon](screens.md#hand-icon) shows how to steer; there is no text tutorial. |
 | 2 | Teaches enemies. Puppies only, generous gates, no boss. |
 | 3 | Teaches buff blocks: shoot a block open, then steer into its lane to collect the big buff. Puppies only, generous gates. |
 | 4–6 | Chihuahuas and barrels, the first weapon buffs. The first boss, the Dustbot, is on level 5. |

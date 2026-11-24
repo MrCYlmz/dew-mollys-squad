@@ -24,8 +24,24 @@ Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the
 
 - The first level starts with one tap from the title screen.
 - The Defeat screen names why the run was lost: "Out of cats" when the squad count reached 0, "Ran into a wall" or "Ran into a block" when the squad's centre ran into an obstacle, or the boss that touched the squad, such as "Caught by the Dustbot".
+- Under the loss reason, the Defeat screen shows one tip, chosen by why the run was lost. The tips are in the string table, like every other text.
+
+| Lost by | Tip |
+| --- | --- |
+| Out of cats | "Take the blue gates and shoot the dogs before they reach you." |
+| Ran into a wall or a block | "Steer into a free lane early: walls and blocks end the run." |
+| Caught by a boss | "Grow your squad before the boss: more cats, more yarn." |
+
+- Hand icon on level 1: when level 1 starts, a hand icon over the lower part of the screen swipes left and right to show how to steer. It has no text. See [hand icon](#hand-icon).
 - HUD: nothing important in the bottom 20% of the screen, where the finger is.
 - HUD and screens respect the phone's safe areas (notch, rounded corners).
+
+## Hand icon
+
+- The hand icon shows on every start of level 1, also on a retry or a restart, and never on another level.
+- It disappears on the player's first [steer input](run.md#controls) of the run, or 4 s into the run (the hand icon time, in the tuning config), whichever comes first. It does not come back in that run. Time paused does not count toward the 4 s.
+- It does not pause or slow the run, and it does not block input: a drag that starts on the hand icon steers.
+- Example: the player starts level 1 and drags after 2 s; the hand icon disappears at once. A player who does not steer sees it until 4 s into the run.
 
 ## Settings
 

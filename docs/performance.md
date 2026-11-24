@@ -10,6 +10,7 @@ Add them to the game's URL, locally (`http://localhost:5173/dew-mollys-squad/?pe
 |---|---|
 | `?perf` | Shows the performance overlay at the top left: fps, average and longest frame time, work time (the game's own time per frame), draw calls, triangles, GPU geometries and textures, drawn cats, enemies, yarn balls, particles, and the JS heap (Chrome only). It refreshes twice a second. |
 | `?stress` | Plays the stress run instead of the levels: refill gates keep the squad near 999 cats, so all 60 formation slots are drawn and yarn balls fly at the cap, while a fast stream and close-packed waves of high-level puppies keep the enemy cap of 150 filled. Barrels, walls, buff blocks and big buffs come into view along the way. A run lasts about 70 s and starts again when it ends. It draws at high graphics unless `graphics` says otherwise. |
+| `?level=N` | The title's tap starts level N instead of level 1, such as `?level=12`, for trying out a level. Level order goes on from there, and retry replays level N. A number with no level, or one that is not a whole number, starts at level 1 as without the flag. |
 | `?graphics=low` or `?graphics=high` | Forces the graphics quality. Without it, the first 3 s of play choose: below 45 fps switches to low (`renderConfig.graphics`). Low turns off shadows and caps the pixel ratio at 1.5, high caps it at 2. |
 
 ## How to measure

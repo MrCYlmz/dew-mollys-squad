@@ -147,13 +147,16 @@ describe('boss arena', () => {
 })
 
 describe('boss HP', () => {
-  // Expected squad at boss × 2 yarn balls/s × 1 damage × 1 yarn ball per shot × 8 s.
+  // Expected squad at boss × 2 yarn balls/s × 1 damage × 1 yarn ball per shot × the boss HP time: 8 s for the Dustbot,
+  // 20 s for the Mega Dustbot. 60 → 960 and 2,400 is the example in docs/domain/levels.md.
   it.each<[BossKind, number, number]>([
     ['dustbot', 60, 960],
     ['dustbot', 1, 16],
     ['dustbot', 25, 400],
     ['dustbot', 999, 15984],
-    ['megaDustbot', 60, 960],
+    ['megaDustbot', 60, 2400],
+    ['megaDustbot', 1, 40],
+    ['megaDustbot', 999, 39960],
   ])('%s_with_an_expected_squad_of_%i_has_%i_hp', (boss, expectedSquadAtBoss, hp) => {
     const run = bossRun(boss, expectedSquadAtBoss)
 

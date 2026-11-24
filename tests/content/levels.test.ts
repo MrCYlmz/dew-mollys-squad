@@ -165,8 +165,9 @@ describe('world 1 streams', () => {
     expect(level(1).stream.interval).toBeGreaterThanOrEqual(2)
   })
 
-  it('level_10_stream_interval_is_at_most_1_second', () => {
-    expect(level(10).stream.interval).toBeLessThanOrEqual(1)
+  // Tightened in the PO's PR review from 1 s.
+  it('level_10_stream_interval_is_at_most_0_8_seconds', () => {
+    expect(level(10).stream.interval).toBeLessThanOrEqual(0.8)
   })
 })
 

@@ -11,6 +11,7 @@ import { levelOf } from '../sim/runHarness'
 
 // requirements S-6 (11–13) and docs/domain/screens.md "Hand icon": on every start of level 1 a hand icon shows how to
 // steer, until the first steer input or 4 s of run time, and never on another level.
+// requirements S-6 (14a): while playing, the HUD shows the current level as "Level N".
 
 // The squad at each drawn frame, read when the frame is drawn.
 const drawnSquads: { z: number; steeringPoint: number }[] = []
@@ -36,6 +37,8 @@ vi.mock('../../src/render/gameRenderer', () => ({
 const wallAt = 120
 const level1: Level = { ...levelOf([{ type: 'wall', z: wallAt, x: 0, width: 10 }], 500, 1), id: 'level-1' }
 const level2: Level = { ...levelOf([], 500, 2), id: 'level-2' }
+// An id that does not name its number, so the shown number can only come from `level`.
+const level7: Level = { ...levelOf([], 500, 7), id: 'bonus-level' }
 
 let pendingFrame: { id: number; callback: FrameRequestCallback } | null = null
 let lastFrameId = 0
@@ -103,7 +106,7 @@ beforeEach(async () => {
   const uiRoot = document.createElement('div')
   gameElement.append(canvas, uiRoot)
   document.body.append(gameElement)
-  game = new Game([level2, level1], canvas, gameElement)
+  game = new Game([level2, level7, level1], canvas, gameElement)
   render(<App loadGame={() => Promise.resolve(game)} />, { container: uiRoot })
   await startLevel1()
 })
@@ -244,5 +247,40 @@ describe('hand icon on level 1', () => {
     await playFrames(1)
 
     expect(drawnSquads.at(-1)?.steeringPoint).toBeCloseTo(50 / pixelsPerTrackUnit)
+  })
+})
+
+describe('level number in the HUD', () => {
+  it('hud_shows_level_1_while_playing_level_1', () => {
+    expect(screen.getByText('Level 1')).toBeTruthy()
+  })
+
+  it('hud_shows_the_number_of_the_next_level_after_a_victory', async () => {
+    await act(() => game.nextLevel())
+    await playFrames(1)
+
+    expect(screen.getByText('Level 2')).toBeTruthy()
+    expect(screen.queryByText('Level 1')).toBeNull()
+  })
+
+  it('level_number_comes_from_the_level_files_level_not_its_id', async () => {
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await playFrames(1)
+
+    expect(screen.getByText('Level 7')).toBeTruthy()
+  })
+
+  it('level_number_is_not_shown_on_the_title_screen', async () => {
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: strings.pause }))
+    await user.click(screen.getByRole('button', { name: strings.quitToTitle }))
+
+    expect(screen.queryByText(/^Level \d+$/)).toBeNull()
+  })
+
+  // The string table holds the text with a placeholder for the number, like the gate labels.
+  it('level_number_text_lives_in_the_string_table', () => {
+    expect(Object.values(strings).some((text) => /^Level \{\w+\}$/.test(text))).toBe(true)
   })
 })

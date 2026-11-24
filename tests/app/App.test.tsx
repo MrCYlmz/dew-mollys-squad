@@ -10,7 +10,7 @@ afterEach(cleanup)
 
 // The game itself needs WebGL; App only needs its view, its subscription and its intents.
 function fakeGame() {
-  const view: GameView = { screen: 'title', squadCount: 1, progress: 0, boss: null, handIcon: false }
+  const view: GameView = { screen: 'title', level: 1, squadCount: 1, progress: 0, boss: null, handIcon: false }
   const game = { view, subscribe: () => () => {}, play: vi.fn(), setSquadLabel: () => {} }
   return { game: game as unknown as Game, play: game.play }
 }

@@ -102,8 +102,12 @@ describe('bosses', () => {
     expect(tuning.hitRadius.megaDustbot).toBe(2.5)
   })
 
-  it('boss_hp_time_is_8_seconds', () => {
-    expect(tuning.boss.hpTime).toBe(8)
+  it('dustbot_hp_time_is_8_seconds', () => {
+    expect(tuning.bosses.dustbot.hpTime).toBe(8)
+  })
+
+  it('mega_dustbot_hp_time_is_20_seconds', () => {
+    expect(tuning.bosses.megaDustbot.hpTime).toBe(20)
   })
 
   it('boss_enters_35_units_beyond_the_arena_start', () => {

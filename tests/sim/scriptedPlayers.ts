@@ -2,14 +2,15 @@ import type { Lane } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import type { GateRowState, GateState, RunState, SteerInput, WeaponState } from '../../src/sim/run'
 
-// Scripted players for the balance tests of requirements S-6 (7–10).
+// Scripted players for the balance tests of requirements S-6 (7–10, 9a, 9b).
 //
-// Both players steer to one lane per gate row, avoid walls and unbroken buff blocks, and otherwise stay where they are.
-// The good player takes the best choice of each row, an empty lane included; the bad player takes the worst gate.
+// Every player steers to one lane per gate row, avoids walls and unbroken buff blocks, and otherwise stays where it is.
+// The good player takes the best choice of each row, an empty lane included; the bad player takes the worst gate, and
+// the middle player the middle-ranked gate.
 // A choice is scored by the squad's firepower after it: squad count × fire rate × damage × yarn balls per shot, so a
 // weapon buff is weighed against a gate that changes the squad count. Range adds no firepower and wins only ties.
 
-export type Choice = 'best' | 'worst'
+export type Choice = 'best' | 'middle' | 'worst'
 
 const lanes: readonly Lane[] = ['left', 'centre', 'right']
 const laneWidth = (2 * tuning.track.halfWidth) / 3
@@ -59,16 +60,15 @@ function firepowerAfter(gate: GateState | null, count: number, weapon: WeaponSta
 function chosenLane(row: GateRowState, state: RunState, choice: Choice): Lane {
   const here = laneOf(state.squad.x)
   const options = lanes.filter((lane) => choice === 'best' || row[lane] !== null)
-  const score = (lane: Lane) => {
-    const firepower = firepowerAfter(row[lane], state.squad.count, state.weapon)
-    return choice === 'best' ? firepower : -firepower
-  }
+  const firepower = (lane: Lane) => firepowerAfter(row[lane], state.squad.count, state.weapon)
+  const ranked = options.map(firepower).sort((first, second) => second - first)
+  // With two gates the middle-ranked one is the worse; with one gate, that gate.
+  const rank = { best: 0, middle: Math.ceil((ranked.length - 1) / 2), worst: ranked.length - 1 }[choice]
   const tieBreak = (lane: Lane) =>
     (choice === 'best' && row[lane]?.op === 'range' ? -10 : 0) + (lane === here ? 0 : 1) + Math.abs(laneCentre[lane] - laneCentre[here]) / 100
-  return options.reduce((chosen, lane) => {
-    const difference = score(lane) - score(chosen)
-    return difference > 0 || (difference === 0 && tieBreak(lane) < tieBreak(chosen)) ? lane : chosen
-  })
+  return options
+    .filter((lane) => firepower(lane) === ranked[rank])
+    .reduce((chosen, lane) => (tieBreak(lane) < tieBreak(chosen) ? lane : chosen))
 }
 
 interface ObstacleSpan {

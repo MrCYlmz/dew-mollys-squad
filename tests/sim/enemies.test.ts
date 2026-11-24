@@ -126,9 +126,10 @@ describe('enemy movement', () => {
   })
 
   it('chihuahua_from_one_track_edge_reaches_a_squad_at_the_other', () => {
-    // The binding case of docs/domain/run.md: the fastest kind closes the 40 units in 40 ÷ (12 + 9) ≈ 1.9 s and in that time
-    // moves up to 11.4 units across, more than the 10 units of the track. On level 30 a chihuahua has 1.08^29 ≈ 9.3 HP,
-    // which the few yarn balls 1 cat lands in that time do not break, and the column of 1 grows to 4.
+    // As the binding case of docs/domain/run.md, on level 30: a chihuahua has 1.08^29 ≈ 9.3 HP, which the few yarn balls
+    // 1 cat lands in that time do not break, and the column of 1 grows to 4. With a speed factor of 1 + 0.07 × 29 = 3.03 it
+    // appears 121.2 units ahead and closes in at 36.36 + 9 units/s, so it touches the squad about 2.65 s later, having
+    // had time to move up to 15.9 units across, more than the 10 units of the track.
     const run = createRun({
       level: levelOf([{ type: 'wave', z: 100, enemy: 'chihuahua', pattern: 'column', count: 1, x: -5, spacing: 1 }], 300, 30),
       seed: 1,
@@ -152,8 +153,8 @@ describe('enemy movement', () => {
       expect.objectContaining({ type: 'enemyKilled', enemy: 'chihuahua', cause: 'contact', x: run.state.squad.x }),
     ])
     expect(run.state.lossCause).toBe('outOfCats')
-    expect(ticks / 60).toBeGreaterThan(1.7)
-    expect(ticks / 60).toBeLessThan(2)
+    expect(ticks / 60).toBeGreaterThan(2.55)
+    expect(ticks / 60).toBeLessThan(2.7)
   })
 
   it('bulldog_from_the_left_lane_reaches_a_squad_in_the_right_lane', () => {

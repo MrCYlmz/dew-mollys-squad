@@ -12,6 +12,7 @@ import { levelOf } from '../sim/runHarness'
 // requirements S-6 (11–13) and docs/domain/screens.md "Hand icon": on every start of level 1 a hand icon shows how to
 // steer, until the first steer input or 4 s of run time, and never on another level.
 // requirements S-6 (14a): while playing, the HUD shows the current level as "Level N".
+// requirements S-11 (1, 14): both work on all 15 levels, and the app runs each level at its level speed.
 
 // The squad at each drawn frame, read when the frame is drawn.
 const drawnSquads: { z: number; steeringPoint: number }[] = []
@@ -39,6 +40,7 @@ const level1: Level = { ...levelOf([{ type: 'wall', z: wallAt, x: 0, width: 10 }
 const level2: Level = { ...levelOf([], 500, 2), id: 'level-2' }
 // An id that does not name its number, so the shown number can only come from `level`.
 const level7: Level = { ...levelOf([], 500, 7), id: 'bonus-level' }
+const level15: Level = { ...levelOf([], 500, 15), id: 'level-15' }
 
 let pendingFrame: { id: number; callback: FrameRequestCallback } | null = null
 let lastFrameId = 0
@@ -106,7 +108,7 @@ beforeEach(async () => {
   const uiRoot = document.createElement('div')
   gameElement.append(canvas, uiRoot)
   document.body.append(gameElement)
-  game = new Game([level2, level7, level1], canvas, gameElement)
+  game = new Game([level2, level15, level7, level1], canvas, gameElement)
   render(<App loadGame={() => Promise.resolve(game)} />, { container: uiRoot })
   await startLevel1()
 })
@@ -221,6 +223,15 @@ describe('hand icon on level 1', () => {
     expect(handIcon()).not.toBeNull()
   })
 
+  it('hand_icon_never_shows_on_level_15', async () => {
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await playFrames(1)
+
+    expect(handIcon()).toBeNull()
+  })
+
   it('hand_icon_never_shows_on_another_level', async () => {
     await act(() => game.nextLevel())
     await playFrames(1)
@@ -271,6 +282,15 @@ describe('level number in the HUD', () => {
     expect(screen.getByText('Level 7')).toBeTruthy()
   })
 
+  it('hud_shows_level_15_on_the_last_level', async () => {
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await playFrames(1)
+
+    expect(screen.getByText('Level 15')).toBeTruthy()
+  })
+
   it('level_number_is_not_shown_on_the_title_screen', async () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: strings.pause }))
@@ -282,5 +302,20 @@ describe('level number in the HUD', () => {
   // The string table holds the text with a placeholder for the number, like the gate labels.
   it('level_number_text_lives_in_the_string_table', () => {
     expect(Object.values(strings).some((text) => /^Level \{\w+\}$/.test(text))).toBe(true)
+  })
+})
+
+describe('level speed in play', () => {
+  // Level 15 runs at 12 × 1.98 = 23.76 units/s, so 2 s of play take the squad about 47.5 units, give or take a tick.
+  it('level_15_runs_at_23_76_units_per_second_in_play', async () => {
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await act(() => game.nextLevel())
+    await playFrames(1)
+    const start = drawnSquads.at(-1)?.z ?? Number.NaN
+
+    await playSeconds(2)
+
+    expect(Math.abs((drawnSquads.at(-1)?.z ?? Number.NaN) - start - 47.52)).toBeLessThanOrEqual(23.76 / 60)
   })
 })

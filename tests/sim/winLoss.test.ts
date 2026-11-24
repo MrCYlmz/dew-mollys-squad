@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRun } from '../../src/sim/run'
-import { everyLane, levelOf, stepUntil } from './runHarness'
+import { everyLane, levelOf, stepTicks, stepUntil } from './runHarness'
 
 describe('win and loss', () => {
   it('run_is_still_running_just_before_the_finish_line', () => {
@@ -19,6 +19,21 @@ describe('win and loss', () => {
     expect(run.state.status).toBe('won')
     expect(run.state.squad.z).toBeGreaterThanOrEqual(300)
     expect(run.state.squad.z).toBeLessThan(300.2)
+  })
+
+  it('run_is_won_in_the_tick_the_distance_travelled_reaches_the_finish_line', () => {
+    // The finish line stands where an empty run's squad is after 300 ticks.
+    const emptyRun = createRun({ level: levelOf([], 1000), seed: 1 })
+    stepTicks(emptyRun, 300)
+    const finishLine = emptyRun.state.squad.z
+    const run = createRun({ level: levelOf([], finishLine), seed: 1 })
+
+    stepTicks(run, 299)
+    expect(run.state.status).toBe('running')
+
+    stepTicks(run, 1)
+    expect(run.state.squad.z).toBe(finishLine)
+    expect(run.state.status).toBe('won')
   })
 
   it('run_is_lost_when_the_squad_count_reaches_0', () => {

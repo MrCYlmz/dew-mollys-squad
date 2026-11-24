@@ -86,7 +86,7 @@ describe('wave size scaling', () => {
   })
 
   it('block_of_4_rows_on_level_5_grows_backwards_to_5_rows_of_the_same_width', () => {
-    // 4 × 1.05⁴ = 4.86, so 5 rows of 5
+    // 4 × 1.05⁴ = 4.86, so 5 rows of 5, from z 130 stretched by level 5's speed factor of 1.28, so 166.4
     const run = spawnWave({ type: 'wave', z: 130, enemy: 'puppy', pattern: 'block', columns: 5, rows: 4, x: 0, spacing: 1.5 }, 5)
 
     const columns = [-3, -1.5, 0, 1.5, 3]
@@ -97,16 +97,16 @@ describe('wave size scaling', () => {
     }
     expect(rowZs).toHaveLength(5)
     rowZs.slice(1).forEach((z, index) => expect(z - rowZs[index]).toBeCloseTo(1.5, 1))
-    expect(Math.abs(rowZs[0] - 130)).toBeLessThanOrEqual(0.15)
+    expect(Math.abs(rowZs[0] - 166.4)).toBeLessThanOrEqual(0.15)
   })
 
   it('column_of_8_on_level_3_has_9_enemies_spacing_apart_from_z_back', () => {
-    // 8 × 1.05² = 8.82, so 9
+    // 8 × 1.05² = 8.82, so 9, from z 180 stretched by level 3's speed factor of 1.14, so 205.2
     const run = spawnWave({ type: 'wave', z: 180, enemy: 'puppy', pattern: 'column', count: 8, x: -3, spacing: 2 }, 3)
 
     const zs = run.state.enemies.map((enemy) => enemy.z).sort((a, b) => a - b)
     expect(zs).toHaveLength(9)
-    zs.forEach((z, index) => expect(Math.abs(z - (180 + 2 * index))).toBeLessThanOrEqual(0.15))
+    zs.forEach((z, index) => expect(Math.abs(z - (205.2 + 2 * index))).toBeLessThanOrEqual(0.15))
     for (const enemy of run.state.enemies) expect(Math.abs(enemy.x - -3)).toBeLessThanOrEqual(chaseStep)
   })
 

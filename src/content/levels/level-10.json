@@ -27,7 +27,7 @@
     { "type": "gates", "z": 415, "left": { "op": "multiply", "value": 2 }, "centre": { "op": "subtract", "value": 30 }, "right": { "op": "add", "value": 30 } },
     { "type": "wave", "z": 440, "enemy": "bulldog", "pattern": "column", "count": 3, "x": 0, "spacing": 4 },
     { "type": "wall", "z": 450, "x": 0, "width": 3.2 },
-    { "type": "gates", "z": 470, "left": { "op": "add", "value": 30 }, "centre": { "op": "divide", "value": 2 }, "right": { "op": "subtract", "value": 30 } },
+    { "type": "gates", "z": 470, "left": { "op": "add", "value": 30 }, "centre": { "op": "damage", "value": 1 }, "right": { "op": "subtract", "value": 30 } },
     { "type": "wave", "z": 495, "enemy": "chihuahua", "pattern": "line", "count": 12 },
     { "type": "gates", "z": 525, "left": { "op": "add", "value": 40 }, "centre": { "op": "divide", "value": 2 }, "right": { "op": "subtract", "value": 20 } },
     { "type": "wave", "z": 540, "enemy": "shieldDog", "pattern": "line", "count": 3 },

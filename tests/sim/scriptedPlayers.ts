@@ -31,11 +31,10 @@ function firepowerAfter(gate: GateState | null, count: number, weapon: WeaponSta
     case undefined:
     case 'range':
       break
+    // Run state holds a subtract gate's value signed, so −15 is −15.
     case 'add':
-      count = Math.min(count + gate.value, tuning.squad.maxCount)
-      break
     case 'subtract':
-      count = Math.max(count - gate.value, 0)
+      count = Math.min(Math.max(count + gate.value, 0), tuning.squad.maxCount)
       break
     case 'multiply':
       count = Math.min(count * gate.value, tuning.squad.maxCount)

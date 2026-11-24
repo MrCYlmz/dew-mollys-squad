@@ -119,6 +119,14 @@ describe('world 1 progression', () => {
     expect(gates(level(number)).filter((gate) => weaponBuffOps.includes(gate.op)).length).toBeGreaterThanOrEqual(2)
   })
 
+  it.each(worldOneLevelNumbers.filter((number) => number >= 4))('level_%i_has_at_least_two_walls', (number) => {
+    expect(count(level(number), 'wall')).toBeGreaterThanOrEqual(2)
+  })
+
+  it.each(worldOneLevelNumbers.filter((number) => number >= 3))('level_%i_has_at_least_one_buff_block', (number) => {
+    expect(count(level(number), 'buffBlock')).toBeGreaterThanOrEqual(1)
+  })
+
   it.each([7, 8, 9])('level_%i_has_bulldogs_and_shield_dogs', (number) => {
     expect(enemyKinds(level(number))).toContain('bulldog')
     expect(enemyKinds(level(number))).toContain('shieldDog')

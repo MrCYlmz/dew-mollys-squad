@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/preact'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../../src/app/App'
 import { Game } from '../../src/app/game'
 import type { Level } from '../../src/content/level'
@@ -118,6 +118,12 @@ afterEach(() => {
   game.dispose()
   document.body.replaceChildren()
   vi.unstubAllGlobals()
+})
+
+// Preact runs effects after paint, with a 100 ms timer in case no frame comes, and that timer calls cancelAnimationFrame.
+// The frames stubbed here may never come, so the file waits out the timer before the test environment is torn down.
+afterAll(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150))
 })
 
 describe('hand icon on level 1', () => {

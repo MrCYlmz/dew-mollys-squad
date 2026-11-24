@@ -193,4 +193,16 @@ describe('world 1 rhythm', () => {
       expect(rowsInWindow, `gate rows from z = ${start}`).toBeLessThanOrEqual(2)
     }
   })
+
+  // The same windows as for gate rows; a wave counts in the window of its z, where its front row stands.
+  it.each(worldOneLevelNumbers)('level_%i_has_1_to_2_waves_in_every_full_100_unit_window', (number) => {
+    const { length, events } = level(number)
+    const zs = events.flatMap((event) => (event.type === 'wave' ? [event.z] : []))
+
+    for (let start = 0; start + 100 <= length; start += 100) {
+      const wavesInWindow = zs.filter((z) => z >= start && z < start + 100).length
+      expect(wavesInWindow, `waves from z = ${start}`).toBeGreaterThanOrEqual(1)
+      expect(wavesInWindow, `waves from z = ${start}`).toBeLessThanOrEqual(2)
+    }
+  })
 })

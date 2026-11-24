@@ -80,7 +80,7 @@ interface ObstacleSpan {
 
 function obstaclesAhead(state: RunState): ObstacleSpan[] {
   const squadZ = state.squad.z
-  const levelSpeed = tuning.squad.forwardSpeed * (1 + tuning.scaling.speedGrowth * (state.level.level - 1))
+  const levelSpeed = tuning.squad.forwardSpeed * state.speedFactor
   const lookahead = obstacleLookaheadSeconds * levelSpeed
   const spans: ObstacleSpan[] = [
     ...state.walls.map((wall) => ({

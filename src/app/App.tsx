@@ -62,7 +62,7 @@ export function App({ loadGame }: AppProps) {
   return (
     <>
       {inRun && <SquadCountLabel count={view.squadCount} ref={game.setSquadLabel} />}
-      {inRun && <Hud progress={view.progress} boss={view.boss} onPause={() => game.pause()} />}
+      {inRun && <Hud level={view.level} progress={view.progress} boss={view.boss} onPause={() => game.pause()} />}
       {view.screen === 'playing' && view.handIcon && <HandIcon />}
       {view.screen === 'title' && <TitleScreen onPlay={() => game.play()} />}
       {view.screen === 'paused' && (

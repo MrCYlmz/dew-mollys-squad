@@ -346,9 +346,9 @@ const dustBallHitEvent: DustBallHitEvent = { type: 'dustBallHit' }
 // The gate a collected big buff acts as, reused for every collection.
 const bigBuffGate: SignedGate = { op: 'add', value: 0 }
 
-// Boss HP is the expected squad at boss's damage per second at the base weapon values, times the boss HP time.
-function bossHp(expectedSquadAtBoss: number): number {
-  return expectedSquadAtBoss * tuning.cat.fireRate * tuning.cat.damage * tuning.cat.yarnBallsPerShot * tuning.boss.hpTime
+// Boss HP is the expected squad at boss's damage per second at the base weapon values, times the boss's boss HP time.
+function bossHp(kind: BossKind, expectedSquadAtBoss: number): number {
+  return expectedSquadAtBoss * tuning.cat.fireRate * tuning.cat.damage * tuning.cat.yarnBallsPerShot * tuning.bosses[kind].hpTime
 }
 
 function clampToTrack(x: number): number {
@@ -546,7 +546,7 @@ class RunSimulation implements Run {
           break
         case 'boss': {
           if (level.expectedSquadAtBoss === undefined) throw new Error(`Level ${level.id} has a boss but no expectedSquadAtBoss`)
-          const hp = bossHp(level.expectedSquadAtBoss)
+          const hp = bossHp(event.boss, level.expectedSquadAtBoss)
           this.boss = { kind: event.boss, x: 0, z: 0, previousX: 0, previousZ: 0, hp, fullHp: hp, ticksInArena: 0 }
           break
         }

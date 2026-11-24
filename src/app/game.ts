@@ -14,6 +14,8 @@ import { PerfOverlay } from './perfOverlay'
 export type Screen = 'title' | 'playing' | 'paused' | 'victory' | 'defeat'
 
 interface RunView {
+  // The level file's level number of the level played or about to be played.
+  level: number
   squadCount: number
   progress: number
   // Null outside the boss arena.
@@ -91,7 +93,7 @@ export class Game {
     this.resize(gameElement)
     this.level = firstLevel(levels)
     this.run = this.newRun()
-    this.view = { screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false }
+    this.view = { screen: 'title', level: this.level.level, squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false }
     this.frameRequest = requestAnimationFrame(this.frame)
     if (this.stress) this.play()
   }
@@ -141,13 +143,13 @@ export class Game {
     this.runTicks = 0
     this.handIconShown = this.level.level === 1
     this.input.takeDragPixels()
-    this.publish({ screen: 'playing', squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: this.handIconShown })
+    this.publish({ screen: 'playing', level: this.level.level, squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: this.handIconShown })
   }
 
   quitToTitle(): void {
     this.level = firstLevel(this.levels)
     this.run = this.newRun()
-    this.publish({ screen: 'title', squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false })
+    this.publish({ screen: 'title', level: this.level.level, squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false })
   }
 
   dispose(): void {

@@ -5,6 +5,8 @@ export const strings = {
   tapToPlay: 'Tap to play',
   loadFailed: "Couldn't load the game. Tap to retry.",
   levelProgress: 'Level progress',
+  // {level} stands for the level number.
+  levelNumber: 'Level {level}',
   bossHp: 'Boss HP',
   pause: 'Pause',
   paused: 'Paused',

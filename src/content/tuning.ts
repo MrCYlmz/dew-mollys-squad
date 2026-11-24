@@ -74,14 +74,12 @@ export const tuning = {
     // How far ahead of the squad's centre a stream enemy appears.
     spawnDistance: 40,
   },
-  // Walk speed in units/s.
+  // Walk speed in units/s. The boss HP time is the seconds the expected squad at boss needs to defeat the boss at the base weapon values.
   bosses: {
-    dustbot: { walkSpeed: 1.5 },
-    megaDustbot: { walkSpeed: 1.5 },
+    dustbot: { walkSpeed: 1.5, hpTime: 8 },
+    megaDustbot: { walkSpeed: 1.5, hpTime: 20 },
   },
   boss: {
-    // Seconds the expected squad at boss needs to defeat the boss at the base weapon values.
-    hpTime: 8,
     // How far beyond the arena start the boss enters.
     startDistance: 35,
   },

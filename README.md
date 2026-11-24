@@ -28,4 +28,4 @@ One-time setup, after the workflow first reaches `main`: in the repo's Settings,
 
 ## Performance
 
-How to show the performance overlay, run the stress run and force a graphics quality, and the numbers last measured: [docs/performance.md](docs/performance.md).
+How to show the performance overlay, run the stress run, force a graphics quality and start at any level (`?perf`, `?stress`, `?graphics`, `?level=N`), and the numbers last measured: [docs/performance.md](docs/performance.md).

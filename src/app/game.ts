@@ -40,7 +40,7 @@ const tickSeconds = 1 / tuning.tickRate
 // Longer frames, such as after a stall, are cut short instead of being caught up tick by tick.
 const maxFrameSeconds = 0.25
 const handIconTicks = tuning.handIconTime * tuning.tickRate
-const normalPlay: LaunchFlags = { perf: false, stress: false, graphics: null }
+const normalPlay: LaunchFlags = { perf: false, stress: false, graphics: null, level: null }
 
 export class Game {
   private readonly renderer: GameRenderer
@@ -53,6 +53,8 @@ export class Game {
   private readonly labelPoint: ScreenPoint = { x: 0, y: 0 }
   private shownLabelX = Number.NaN
   private shownLabelY = Number.NaN
+  // The level the title's tap starts: the first level, or the one the level flag names.
+  private readonly startLevel: Level
   private level: Level
   private run: Run
   private squadLabel: HTMLElement | null = null
@@ -91,7 +93,9 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.resize(gameElement))
     this.resizeObserver.observe(gameElement)
     this.resize(gameElement)
-    this.level = firstLevel(levels)
+    const flaggedLevels = levels.filter((level) => level.level === flags.level)
+    this.startLevel = firstLevel(flaggedLevels.length > 0 ? flaggedLevels : levels)
+    this.level = this.startLevel
     this.run = this.newRun()
     this.view = { screen: 'title', level: this.level.level, squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false }
     this.frameRequest = requestAnimationFrame(this.frame)
@@ -109,7 +113,7 @@ export class Game {
   }
 
   play(): void {
-    this.level = firstLevel(this.levels)
+    this.level = this.startLevel
     this.restart()
   }
 
@@ -147,7 +151,7 @@ export class Game {
   }
 
   quitToTitle(): void {
-    this.level = firstLevel(this.levels)
+    this.level = this.startLevel
     this.run = this.newRun()
     this.publish({ screen: 'title', level: this.level.level, squadCount: this.run.state.squad.count, progress: 0, boss: null, handIcon: false })
   }
@@ -235,7 +239,7 @@ export class Game {
       if (state.status !== 'running') break
     }
 
-    const progress = Math.floor(Math.min(state.squad.z / state.level.length, 1) * 100) / 100
+    const progress = Math.floor(Math.min(state.squad.z / state.length, 1) * 100) / 100
     if (this.stress && state.status !== 'running') {
       this.restart()
     } else if (state.status === 'won') {

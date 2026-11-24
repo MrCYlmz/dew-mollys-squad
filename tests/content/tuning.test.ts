@@ -37,6 +37,11 @@ describe('enemies', () => {
     expect(tuning.enemyChaseSpeed).toBe(6)
   })
 
+  // Both at speed factor 1; the run stretches them by the level's speed factor.
+  it('wave_spawn_distance_is_40_units', () => {
+    expect(tuning.wave.spawnDistance).toBe(40)
+  })
+
   it('stream_spawn_distance_is_40_units', () => {
     expect(tuning.stream.spawnDistance).toBe(40)
   })
@@ -88,6 +93,11 @@ describe('level scaling', () => {
 
   it('wave_size_grows_by_1_05_per_level', () => {
     expect(tuning.scaling.waveSizeGrowth).toBe(1.05)
+  })
+
+  // requirements S-11 (1): the speed factor grows by 0.07 per level number above 1.
+  it('speed_grows_by_0_07_per_level', () => {
+    expect(tuning.scaling.speedGrowth).toBe(0.07)
   })
 })
 

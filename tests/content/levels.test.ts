@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import type { EnemyKind, Gate, GateOp, Level } from '../../src/content/level'
+import type { BossKind, EnemyKind, Gate, GateOp, Level } from '../../src/content/level'
 import { levelSchema, type LevelFile } from './levelSchema'
 import { worldOneLevel, worldOneLevelNumbers } from './worldOneLevels'
 
@@ -30,7 +30,8 @@ describe('level files', () => {
   })
 })
 
-// requirements S-6 (1–6): the ten levels of world 1, following "The first world (MVP)" in docs/domain/levels.md.
+// requirements S-6 (1–6) and S-11 (5–9): the fifteen levels of world 1, following "The first world (MVP)" in docs/domain/levels.md.
+// Every distance is checked as written in the level file, at speed factor 1.
 
 function level(number: number): Level {
   const found = worldOneLevel(number)
@@ -59,7 +60,7 @@ const weaponBuffOps: GateOp[] = ['fireRate', 'damage', 'multiShot', 'range']
 const badOps: GateOp[] = ['subtract', 'divide']
 
 describe('world 1 level files', () => {
-  it('there_are_exactly_ten_level_files_level_1_to_level_10', () => {
+  it('there_are_exactly_fifteen_level_files_level_1_to_level_15', () => {
     expect([...levelFileNames].sort()).toEqual(worldOneLevelNumbers.map((number) => `level-${number}.json`).sort())
   })
 
@@ -133,7 +134,7 @@ describe('world 1 progression', () => {
   })
 
   // A bad choice is a red gate (subtract or divide); a good one is any blue gate in the same row.
-  it.each([7, 8, 9])('level_%i_has_a_bad_choice_next_to_a_good_one_in_at_least_half_of_its_gate_rows', (number) => {
+  it.each([7, 8, 9, 11, 12, 13, 14, 15])('level_%i_has_a_bad_choice_next_to_a_good_one_in_at_least_half_of_its_gate_rows', (number) => {
     const rows = gateRows(level(number))
     const tightRows = rows.filter((row) => {
       const ops = [row.left, row.centre, row.right].flatMap((gate) => (gate ? [gate.op] : []))
@@ -144,15 +145,31 @@ describe('world 1 progression', () => {
     expect(tightRows.length * 2).toBeGreaterThanOrEqual(rows.length)
   })
 
-  it('level_10_has_all_four_enemy_kinds', () => {
-    expect(enemyKinds(level(10))).toEqual(new Set(['puppy', 'chihuahua', 'bulldog', 'shieldDog']))
+  it.each([10, 11, 12, 13, 14, 15])('level_%i_has_all_four_enemy_kinds', (number) => {
+    expect(enemyKinds(level(number))).toEqual(new Set(['puppy', 'chihuahua', 'bulldog', 'shieldDog']))
   })
 
-  it.each(worldOneLevelNumbers)('level_%i_has_the_boss_of_world_1_only_on_levels_5_and_10', (number) => {
+  it.each(worldOneLevelNumbers)('level_%i_has_the_dustbot_on_level_5_the_mega_dustbot_on_levels_10_to_15_and_no_other_boss', (number) => {
     const bosses = level(number).events.flatMap((event) => (event.type === 'boss' ? [event.boss] : []))
-    const expected = number === 5 ? ['dustbot'] : number === 10 ? ['megaDustbot'] : []
+    const expected = number === 5 ? ['dustbot'] : number >= 10 ? ['megaDustbot'] : []
 
     expect(bosses).toEqual(expected)
+  })
+})
+
+// requirements S-11 (9) and docs/domain/levels.md "Balancing": boss HP = the expected squad at boss × the base damage per
+// second of a cat (2 yarn balls/s × 1 damage × 1 yarn ball per shot) × the boss HP time.
+describe('world 1 bosses', () => {
+  const bossHpTime: Record<BossKind, number> = { dustbot: 8, megaDustbot: 20 }
+
+  function bossHp(of: Level): number {
+    const boss = of.events.find((event) => event.type === 'boss')
+    if (boss?.type !== 'boss' || of.expectedSquadAtBoss === undefined) throw new Error(`${of.id} has no boss`)
+    return of.expectedSquadAtBoss * 2 * 1 * 1 * bossHpTime[boss.boss]
+  }
+
+  it.each([11, 12, 13, 14, 15])('level_%i_boss_hp_is_at_least_1_2_times_the_boss_hp_of_the_level_before', (number) => {
+    expect(bossHp(level(number))).toBeGreaterThanOrEqual(1.2 * bossHp(level(number - 1)))
   })
 })
 
@@ -168,6 +185,10 @@ describe('world 1 streams', () => {
   // Tightened in the PO's PR review from 1 s.
   it('level_10_stream_interval_is_at_most_0_8_seconds', () => {
     expect(level(10).stream.interval).toBeLessThanOrEqual(0.8)
+  })
+
+  it('level_15_stream_interval_is_at_most_0_6_seconds', () => {
+    expect(level(15).stream.interval).toBeLessThanOrEqual(0.6)
   })
 })
 

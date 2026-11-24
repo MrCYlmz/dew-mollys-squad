@@ -4,12 +4,30 @@ Terms as in the [glossary](glossary.md).
 
 ## Movement
 
-- The squad holds a fixed place on screen and does not visibly run forward. The road and everything on it (gate rows, enemies, barrels, walls and buff blocks) come toward the squad at the run speed, a constant 12 units/s (in the tuning config). The player controls only the steering point.
-- Every rule is measured in distance travelled, as if the squad ran down a still road: the squad's distance travelled grows by 12 units/s, z is a place along the road measured from the start, and something standing still at z reaches the squad's centre when the distance travelled is z. Example: the squad meets a gate row at z = 60 after 5 s.
+- The squad holds a fixed place on screen and does not visibly run forward. The road and everything on it (gate rows, enemies, barrels, walls and buff blocks) come toward the squad at the level speed, which is constant for the whole road of a level. The player controls only the steering point.
+- Every rule is measured in distance travelled, as if the squad ran down a still road: the squad's distance travelled grows by the level speed, z is a place along the road measured from the start, and something standing still at z reaches the squad's centre when the distance travelled is z. Example: on level 1, the squad meets a gate row at z = 60 after 5 s.
 - The camera does not move forward. It frames the squad and the road ahead of it.
 - The steering point is clamped to the track edges: x stays within −5..5.
 - The squad follows the steering point smoothly, closing the gap in about 80 ms, so it is responsive but not twitchy.
 - Cats stay in a tight cluster around the steering point.
+
+### Level speed
+
+Every level runs faster than the one before, and its road is longer by the same factor, so a level takes the same time at every speed.
+
+- A level's speed factor is 1 + 0.07 × (level number − 1), where 0.07 is the speed growth, in the tuning config, and the level number is the level file's `level`. It is kept as is, without rounding.
+- The level speed is the run speed (12 units/s, in the tuning config) × the speed factor, kept as is. Examples: level 1 runs at 12 units/s; level 2 at 12 × 1.07 = 12.84 units/s; level 15 at 12 × 1.98 = 23.76 units/s, about twice level 1.
+- Distances along the road in the level file are written at speed factor 1. When the run starts, each is multiplied by the level's speed factor (stretched), kept as is, without rounding: the level's `length`, and so the finish line and the arena start, and every event's `z`. Every rule of the run uses the stretched values. Example: on level 15, a level file with `length` 400 and a gate row at `z` 60 has its finish line at 400 × 1.98 = 792 and the gate row at 118.8. The road takes 400 ÷ 12 ≈ 33 s on level 1 and 792 ÷ 23.76 ≈ 33 s on level 15, and the squad meets the gate row after 5 s on both.
+- The spawn distance of waves and the stream spawn distance (40 units each, at speed factor 1) are stretched the same way, so enemies appear the same time before they reach the squad at every level.
+- Everything else stays the same at every speed:
+  - lengths inside a [spawn pattern](levels.md#wave) (`spacing`), so a wave's rows stand `spacing` apart behind its stretched `z`;
+  - the wall depth and the buff block depth, so an obstacle reaches from its stretched `z` to that + its depth;
+  - the track width and the lanes;
+  - the boss arena: the boss start distance, the boss walk speed and the dust balls;
+  - every enemy's own speed and the enemy chase speed;
+  - the steering: the steering point's clamping, the squad's follow time and the key steering speed.
+- Yarn balls move the same relative to the squad at every level speed (see [shooting](#shooting)).
+- Times are not stretched: the stream interval, the dust ball interval and the hand icon time stay as they are.
 
 ### Lanes
 
@@ -34,7 +52,7 @@ One input steers. Firing is always on.
 | Keyboard | A / D or ← / → | Esc or P |
 
 - Relative drag: the steering point moves by the finger's change in x times the steering sensitivity. Sensitivity defaults to 1.0 and can be set from 0.5 to 2.0. Example: at sensitivity 2.0, a drag of 1 unit moves the steering point 2 units.
-- Holding a steering key moves the steering point at 12 units/s.
+- Holding a steering key moves the steering point at 12 units/s (the key steering speed), at every level speed.
 - Touch, mouse and pen behave the same.
 - Page scroll and pinch-zoom are blocked over the game.
 - When the game loses focus or goes to the background, it pauses.
@@ -50,7 +68,9 @@ One input steers. Firing is always on.
 ## Shooting
 
 - Every cat fires yarn balls straight ahead, all the time.
-- Each yarn ball travels up to the squad's range, measured along its path.
+- Each yarn ball travels up to the squad's range, measured along its own flight.
+- Yarn balls move the same relative to the squad at every level speed, so shooting works the same on every level. While the road comes at the squad, the road also carries each yarn ball forward by the level speed − the run speed, on top of its own flight at the yarn ball speed. This carry does not count toward its range. Once the road has stopped at the [arena start](#the-boss-arena), there is no carry. Example: on level 15, a yarn ball flying straight ahead moves along the road at 30 + 23.76 − 12 = 41.76 units/s, so it stays ahead of the squad by 18 units after its 1 s flight, as on level 1, where it moves at 30 units/s while the squad moves at 12.
+- A yarn ball in flight when the road stops loses its carry from that tick on.
 - A yarn ball stops at the first enemy, barrel, wall, buff block or boss it hits, deals its damage and disappears. One that hits nothing disappears at the end of its range. A wall takes no damage.
 - Yarn balls fly through gates without stopping and without changing them (see [gates](#gates)).
 
@@ -115,7 +135,7 @@ A weapon-buff gate changes a value of every cat, from the moment it is taken unt
 - Fire rate adds up on the base rate, not on the current rate. Examples at the base of 2 yarn balls/s: one gate gives 2.4, two give 2.8, ten give 6, the cap. An eleventh gate changes nothing.
 - A gate taken at its cap is still taken, and the rest of its row still disappears, but the value stays at the cap.
 - Multi-shot: a cat's yarn balls of one shot leave together in a fan, spread evenly around straight ahead, with the multi-shot spread (5°, in the tuning config) between neighbouring yarn balls. Examples: 2 yarn balls fly at −2.5° and +2.5°; 3 at −5°, 0° and +5°.
-- A yarn ball in a fan flies at the yarn ball speed along its own direction and drifts sideways as it goes. It may leave the track.
+- A yarn ball in a fan flies at the yarn ball speed along its own direction and drifts sideways as it goes. It may leave the track. The road's carry is straight along the road, so it does not change the sideways drift.
 
 ## Enemies
 
@@ -132,9 +152,9 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 - Every enemy chases the squad's centre, in any lane, from its first tick, following the squad as it steers:
   - Along the road it runs toward the squad's centre at its own speed. An enemy ahead of the centre or level with it runs toward the squad; one behind the centre runs back toward it.
   - Across the track it moves toward the squad's centre x at up to 6 units/s (the enemy chase speed, in the tuning config, the same for every kind). When the squad's centre x is closer than one tick's move, the enemy stops exactly at it and does not overshoot. So it never leaves the track, because the squad's centre is always on it.
-- The road brings an enemy toward the squad as well, at the run speed, so an enemy ahead of the squad closes in at the run speed plus its own speed, wherever it is across the track. Example: a puppy closes in at 12 + 4 = 16 units/s. In the boss arena, where the road has stopped, it closes in at its own speed.
-- Example: a puppy appears 40 units ahead at the left lane centre (x = −10/3) while the squad stays at the right lane centre (x = 10/3). It crosses the 20/3 units in about 1.1 s at 6 units/s and then runs at the squad's x, reaching the squad about 2.5 s after it appeared, if it is not shot. Steering away does not escape it, because the squad cannot leave the track.
-- Every kind reaches a squad anywhere on the track from the spawn distance: the chihuahua, the fastest, closes the 40 units in 40 ÷ (12 + 9) ≈ 1.9 s, and in that time moves up to 6 × 1.9 ≈ 11.4 units across, more than the 10 units of the whole track. Slower kinds take longer along the road and so have more time to cross.
+- The road brings an enemy toward the squad as well, at the [level speed](#level-speed), so an enemy ahead of the squad closes in at the level speed plus its own speed, wherever it is across the track. Example: a puppy closes in at 12 + 4 = 16 units/s on level 1 and 23.76 + 4 = 27.76 units/s on level 15. In the boss arena, where the road has stopped, it closes in at its own speed.
+- Example: on level 1, a puppy appears 40 units ahead at the left lane centre (x = −10/3) while the squad stays at the right lane centre (x = 10/3). It crosses the 20/3 units in about 1.1 s at 6 units/s and then runs at the squad's x, reaching the squad about 2.5 s after it appeared, if it is not shot. Steering away does not escape it, because the squad cannot leave the track.
+- Every kind reaches a squad anywhere on the track from the spawn distance: the chihuahua, the fastest, closes the 40 units on level 1 in 40 ÷ (12 + 9) ≈ 1.9 s, and in that time moves up to 6 × 1.9 ≈ 11.4 units across, more than the 10 units of the whole track. On faster levels the stretched spawn distance gives it longer: on level 15, 79.2 ÷ (23.76 + 9) ≈ 2.4 s. Slower kinds take longer along the road and so have more time to cross.
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage, whatever HP it has left. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - An enemy that gets past the squad disappears behind it and does no damage.
 - An enemy is past the squad only once it is past the squad's last cat. Until then, an enemy touching any cat, even one inside the cluster, costs cats.
@@ -145,10 +165,10 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 
 Besides its waves, every level has an endless enemy stream, set by the level file's `stream` (see [levels](levels.md#stream)): one enemy every `interval` seconds.
 
-- The stream runs from the start of the run while the squad's distance travelled is less than `length`, so until the finish line or the arena start. It stops there, and when the run ends. Stream enemies still alive at the arena start keep coming, like wave enemies.
+- The stream runs from the start of the run while the squad's distance travelled is less than the stretched `length`, so until the finish line or the arena start. It stops there, and when the run ends. Stream enemies still alive at the arena start keep coming, like wave enemies.
 - Timing counts whole ticks: the interval is `interval` × the tick rate (60 ticks/s), rounded to the nearest whole number of ticks, halves up, and at least 1 tick. Counting the run's first tick as tick 1, an enemy spawns on every tick that is a whole multiple of the interval. Example: an `interval` of 1.5 is 90 ticks, so enemies spawn on ticks 90, 180, 270 and so on, the first 1.5 s into the run.
 - The stream's enemies come in the order of its `enemies` list, starting over after the last. Example: with `["puppy", "puppy", "chihuahua"]` the stream sends puppy, puppy, chihuahua, puppy, puppy, chihuahua and so on.
-- A stream enemy spawns 40 units (the stream spawn distance, in the tuning config) ahead of the squad's centre, at z = distance travelled + 40, at an x drawn evenly from −5..5 by the seeded RNG.
+- A stream enemy spawns the stream spawn distance (40 units at speed factor 1, in the tuning config) × the speed factor ahead of the squad's centre, at z = distance travelled + 40 × the speed factor, at an x drawn evenly from −5..5 by the seeded RNG. Examples: 40 units ahead on level 1, 79.2 on level 15.
 - A stream enemy is an enemy like any other: it chases, touches, dies and gets past the squad as above. Its HP scales with the level number like a wave enemy's (see [levels](levels.md#scaling)).
 
 ### Enemy cap
@@ -189,7 +209,7 @@ Walls and unbroken buff blocks are obstacles.
 
 - When the squad's centre runs into an obstacle, the run is lost at once, whatever the squad count.
 - The squad's centre is in an obstacle when it is inside the obstacle's x-range across the track and between its front and back edge along the track (distance travelled from the obstacle's `z` to its `z` + its depth). For a wall the x-range is from `x` − `width` ÷ 2 to `x` + `width` ÷ 2, both edges included; for a buff block it is the block's lane, so the squad's centre is in its x-range when the squad is in that lane (see [lanes](#lanes)).
-- This is checked every tick, so a squad whose centre is in an obstacle's x-range as the obstacle reaches it is lost, and so is one that steers its centre into an obstacle while the obstacle passes. Example: a wall over x −5..0 at z = 160 loses the run of a squad at x = −1 when the distance travelled reaches 160, and of a squad at x = 0; a squad at x = 0.5 passes it.
+- This is checked every tick, so a squad whose centre is in an obstacle's x-range as the obstacle reaches it is lost, and so is one that steers its centre into an obstacle while the obstacle passes. Example: on level 1, a wall over x −5..0 at z = 160 loses the run of a squad at x = −1 when the distance travelled reaches 160, and of a squad at x = 0; a squad at x = 0.5 passes it.
 - Cats at the side of the squad that only clip an obstacle are not lost and do not lose the run: the obstacle passes through them.
 - Barrels are not obstacles: the squad passes them unharmed.
 
@@ -235,17 +255,17 @@ A buff block is a block filling one [lane](#lanes), with HP, that hides a big bu
 
 A boss level ends in a boss arena instead of a finish line (see the [level file](levels.md#boss)). Bosses are giant robot vacuum cleaners.
 
-| Boss | World 1 level | Hit radius (units) | Walk speed (units/s) | Boss HP time (s) | Throws dust balls |
+| Boss | World 1 levels | Hit radius (units) | Walk speed (units/s) | Boss HP time (s) | Throws dust balls |
 | --- | --- | --- | --- | --- | --- |
 | Dustbot | 5 | 2 | 1.5 | 8 | No |
-| Mega Dustbot (the world boss) | 10 | 2.5 | 1.5 | 20 | Yes |
+| Mega Dustbot (the world boss) | 10–15 | 2.5 | 1.5 | 20 | Yes |
 
 The hit radii, walk speeds and boss HP times are in the tuning config.
 
 ### The boss arena
 
-- The boss arena starts at the level's `length`. When the squad's centre reaches it, the road stops coming at the squad, and the squad's distance travelled stays at `length`. Steering still works as before, within x −5..5, and every cat keeps firing straight ahead.
-- At that moment the boss enters: it appears at x = 0, 35 units (the boss start distance, in the tuning config) beyond the arena start, so at z = `length` + 35.
+- The boss arena starts at the level's stretched `length` (see [level speed](#level-speed)). When the squad's centre reaches it, the road stops coming at the squad, and the squad's distance travelled stays at the stretched `length`. Steering still works as before, within x −5..5, and every cat keeps firing straight ahead.
+- At that moment the boss enters: it appears at x = 0, 35 units (the boss start distance, in the tuning config) beyond the arena start, so at z = the stretched `length` + 35. The boss start distance is not stretched, so the fight is the same at every level speed.
 - From then on the boss walks straight toward the squad's centre at its walk speed, following the squad as it steers.
 - A big HP bar shows the boss's HP while it is in the arena.
 - Enemies still alive when the squad reaches the arena keep coming and work as before. Enemies and the boss do not stop each other.

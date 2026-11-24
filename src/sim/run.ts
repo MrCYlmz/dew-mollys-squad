@@ -124,7 +124,11 @@ export interface GateRowState {
 }
 
 export interface RunState {
+  // As in the level file, at speed factor 1.
   readonly level: Level
+  readonly speedFactor: number
+  // The level's length stretched by the speed factor: where the finish line or the arena start is.
+  readonly length: number
   readonly status: RunStatus
   // Null while the run goes on and after a win.
   readonly lossCause: LossCause | null
@@ -415,7 +419,15 @@ class RunSimulation implements Run {
   // Created with the run and shown in the state once it enters the arena.
   private readonly boss: Boss | null = null
   private readonly gateRows: GateRow[]
+  // With their z stretched by the speed factor.
   private readonly waves: WaveEvent[]
+  private readonly length: number
+  // How far the squad's distance travelled grows per tick while the road moves.
+  private readonly roadStep: number
+  // Share of the road's step that carries a yarn ball forward on top of its flight: what the level speed adds to the run speed.
+  private readonly yarnBallCarryShare: number
+  private readonly waveSpawnDistance: number
+  private readonly streamSpawnDistance: number
   private readonly streamTicks: number
   private readonly enemyHpFactor: number
   private readonly waveSizeFactor: number
@@ -466,6 +478,12 @@ class RunSimulation implements Run {
     for (let drawn = 0; drawn <= tuning.squad.formationSlots; drawn++) this.drawnCatLists.push(this.catPlaces.slice(0, drawn))
     this.enemyHpFactor = Math.pow(tuning.scaling.enemyHpGrowth, level.level - 1)
     this.waveSizeFactor = Math.pow(tuning.scaling.waveSizeGrowth, level.level - 1)
+    const speedFactor = 1 + tuning.scaling.speedGrowth * (level.level - 1)
+    this.length = level.length * speedFactor
+    this.roadStep = tuning.squad.forwardSpeed * speedFactor * dt
+    this.yarnBallCarryShare = 1 - 1 / speedFactor
+    this.waveSpawnDistance = tuning.wave.spawnDistance * speedFactor
+    this.streamSpawnDistance = tuning.stream.spawnDistance * speedFactor
     this.enemies = new Pool<Enemy>(
       tuning.limits.enemies,
       () => ({ kind: 'puppy', x: 0, z: 0, previousX: 0, previousZ: 0, hp: 0, shield: 0 }),
@@ -528,21 +546,22 @@ class RunSimulation implements Run {
     // Whole ticks, rounded half up, and at least 1.
     this.streamTicks = Math.max(Math.floor(level.stream.interval * tuning.tickRate + 0.5), 1)
     for (const event of level.events) {
+      const z = event.z * speedFactor
       switch (event.type) {
         case 'gates':
-          this.gateRows.push({ z: event.z, left: gateCell(event.left), centre: gateCell(event.centre), right: gateCell(event.right), taken: null })
+          this.gateRows.push({ z, left: gateCell(event.left), centre: gateCell(event.centre), right: gateCell(event.right), taken: null })
           break
         case 'wave':
-          this.waves.push(event)
+          this.waves.push({ ...event, z })
           break
         case 'barrel':
-          this.placeBarrel(event.x, event.z)
+          this.placeBarrel(event.x, z)
           break
         case 'wall':
-          this.placeWall(event.x, event.z, event.width)
+          this.placeWall(event.x, z, event.width)
           break
         case 'buffBlock':
-          this.placeBuffBlock(event.lane, event.z, event.hp, event.buff)
+          this.placeBuffBlock(event.lane, z, event.hp, event.buff)
           break
         case 'boss': {
           if (level.expectedSquadAtBoss === undefined) throw new Error(`Level ${level.id} has a boss but no expectedSquadAtBoss`)
@@ -554,6 +573,8 @@ class RunSimulation implements Run {
     }
     this.state = {
       level,
+      speedFactor,
+      length: this.length,
       status: 'running',
       lossCause: null,
       squad: this.squad,
@@ -596,7 +617,7 @@ class RunSimulation implements Run {
     this.moveEnemies()
     this.moveBoss()
     this.removeObjectsBehind()
-    if (this.boss === null && this.squad.z >= this.state.level.length) this.state.status = 'won'
+    if (this.boss === null && this.squad.z >= this.length) this.state.status = 'won'
     return this.events
   }
 
@@ -634,9 +655,9 @@ class RunSimulation implements Run {
     squad.previousX = squad.x
     squad.previousZ = squad.z
     squad.x += (squad.steeringPoint - squad.x) * followFactor
-    squad.z += tuning.squad.forwardSpeed * dt
+    squad.z += this.roadStep
     // In a boss level the squad stops at the arena start.
-    if (this.boss !== null) squad.z = Math.min(squad.z, this.state.level.length)
+    if (this.boss !== null) squad.z = Math.min(squad.z, this.length)
     this.placeCats()
   }
 
@@ -651,25 +672,25 @@ class RunSimulation implements Run {
   }
 
   private spawnWaves(): void {
-    while (this.nextWave < this.waves.length && this.squad.z >= this.waves[this.nextWave].z - tuning.wave.spawnDistance) {
+    while (this.nextWave < this.waves.length && this.squad.z >= this.waves[this.nextWave].z - this.waveSpawnDistance) {
       this.spawnWave(this.waves[this.nextWave])
       this.nextWave++
     }
   }
 
   private spawnStreamEnemy(): void {
-    if (this.tick % this.streamTicks !== 0 || this.squad.z >= this.state.level.length) return
+    if (this.tick % this.streamTicks !== 0 || this.squad.z >= this.length) return
     const streamEnemies = this.state.level.stream.enemies
     const kind = streamEnemies[this.nextStreamEnemy]
     this.nextStreamEnemy = (this.nextStreamEnemy + 1) % streamEnemies.length
-    this.spawnEnemy(kind, -halfWidth + this.random() * 2 * halfWidth, this.squad.z + tuning.stream.spawnDistance)
+    this.spawnEnemy(kind, -halfWidth + this.random() * 2 * halfWidth, this.squad.z + this.streamSpawnDistance)
   }
 
   private enterBoss(): void {
     const boss = this.boss
-    if (boss === null || this.state.boss !== null || this.squad.z < this.state.level.length) return
+    if (boss === null || this.state.boss !== null || this.squad.z < this.length) return
     boss.x = boss.previousX = 0
-    boss.z = boss.previousZ = this.state.level.length + tuning.boss.startDistance
+    boss.z = boss.previousZ = this.length + tuning.boss.startDistance
     boss.ticksInArena = 0
     this.state.boss = boss
     this.bossEnteredEvent.boss = boss.kind
@@ -765,12 +786,14 @@ class RunSimulation implements Run {
     }
   }
 
+  // The carry follows the squad's step, so it stops with the road at the arena start; it does not count toward the range.
   private moveYarnBalls(): void {
+    const carry = (this.squad.z - this.squad.previousZ) * this.yarnBallCarryShare
     for (const yarnBall of this.yarnBalls.active) {
       yarnBall.previousX = yarnBall.x
       yarnBall.previousZ = yarnBall.z
       yarnBall.x += yarnBall.directionX * yarnBallStep
-      yarnBall.z += yarnBall.directionZ * yarnBallStep
+      yarnBall.z += yarnBall.directionZ * yarnBallStep + carry
       yarnBall.distance += yarnBallStep
     }
   }

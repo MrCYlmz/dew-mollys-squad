@@ -225,7 +225,7 @@ describe('graphics quality start-up check', () => {
   it('forced_high_graphics_stays_high_on_a_slow_start', () => {
     game.dispose()
     createdQualities.length = 0
-    game = createGame({ perf: false, stress: false, graphics: 'high' })
+    game = createGame({ perf: false, stress: false, graphics: 'high', level: null })
     game.play()
     playSeconds(5, 20)
 
@@ -236,7 +236,7 @@ describe('graphics quality start-up check', () => {
   it('forced_low_graphics_stays_low_on_a_fast_start', () => {
     game.dispose()
     createdQualities.length = 0
-    game = createGame({ perf: false, stress: false, graphics: 'low' })
+    game = createGame({ perf: false, stress: false, graphics: 'low', level: null })
     game.play()
     playSeconds(5, 60)
 

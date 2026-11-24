@@ -2,7 +2,7 @@ import type { Lane } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import type { GateRowState, GateState, RunState, SteerInput, WeaponState } from '../../src/sim/run'
 
-// Scripted players for the balance tests of requirements S-6 (7–10, 9a, 9b).
+// Scripted players for the balance tests of requirements S-6 (7–10, 9a, 9b) and S-11 (10–13).
 //
 // Every player steers to one lane per gate row, avoids walls and unbroken buff blocks, and otherwise stays where it is.
 // The good player takes the best choice of each row, an empty lane included; the bad player takes the worst gate, and
@@ -15,8 +15,9 @@ export type Choice = 'best' | 'middle' | 'worst'
 const lanes: readonly Lane[] = ['left', 'centre', 'right']
 const laneWidth = (2 * tuning.track.halfWidth) / 3
 const laneCentre: Record<Lane, number> = { left: -laneWidth, centre: 0, right: laneWidth }
-// How far ahead an obstacle makes the player steer around it: steering settles in about 80 ms, about 1 unit of road.
-const obstacleLookahead = 15
+// How long before an obstacle reaches the squad the player steers around it: steering settles in about 80 ms. On level 1
+// that is 15 units of road; on faster levels the road brings the obstacle closer in the same time.
+const obstacleLookaheadSeconds = 1.25
 // Kept between the squad's centre and a wall's edge when passing it.
 const wallClearance = 0.6
 
@@ -79,6 +80,8 @@ interface ObstacleSpan {
 
 function obstaclesAhead(state: RunState): ObstacleSpan[] {
   const squadZ = state.squad.z
+  const levelSpeed = tuning.squad.forwardSpeed * state.speedFactor
+  const lookahead = obstacleLookaheadSeconds * levelSpeed
   const spans: ObstacleSpan[] = [
     ...state.walls.map((wall) => ({
       front: wall.z,
@@ -89,7 +92,7 @@ function obstaclesAhead(state: RunState): ObstacleSpan[] {
       .filter((block) => block.hp > 0)
       .map((block) => ({ front: block.z, back: block.z + tuning.buffBlock.depth, blocks: (x: number) => laneOf(x) === block.lane })),
   ]
-  return spans.filter((span) => span.back >= squadZ - 1 && span.front <= squadZ + obstacleLookahead)
+  return spans.filter((span) => span.back >= squadZ - 1 && span.front <= squadZ + lookahead)
 }
 
 // Where the player wants its squad's centre: the chosen lane of the next gate row, or where it is when no row is left.

@@ -8,6 +8,7 @@ export const tuning = {
   squad: {
     startCount: 1,
     maxCount: 999,
+    // The run speed, at speed factor 1.
     forwardSpeed: 12,
     // Time for the squad to close 95% of the gap to the steering point.
     followTime: 0.08,
@@ -46,6 +47,8 @@ export const tuning = {
     // Factors per level number above 1.
     enemyHpGrowth: 1.08,
     waveSizeGrowth: 1.05,
+    // Added to the speed factor per level number above 1; the speed factor multiplies the run speed and stretches distances along the road.
+    speedGrowth: 0.07,
   },
   barrel: {
     hp: 10,
@@ -67,6 +70,7 @@ export const tuning = {
     multiShot: 2,
     range: 30,
   },
+  // Spawn distances are at speed factor 1.
   wave: {
     spawnDistance: 40,
   },

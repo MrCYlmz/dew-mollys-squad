@@ -4,10 +4,11 @@ import { createRun, type RunStatus } from '../../src/sim/run'
 import { worldOneLevel } from '../content/worldOneLevels'
 import { scriptedPlayer, type Choice } from './scriptedPlayers'
 
-// requirements S-6 (7–10, 9a, 9b): scripted players on the ten levels of world 1, each on the same 5 fixed seeds.
+// requirements S-6 (7–10, 9a, 9b) and S-11 (10–13): scripted players on the fifteen levels of world 1, each on the same 5
+// fixed seeds, at each level's level speed.
 
 const seeds = [1, 42, 1234, 98765, 20261124]
-// The longest road, 600 units, takes 50 s; a boss fight is over well before another 70 s.
+// The longest road, 600 units, takes 50 s at every level speed; a boss fight is over well before another 70 s.
 const maxTicks = 120 * tuning.tickRate
 
 interface Outcome {
@@ -45,8 +46,15 @@ function play(levelNumber: number, seed: number, choice: Choice): Outcome {
   return outcome
 }
 
-const allLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap((level) => seeds.map((seed) => [level, seed] as const))
-const hardLevels = [7, 8, 9, 10].flatMap((level) => seeds.map((seed) => [level, seed] as const))
+const levelNumbers = Array.from({ length: 15 }, (_, index) => index + 1)
+const megaDustbotLevels = [10, 11, 12, 13, 14, 15]
+const allLevels = levelNumbers.flatMap((level) => seeds.map((seed) => [level, seed] as const))
+const badPlayerLevels = levelNumbers.filter((level) => level >= 7).flatMap((level) => seeds.map((seed) => [level, seed] as const))
+const megaDustbotRuns = megaDustbotLevels.flatMap((level) => seeds.map((seed) => [level, seed] as const))
+
+function shortestBossFight(level: number): number {
+  return Math.min(...seeds.map((seed) => play(level, seed, 'best').bossFightSeconds ?? Number.NaN))
+}
 
 describe('good player', () => {
   it.each(allLevels)('good_player_wins_level_%i_on_seed_%i', (level, seed) => {
@@ -62,22 +70,27 @@ describe('good player', () => {
     expect(squadAtBoss).toBeLessThanOrEqual(1.5 * expectedSquadAtBoss)
   })
 
-  // Tightened in the PO's PR review: on level 10, 75–100 %.
-  it.each(seeds)('good_player_reaches_the_mega_dustbot_of_level_10_with_75_to_100_percent_of_the_expected_squad_on_seed_%i', (seed) => {
-    const expectedSquadAtBoss = worldOneLevel(10)?.expectedSquadAtBoss ?? Number.NaN
-    const squadAtBoss = play(10, seed, 'best').squadAtBoss
+  // Tightened in the PO's PR review of S-6 for level 10, and set for levels 10–15 by S-11 (10): 75–100 %.
+  it.each(megaDustbotRuns)('good_player_reaches_the_mega_dustbot_of_level_%i_with_75_to_100_percent_of_the_expected_squad_on_seed_%i', (level, seed) => {
+    const expectedSquadAtBoss = worldOneLevel(level)?.expectedSquadAtBoss ?? Number.NaN
+    const squadAtBoss = play(level, seed, 'best').squadAtBoss
 
     expect(squadAtBoss).not.toBeNull()
     expect(squadAtBoss).toBeGreaterThanOrEqual(0.75 * expectedSquadAtBoss)
     expect(squadAtBoss).toBeLessThanOrEqual(expectedSquadAtBoss)
   })
 
-  // requirements S-6 (9b): from entering the arena to the Mega Dustbot's defeat.
-  it.each(seeds)('good_player_fight_against_the_mega_dustbot_lasts_at_least_12_seconds_on_seed_%i', (seed) => {
-    const bossFightSeconds = play(10, seed, 'best').bossFightSeconds
+  // requirements S-6 (9b) and S-11 (11): from entering the arena to the Mega Dustbot's defeat.
+  it.each(megaDustbotRuns)('good_player_fight_against_the_mega_dustbot_of_level_%i_lasts_at_least_12_seconds_on_seed_%i', (level, seed) => {
+    const bossFightSeconds = play(level, seed, 'best').bossFightSeconds
 
     expect(bossFightSeconds).not.toBeNull()
     expect(bossFightSeconds).toBeGreaterThanOrEqual(12)
+  })
+
+  // requirements S-11 (11): the boss gets stronger each time, so the shortest fight over the seeds never gets shorter.
+  it.each(megaDustbotLevels.slice(1))('shortest_good_player_fight_on_level_%i_is_not_shorter_than_on_the_level_before', (level) => {
+    expect(shortestBossFight(level)).toBeGreaterThanOrEqual(shortestBossFight(level - 1))
   })
 
   it.each(allLevels)('good_player_never_reaches_the_enemy_cap_on_level_%i_seed_%i', (level, seed) => {
@@ -86,14 +99,14 @@ describe('good player', () => {
 })
 
 describe('bad player', () => {
-  it.each(hardLevels)('bad_player_loses_level_%i_on_seed_%i', (level, seed) => {
+  it.each(badPlayerLevels)('bad_player_loses_level_%i_on_seed_%i', (level, seed) => {
     expect(play(level, seed, 'worst').status).toBe('lost')
   })
 })
 
-// requirements S-6 (9a): the middle player takes the middle-ranked gate of each row.
+// requirements S-6 (9a) and S-11 (12): the middle player takes the middle-ranked gate of each row.
 describe('middle player', () => {
-  it.each([8, 9, 10])('middle_player_loses_level_%i_on_at_least_3_of_the_5_seeds', (level) => {
+  it.each(levelNumbers.filter((level) => level >= 8))('middle_player_loses_level_%i_on_at_least_3_of_the_5_seeds', (level) => {
     const losses = seeds.filter((seed) => play(level, seed, 'middle').status === 'lost')
 
     expect(losses.length).toBeGreaterThanOrEqual(3)

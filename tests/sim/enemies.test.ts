@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type EnemyKilledEvent, type GameEvent, type Run } from '../../src/sim/run'
@@ -125,35 +125,45 @@ describe('enemy movement', () => {
     expect(run.state.enemies[0].x).toBeCloseTo(before - 10 * chaseStep, 6)
   })
 
-  it('chihuahua_from_one_track_edge_reaches_a_squad_at_the_other', () => {
-    // The binding case of docs/domain/run.md: the fastest kind closes the 40 units in 40 ÷ (12 + 9) ≈ 1.9 s and in that time
-    // moves up to 11.4 units across, more than the 10 units of the track. On level 30 a chihuahua has 1.08^29 ≈ 9.3 HP,
-    // which the few yarn balls 1 cat lands in that time do not break, and the column of 1 grows to 4.
-    const run = createRun({
-      level: levelOf([{ type: 'wave', z: 100, enemy: 'chihuahua', pattern: 'column', count: 1, x: -5, spacing: 1 }], 300, 30),
-      seed: 1,
+  describe('with no speed growth in the tuning config', () => {
+    const documentedGrowth = tuning.scaling.speedGrowth
+
+    afterEach(() => {
+      tuning.scaling.speedGrowth = documentedGrowth
     })
-    steerTo(run, 5)
-    stepUntil(run, (state) => state.enemies.length > 0, 6000)
-    expect(run.state.squad.x).toBeCloseTo(5, 6)
-    let ticks = 0
 
-    const events = stepUntil(
-      run,
-      () => {
-        ticks++
-        return false
-      },
-      600,
-    )
+    it('chihuahua_from_one_track_edge_reaches_a_squad_at_the_other', () => {
+      // The binding case of docs/domain/run.md: the fastest kind closes the 40 units in 40 ÷ (12 + 9) ≈ 1.9 s and in that time
+      // moves up to 11.4 units across, more than the 10 units of the track. On level 30 a chihuahua has 1.08^29 ≈ 9.3 HP,
+      // which the few yarn balls 1 cat lands in that time do not break, and the column of 1 grows to 4. Without speed growth,
+      // level 30 runs at the speed of level 1, so the case stays as tight as there.
+      tuning.scaling.speedGrowth = 0
+      const run = createRun({
+        level: levelOf([{ type: 'wave', z: 100, enemy: 'chihuahua', pattern: 'column', count: 1, x: -5, spacing: 1 }], 300, 30),
+        seed: 1,
+      })
+      steerTo(run, 5)
+      stepUntil(run, (state) => state.enemies.length > 0, 6000)
+      expect(run.state.squad.x).toBeCloseTo(5, 6)
+      let ticks = 0
 
-    // It has crossed the whole track and touches the squad on its line.
-    expect(events.filter((event) => event.type === 'enemyKilled')).toEqual([
-      expect.objectContaining({ type: 'enemyKilled', enemy: 'chihuahua', cause: 'contact', x: run.state.squad.x }),
-    ])
-    expect(run.state.lossCause).toBe('outOfCats')
-    expect(ticks / 60).toBeGreaterThan(1.7)
-    expect(ticks / 60).toBeLessThan(2)
+      const events = stepUntil(
+        run,
+        () => {
+          ticks++
+          return false
+        },
+        600,
+      )
+
+      // It has crossed the whole track and touches the squad on its line.
+      expect(events.filter((event) => event.type === 'enemyKilled')).toEqual([
+        expect.objectContaining({ type: 'enemyKilled', enemy: 'chihuahua', cause: 'contact', x: run.state.squad.x }),
+      ])
+      expect(run.state.lossCause).toBe('outOfCats')
+      expect(ticks / 60).toBeGreaterThan(1.7)
+      expect(ticks / 60).toBeLessThan(2)
+    })
   })
 
   it('bulldog_from_the_left_lane_reaches_a_squad_in_the_right_lane', () => {

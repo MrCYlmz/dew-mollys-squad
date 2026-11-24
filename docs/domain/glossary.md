@@ -5,10 +5,14 @@ One term per concept. Code, tests and docs use these words exactly.
 | Term | Definition |
 | --- | --- |
 | Run | One attempt at one level, from the first tap to win or loss. |
-| Track | The straight road a run takes place on, 10 units wide and 300–600 units long, with three lanes. |
+| Track | The straight road a run takes place on, 10 units wide and 300–600 units long in the level file, stretched by the speed factor in the run, with three lanes. |
 | Lane | One of the three equal strips of the track: left, centre or right. Gates and buff blocks are placed by lane; steering is free. |
-| Run speed | The 12 units/s at which the road and everything on it comes toward the squad. |
-| Distance travelled | How far the road has carried the squad from the start, in units. Every z is measured in it. |
+| Run speed | The 12 units/s at which the road comes toward the squad on level 1. The level speed is measured from it. |
+| Speed factor | 1 + the speed growth × (level number − 1). It multiplies the run speed and stretches a level's distances along the road. |
+| Speed growth | How much the speed factor grows per level number above 1, 0.07. |
+| Level speed | The run speed × the level's speed factor: the speed at which the road and everything on it comes toward the squad on that level. |
+| Stretched | Of a distance along the road written in the level file: multiplied by the level's speed factor when the run starts, so a level takes the same time at every level speed. |
+| Distance travelled | How far the road has carried the squad from the start, in units. Every z in the run is measured in it, at the stretched values. |
 | Squad | The group of cats the player steers. It holds a fixed place on screen while the road comes at it. |
 | Cat | One member of the squad. Every cat fires. |
 | Squad count | The number of cats in the squad, 0–999. It is the squad's health and firepower. |
@@ -26,10 +30,10 @@ One term per concept. Code, tests and docs use these words exactly.
 | Contact damage | The number of cats an enemy removes when it touches the squad. |
 | Wave | A group of enemies spawned together in one spawn pattern. |
 | Spawn pattern | The starting formation of a wave: line, block, column or flank. |
-| Spawn distance | How far before a wave's position the squad is when the wave appears. |
+| Spawn distance | How far before a wave's position the squad is when the wave appears, stretched by the speed factor. |
 | Enemy stream | The endless enemies of a level besides its waves: one every interval, from the start of the run until the finish line or the arena start. |
 | Stream interval | The seconds between two enemies of the enemy stream, set per level. |
-| Stream spawn distance | How far ahead of the squad's centre a stream enemy appears. |
+| Stream spawn distance | How far ahead of the squad's centre a stream enemy appears, stretched by the speed factor. |
 | Enemy chase speed | The speed at which every enemy moves across the track toward the squad's centre x, 6 units/s. |
 | Enemy cap | The most enemies alive at once, 150. An enemy that would spawn beyond it is dropped. |
 | Barrel | A static water bucket on the track that splashes nearby enemies when destroyed. |
@@ -41,18 +45,18 @@ One term per concept. Code, tests and docs use these words exactly.
 | Coin | A fish. Coins are the currency for upgrades. |
 | Boss | A giant robot vacuum cleaner at the end of some levels: the Dustbot or the Mega Dustbot. |
 | Dustbot | The boss of level 5 in world 1. It does not throw dust balls. |
-| Mega Dustbot | The world boss of world 1, on level 10. It throws dust balls. |
+| Mega Dustbot | The world boss of world 1, on levels 10–15, stronger on each. It throws dust balls. |
 | World boss | The boss of a world's last level. |
 | Dust ball | A projectile the Mega Dustbot throws at the squad. It removes cats when it touches the squad. |
-| Boss arena | The end of a boss level's track, from z = `length` on, where the squad stops and fights the boss. |
-| Arena start | Where the boss arena begins, at z = `length`. The road stops there. |
+| Boss arena | The end of a boss level's track, from the stretched `length` on, where the squad stops and fights the boss. |
+| Arena start | Where the boss arena begins, at the stretched `length`. The road stops there. |
 | Boss HP time | The seconds the expected squad needs to defeat the boss at the base weapon values, set per boss. Boss HP is worked out from it. |
 | Finish line | The end of a level that has no boss. |
 | Level | A hand-made sequence of events placed at distances along the track. |
 | Level number | A level's number, stated in its level file. It sets how much enemy HP and wave size grow. |
 | Level order | The order levels are played in: by level number, then by `id`. |
 | Event | One thing placed at a distance (z) in a level: a gate row, a wave, a barrel, a wall, a buff block, coins or the boss. |
-| World | A set of levels sharing a look and a boss. The MVP has one world of 10 levels. |
+| World | A set of levels sharing a look and a boss. The MVP has one world of 15 levels. |
 | Stars | The 1–3 rating of a won run, based on the squad count left. |
 | Upgrade | A permanent improvement bought with coins between runs. |
 | Upgrade level | How many times an upgrade has been bought. |

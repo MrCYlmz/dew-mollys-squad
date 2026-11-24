@@ -11,7 +11,8 @@ Terms as in the [glossary](glossary.md).
 - On top of the waves, an endless enemy stream sends one enemy every few seconds for the whole level (see [stream](#stream)). Its interval is the level's main difficulty setting: a shorter interval makes the level harder.
 - Barrels, coins, walls and buff blocks sit on the track: barrels to shoot, coins to collect, walls to steer around, buff blocks to shoot open for a big buff.
 - Rhythm per 100 units: 1–2 gate rows, 1–2 waves, and a few coins, barrels or buff blocks.
-- The road of a level takes 25–50 s at the run speed (300–600 units at 12 units/s), plus the boss fight in a boss level.
+- The road of a level takes 25–50 s (300–600 units at 12 units/s), plus the boss fight in a boss level. It takes the same time at every [level speed](run.md#level-speed), because the run stretches the level's distances by its speed factor.
+- Every distance and rhythm rule in this file, such as the 40–60 units between gate rows, the 300–600 length and the 5 units before the arena start, is about the values written in the level file, at speed factor 1, not the stretched ones.
 
 ## Level order
 
@@ -23,6 +24,8 @@ Terms as in the [glossary](glossary.md).
 ## Level file
 
 Each level is one JSON file. Distances are in track units: x runs across the track from −5 (left edge) to 5 (right edge), z runs forward from the start (z = 0).
+
+The level file's `length` and every event's `z` are written at speed factor 1. The run stretches them by the level's speed factor (see [level speed](run.md#level-speed)); every other field, such as `x`, `width` and `spacing`, is used as written. Example: on level 15, with a speed factor of 1.98, a wave at `"z": 80` stands at 158.4 in the run, and its rows stand `spacing` apart behind it.
 
 | Field | Value |
 | --- | --- |
@@ -69,8 +72,8 @@ Examples:
 | `enemy` | `"puppy"`, `"chihuahua"`, `"bulldog"` or `"shieldDog"`. A wave has one kind of enemy |
 | `pattern` | `"line"`, `"block"`, `"column"` or `"flank"`, with that pattern's fields below |
 
-- A wave appears when the squad is 40 units (the spawn distance) before its `z`. Its enemies then start moving.
-- Rows of a wave stand one behind the other, away from the squad: the front row at `z`, the next at `z` + `spacing`, and so on.
+- A wave appears when the squad is the spawn distance (40 units at speed factor 1, in the tuning config) × the speed factor before its stretched `z`. Its enemies then start moving. Example: a wave at `"z": 80` appears at distance travelled 40 on level 1 and 158.4 − 79.2 = 79.2 on level 15, both 3⅓ s into the run.
+- Rows of a wave stand one behind the other, away from the squad: the front row at the stretched `z`, the next at that + `spacing`, and so on. `spacing` is not stretched.
 - Every enemy of a wave must stand within x −5..5.
 
 | Pattern | Fields | Where the enemies stand |
@@ -85,11 +88,11 @@ Examples:
 Examples:
 
 - `{ "type": "wave", "z": 80, "enemy": "puppy", "pattern": "line", "count": 5 }`: 5 puppies at x −4, −2, 0, 2 and 4.
-- `{ "type": "wave", "z": 130, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": 0, "spacing": 1.5 }`: 20 puppies at x −3, −1.5, 0, 1.5 and 3, in rows at z 130, 131.5, 133 and 134.5.
+- `{ "type": "wave", "z": 130, "enemy": "puppy", "pattern": "block", "columns": 5, "rows": 4, "x": 0, "spacing": 1.5 }`: 20 puppies at x −3, −1.5, 0, 1.5 and 3, in rows at z 130, 131.5, 133 and 134.5 on level 1.
 - `{ "type": "wave", "z": 180, "enemy": "puppy", "pattern": "column", "count": 8, "x": -3, "spacing": 2 }`: 8 puppies at x −3, from z 180 to 194.
 - `{ "type": "wave", "z": 230, "enemy": "puppy", "pattern": "flank", "count": 4, "spacing": 2 }`: 4 puppies at each edge, from z 230 to 236.
 - `{ "type": "wave", "z": 260, "enemy": "chihuahua", "pattern": "line", "count": 10 }`: 10 chihuahuas across the track.
-- These counts are for level 1. On higher levels the wave has more enemies (see [scaling](#scaling)).
+- These counts and places are for level 1. On higher levels the wave has more enemies (see [scaling](#scaling)) and its `z` is stretched.
 
 ### Stream
 
@@ -170,6 +173,7 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 - On level L, a wave's size is its size in the level file × 1.05^(L − 1), rounded to the nearest whole number, halves up. For line, column and flank waves this scales `count` (per side for flank). For block waves it scales `rows`, so the block keeps its width and grows backwards. Examples: a line of 10 has 10 × 1.05 = 10.5, so 11 enemies on level 2; a line of 5 has 5.25, so still 5. A block of 5 columns and 4 rows on level 5 has 4 × 1.05⁴ = 4.86, so 5 rows of 5.
 - Scaled waves follow the same placement rules: a scaled line still spreads evenly across the track, and extra rows and enemies stand further back at the same `spacing`.
 - Barrels, walls and gates do not scale. Boss HP does not scale with the level number either; it follows the expected squad at boss (see [balancing](#balancing)).
+- The level speed grows with the level number too, and stretches the level's distances by the same factor (see [level speed](run.md#level-speed)). Example: the speed factor is 1 on level 1, 1.07 on level 2 and 1.98 on level 15.
 
 ## Balancing
 
@@ -179,12 +183,13 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 - Boss HP is kept as is, without rounding.
 - Example: an expected squad at boss of 60 at the base values (2 yarn balls/s, 1 damage, 1 yarn ball per shot) deals 60 × 2 × 1 × 1 = 120 damage per second, so the Dustbot has 120 × 8 = 960 HP, and the Mega Dustbot would have 120 × 20 = 2,400 HP.
 - A bad run still reaches the boss with about 40% of the expected squad, so it can win with good aim.
+- The Mega Dustbot gets stronger on each of levels 11–15: each level's boss HP is at least 1.2 × the boss HP of the level before it. With the same boss and the same base values, that is an `expectedSquadAtBoss` at least 1.2 × the level before's. Example: level 10 with an expected squad at boss of 100 needs at least 120 on level 11.
 - Each gate row offers one clearly better gate and at least one that looks tempting. Example: +20 against ×2 when the squad count is 8 (+20 gives 28, ×2 gives 16).
 - The expected squad at boss counts gates only, not big buffs: a big buff is a reward on top of a good run.
 
 ## The first world (MVP)
 
-10 levels in one world. Later worlds change the look and add one new enemy each.
+15 levels in one world, from `level-1` to `level-15`, each running faster than the one before (see [level speed](run.md#level-speed)). Later worlds change the look and add one new enemy each.
 
 | Levels | Content |
 | --- | --- |
@@ -194,5 +199,6 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 | 4–6 | Chihuahuas and barrels, the first weapon buffs. The first boss, the Dustbot, is on level 5. |
 | 7–9 | Bulldogs and shield dogs, tighter gate choices. |
 | 10 | The world boss, the Mega Dustbot, which throws dust balls. |
+| 11–15 | Much harder: all four enemy kinds, and at least half of the gate rows put a red gate next to a blue one. Each ends with a Mega Dustbot fight that is stronger than the last (see [balancing](#balancing)). Level 15's stream interval is at most 0.6 s. |
 
-Only levels 5 and 10 have a boss; the others end at a finish line.
+Levels 5 and 10–15 have a boss: the Dustbot on level 5 and the Mega Dustbot on levels 10–15. The others end at a finish line. After level 15, the victory screen goes back to the title.

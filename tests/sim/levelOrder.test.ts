@@ -47,12 +47,11 @@ describe('level order', () => {
     expect(levelAfter(world, world[1])?.id).toBe('level-10')
   })
 
-  it('game_starts_at_level_1_and_its_victory_leads_to_the_dustbot_level_5', () => {
-    const first = firstLevel(levels)
-    const second = levelAfter(levels, first)
+  // requirements S-6 (2): the shipped levels run level-1 → level-10, and the victory after level-10 goes back to the title.
+  it('shipped_levels_are_played_from_level_1_to_level_10_then_back_to_the_title', () => {
+    const played = [firstLevel(levels)]
+    for (let next = levelAfter(levels, played[0]); next !== null; next = levelAfter(levels, next)) played.push(next)
 
-    expect(first.level).toBe(1)
-    expect(second?.level).toBe(5)
-    expect(second?.events.at(-1)).toEqual({ type: 'boss', z: second?.length, boss: 'dustbot' })
+    expect(played.map((level) => level.id)).toEqual(Array.from({ length: 10 }, (_, index) => `level-${index + 1}`))
   })
 })

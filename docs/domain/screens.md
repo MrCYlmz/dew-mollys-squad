@@ -17,7 +17,7 @@ Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the
 | --- | --- | --- |
 | Title | Game name, level number, coins, settings icon | Tap to play |
 | Upgrades | Upgrade cards with upgrade level and price | Buy, back |
-| In-game HUD | Level progress bar (top), coins (top right), pause (top left), squad count above the squad, boss HP bar in the boss arena | Steer |
+| In-game HUD | Level progress bar (top) with the level number next to it, coins (top right), pause (top left), squad count above the squad, boss HP bar in the boss arena | Steer |
 | Pause | Resume, restart, settings, quit | Resume |
 | Victory | Stars, coins earned, optional coin multiplier spin | Next level |
 | Defeat | Distance reached, tip text | Retry, one tap, instant |
@@ -33,6 +33,7 @@ Boot → Title → Playing ⇄ Paused → Victory or Defeat. From the title, the
 | Caught by a boss | "Grow your squad before the boss: more cats, more yarn." |
 
 - Hand icon on level 1: when level 1 starts, a hand icon over the lower part of the screen swipes left and right to show how to steer. It has no text. See [hand icon](#hand-icon).
+- While playing, the HUD shows the current level as "Level N" at the top, next to the progress bar, where N is the level file's `level`. Example: on `level-7` it shows "Level 7".
 - HUD: nothing important in the bottom 20% of the screen, where the finger is.
 - HUD and screens respect the phone's safe areas (notch, rounded corners).
 

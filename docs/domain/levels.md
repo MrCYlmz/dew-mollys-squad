@@ -174,10 +174,10 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 ## Balancing
 
 - Each boss level states its expected squad at boss (`expectedSquadAtBoss`): the squad count a good run has when it reaches the boss arena.
-- Boss HP = the expected squad's damage per second at the base weapon values × 8 s (the boss HP time, in the tuning config).
+- Boss HP = the expected squad's damage per second at the base weapon values × the boss's boss HP time. Each boss has its own boss HP time, in the tuning config: 8 s for the Dustbot, 20 s for the Mega Dustbot, so the world boss takes longer to defeat.
 - The expected squad's damage per second at the base weapon values = expected squad at boss × base fire rate × base damage × base yarn balls per shot, with the base values at level 1 from [the run](run.md#shooting), before weapon buffs and upgrades. The yarn ball cap does not change it.
 - Boss HP is kept as is, without rounding.
-- Example: an expected squad at boss of 60 at the base values (2 yarn balls/s, 1 damage, 1 yarn ball per shot) deals 60 × 2 × 1 × 1 = 120 damage per second, so the boss has 120 × 8 = 960 HP.
+- Example: an expected squad at boss of 60 at the base values (2 yarn balls/s, 1 damage, 1 yarn ball per shot) deals 60 × 2 × 1 × 1 = 120 damage per second, so the Dustbot has 120 × 8 = 960 HP, and the Mega Dustbot would have 120 × 20 = 2,400 HP.
 - A bad run still reaches the boss with about 40% of the expected squad, so it can win with good aim.
 - Each gate row offers one clearly better gate and at least one that looks tempting. Example: +20 against ×2 when the squad count is 8 (+20 gives 28, ×2 gives 16).
 - The expected squad at boss counts gates only, not big buffs: a big buff is a reward on top of a good run.

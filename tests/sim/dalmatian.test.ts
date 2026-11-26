@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type EnemyState, type GameEvent, type Run } from '../../src/sim/run'
@@ -154,6 +154,30 @@ describe('dalmatian split', () => {
     }
 
     expect(passedRuns).toBeGreaterThan(0)
+  })
+})
+
+describe('with another split in the tuning config', () => {
+  let documentedSplit = { puppies: 0, spacing: 0 }
+
+  beforeEach(() => {
+    documentedSplit = { ...tuning.dalmatianSplit }
+  })
+
+  afterEach(() => {
+    Object.assign(tuning.dalmatianSplit, documentedSplit)
+  })
+
+  it('split_of_4_puppies_2_units_apart_stands_at_z_z_plus_2_z_plus_4_and_z_plus_6', () => {
+    tuning.dalmatianSplit.puppies = 4
+    tuning.dalmatianSplit.spacing = 2
+
+    const split = stepToDalmatianKill(runWith([...oneShotKiller, { type: 'wave', z: 100, enemy: 'dalmatian', pattern: 'line', count: 1 }]))
+    if (split === null) throw new Error('the dalmatian was not killed')
+    const left = puppies(split.enemies)
+
+    expect(left).toHaveLength(4)
+    left.forEach((puppy, index) => expect(puppy.z - left[0].z).toBeCloseTo(2 * index, 9))
   })
 })
 

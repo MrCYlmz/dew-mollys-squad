@@ -1,4 +1,4 @@
-import type { BigBuff, BossKind, EnemyKind, Gate, GateOp, Lane, Level, WaveEvent } from '../content/level'
+import type { BigBuff, BossKind, EnemyKind, Gate, GateFace, GateOp, Lane, Level, WaveEvent } from '../content/level'
 import { tuning } from '../content/tuning'
 import { drawnCats, formationOffsetX, formationOffsetZ, formationRadius } from './formation'
 import {
@@ -8,12 +8,13 @@ import {
   laneAt,
   laneBorder,
   laneCentreX,
+  type FaceColour,
   type GateColour,
   type SignedGate,
   type Weapon,
 } from './gates'
 import { Pool, Recycler } from './pool'
-import { createRng } from './rng'
+import { createRng, firstNumber } from './rng'
 
 export interface SteerInput {
   // The pointer's change in x since the last tick, in track units.
@@ -107,10 +108,23 @@ export interface YarnBallState {
   readonly previousZ: number
 }
 
-export interface GateState {
+// Value is signed: a subtract face of −15 holds −15.
+export interface GateFaceState {
   readonly op: GateOp
   readonly value: number
+  readonly colour: FaceColour
+}
+
+export type GateKind = 'ordinary' | 'switching' | 'mystery'
+
+// op, value and colour are the face shown in this tick; a mystery gate shows op 'mystery', value 0 and purple.
+export interface GateState {
+  readonly kind: GateKind
+  readonly op: GateOp | 'mystery'
+  readonly value: number
   readonly colour: GateColour
+  // An ordinary gate's face, a switching gate's own face and then its second face, or a mystery gate's options.
+  readonly faces: readonly GateFaceState[]
 }
 
 // An empty lane holds null.
@@ -167,11 +181,15 @@ export interface CatsLostEvent {
   count: number
 }
 
+// op and value are the face applied: the one shown when taken, or a mystery gate's drawn option.
 export interface GateTakenEvent {
   type: 'gateTaken'
   lane: Lane
+  // The row's z, where the gate stood.
+  z: number
   op: GateOp
   value: number
+  mystery: boolean
   squadCount: number
 }
 
@@ -317,9 +335,15 @@ interface YarnBall {
 }
 
 interface GateCell {
-  op: GateOp
+  kind: GateKind
+  op: GateOp | 'mystery'
   value: number
   colour: GateColour
+  faces: GateFaceState[]
+  // The index in faces of the face shown; unused for a mystery gate.
+  shownFace: number
+  // A mystery gate's own draw seed, from the run's seed and the gate's place in the level file.
+  drawSeed: number
 }
 
 interface GateRow {
@@ -359,9 +383,30 @@ function clampToTrack(x: number): number {
   return Math.min(Math.max(x, -halfWidth), halfWidth)
 }
 
-function gateCell(gate: Gate | undefined): GateCell | null {
+const laneNumbers: Record<Lane, number> = { left: 0, centre: 1, right: 2 }
+
+function faceState(face: GateFace): GateFaceState {
+  return { op: face.op, value: face.op === 'subtract' ? -face.value : face.value, colour: gateColour(face.op) }
+}
+
+// eventIndex is the row's place in the level file's events, which with the lane keys a mystery gate's draw.
+function gateCell(gate: Gate | undefined, eventIndex: number, lane: Lane, seed: number): GateCell | null {
   if (gate === undefined) return null
-  return { op: gate.op, value: gate.op === 'subtract' ? -gate.value : gate.value, colour: gateColour(gate.op) }
+  if (gate.op === 'mystery') {
+    const key = eventIndex * 3 + laneNumbers[lane] + 1
+    const drawSeed = (seed ^ Math.imul(key, 2654435769)) >>> 0
+    return { kind: 'mystery', op: 'mystery', value: 0, colour: 'purple', faces: gate.options.map(faceState), shownFace: 0, drawSeed }
+  }
+  const own = faceState(gate)
+  const faces = gate.switchTo === undefined ? [own] : [own, faceState(gate.switchTo)]
+  const kind = gate.switchTo === undefined ? 'ordinary' : 'switching'
+  return { kind, op: own.op, value: own.value, colour: own.colour, faces, shownFace: 0, drawSeed: 0 }
+}
+
+// The face a gate applies when taken: the one it shows, or a mystery gate's option drawn evenly from its draw seed.
+function takenFace(gate: GateCell): GateFaceState {
+  if (gate.kind !== 'mystery') return gate.faces[gate.shownFace]
+  return gate.faces[Math.floor(firstNumber(gate.drawSeed) * gate.faces.length)]
 }
 
 // Share of the path from (x, z) by (dx, dz) at which a point first comes within reach of the centre, or Infinity if it never does.
@@ -419,6 +464,8 @@ class RunSimulation implements Run {
   // Created with the run and shown in the state once it enters the arena.
   private readonly boss: Boss | null = null
   private readonly gateRows: GateRow[]
+  private readonly switchingGates: GateCell[] = []
+  private readonly switchTicks: number
   // With their z stretched by the speed factor.
   private readonly waves: WaveEvent[]
   private readonly length: number
@@ -444,8 +491,10 @@ class RunSimulation implements Run {
   private readonly gateTakenEvents = new Recycler<GateTakenEvent>(() => ({
     type: 'gateTaken',
     lane: 'left',
+    z: 0,
     op: 'add',
     value: 0,
+    mystery: false,
     squadCount: 0,
   }))
   private readonly buffBlockBrokenEvents = new Recycler<BuffBlockBrokenEvent>(() => ({ type: 'buffBlockBroken', lane: 'left', buff: 'add' }))
@@ -478,7 +527,7 @@ class RunSimulation implements Run {
     for (let drawn = 0; drawn <= tuning.squad.formationSlots; drawn++) this.drawnCatLists.push(this.catPlaces.slice(0, drawn))
     this.enemyHpFactor = Math.pow(tuning.scaling.enemyHpGrowth, level.level - 1)
     this.waveSizeFactor = Math.pow(tuning.scaling.waveSizeGrowth, level.level - 1)
-    const speedFactor = 1 + tuning.scaling.speedGrowth * (level.level - 1)
+    const speedFactor = 1 + tuning.scaling.speedGrowth * (Math.min(level.level, tuning.scaling.speedGrowthLastLevel) - 1)
     this.length = level.length * speedFactor
     this.roadStep = tuning.squad.forwardSpeed * speedFactor * dt
     this.yarnBallCarryShare = 1 - 1 / speedFactor
@@ -545,12 +594,23 @@ class RunSimulation implements Run {
     this.waves = []
     // Whole ticks, rounded half up, and at least 1.
     this.streamTicks = Math.max(Math.floor(level.stream.interval * tuning.tickRate + 0.5), 1)
-    for (const event of level.events) {
+    this.switchTicks = Math.max(Math.floor(tuning.gate.switchTime * tuning.tickRate + 0.5), 1)
+    for (let eventIndex = 0; eventIndex < level.events.length; eventIndex++) {
+      const event = level.events[eventIndex]
       const z = event.z * speedFactor
       switch (event.type) {
-        case 'gates':
-          this.gateRows.push({ z, left: gateCell(event.left), centre: gateCell(event.centre), right: gateCell(event.right), taken: null })
+        case 'gates': {
+          const row: GateRow = {
+            z,
+            left: gateCell(event.left, eventIndex, 'left', seed),
+            centre: gateCell(event.centre, eventIndex, 'centre', seed),
+            right: gateCell(event.right, eventIndex, 'right', seed),
+            taken: null,
+          }
+          for (const gate of [row.left, row.centre, row.right]) if (gate?.kind === 'switching') this.switchingGates.push(gate)
+          this.gateRows.push(row)
           break
+        }
         case 'wave':
           this.waves.push({ ...event, z })
           break
@@ -604,6 +664,7 @@ class RunSimulation implements Run {
     if (this.state.status !== 'running') return this.events
 
     this.tick++
+    this.showGateFaces()
     this.moveSquad(input)
     this.spawnWaves()
     this.spawnStreamEnemy()
@@ -619,6 +680,18 @@ class RunSimulation implements Run {
     this.removeObjectsBehind()
     if (this.boss === null && this.squad.z >= this.length) this.state.status = 'won'
     return this.events
+  }
+
+  // Every switching gate shows its own face in the first switch time of ticks, its second face in the next, and so on.
+  private showGateFaces(): void {
+    const shownFace = Math.floor((this.tick - 1) / this.switchTicks) % 2
+    for (const gate of this.switchingGates) {
+      const face = gate.faces[shownFace]
+      gate.shownFace = shownFace
+      gate.op = face.op
+      gate.value = face.value
+      gate.colour = face.colour
+    }
   }
 
   private placeBarrel(x: number, z: number): void {
@@ -936,7 +1009,15 @@ class RunSimulation implements Run {
     enemy.hp -= damage - shieldDamage
     if (enemy.hp > 0) return
     this.pushEnemyKilled(cause, enemy)
+    const { kind, x, z } = enemy
     this.enemies.release(index)
+    if (kind === 'dalmatian') this.splitDalmatian(x, z)
+  }
+
+  // The puppies come after the dalmatian is gone, nearest first, so the cap drops the ones furthest back.
+  private splitDalmatian(x: number, z: number): void {
+    const { puppies, spacing } = tuning.dalmatianSplit
+    for (let i = 0; i < puppies; i++) this.spawnEnemy('puppy', x, z + i * spacing)
   }
 
   private damageBoss(boss: Boss, damage: number): void {
@@ -1063,13 +1144,16 @@ class RunSimulation implements Run {
       const gate = row[lane]
       if (gate === null) continue
       row.taken = lane
+      const face = takenFace(gate)
       const countBefore = squad.count
-      squad.count = applyGate(squad.count, gate)
-      applyWeaponBuff(this.weapon, gate)
+      squad.count = applyGate(squad.count, face)
+      applyWeaponBuff(this.weapon, face)
       const event = this.gateTakenEvents.next()
       event.lane = lane
-      event.op = gate.op
-      event.value = gate.value
+      event.z = row.z
+      event.op = face.op
+      event.value = face.value
+      event.mystery = gate.kind === 'mystery'
       event.squadCount = squad.count
       this.events.push(event)
       if (squad.count < countBefore) this.pushCatsLost(countBefore - squad.count)

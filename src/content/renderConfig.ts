@@ -50,7 +50,9 @@ export const renderConfig = {
     // The sky dome's radius as a share of the camera's far distance, so it is never clipped.
     farShare: 0.9,
   },
-  fog: { near: 55, far: 150 },
+  // Distances along the road ahead of the squad where the fog starts and where it hides everything, on every screen shape.
+  // Halfway between them the fog is at half strength, which must lie beyond the stretched spawn distance of level 15, 79.2.
+  fog: { nearAhead: 45, farAhead: 140 },
   light: {
     hemisphere: { sky: 0xdcefff, ground: 0x7a9655, intensity: 1.6 },
     // The warm sun, ahead and to the right, so shadows fall towards the camera.
@@ -140,6 +142,8 @@ export const renderConfig = {
     chihuahua: { coat: 0xe6b77e, innerEar: 0xf0a3a3, muzzle: 0xf6dcb7, scale: 1.15 },
     bulldog: { coat: 0x9a8b7c, dark: 0x574c42, chest: 0xf2ece4, collar: 0xd63a3a, scale: 1.1 },
     shieldDog: { coat: 0x6b7686, dark: 0x3c4450, muzzle: 0xd9d4cc, scale: 1.15 },
+    greyhound: { coat: 0x9ea3aa, dark: 0x6e737b, belly: 0xc9ccd1, scale: 1.15 },
+    dalmatian: { coat: 0xfbfaf6, spot: 0x1e1c1f, scale: 1.15 },
     // Radians the dogs roll from side to side.
     waddleAngle: 0.14,
     waddleSpeed: 9,
@@ -216,7 +220,14 @@ export const renderConfig = {
     // Canvas pixels of the glow around a panel's edge.
     glowBlur: 12,
   },
-  gate: { good: 0x2f86ff, bad: 0xf03c3c },
+  gate: {
+    good: 0x2f86ff,
+    bad: 0xf03c3c,
+    mystery: 0xa83cf0,
+    // The label that reveals a mystery gate's option rises from the gate for revealSeconds and fades out.
+    revealSeconds: 1.2,
+    revealRise: 2.5,
+  },
   hpLabel: {
     text: 0xffffff,
     outline: 0x1e1e28,
@@ -229,7 +240,7 @@ export const renderConfig = {
     buffBlockSize: 1.8,
     digitHeight: 0.6,
     // Height of the number above the ground.
-    heights: { puppy: 1.25, chihuahua: 1.15, bulldog: 1.7, shieldDog: 1.35, barrel: 1.35 },
+    heights: { puppy: 1.25, chihuahua: 1.15, bulldog: 1.7, shieldDog: 1.35, greyhound: 1.55, dalmatian: 1.4, barrel: 1.35 },
     shieldRise: 0.6,
   },
   particles: {

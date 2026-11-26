@@ -26,14 +26,14 @@ import {
   type Material,
   type Texture,
 } from 'three'
-import type { BigBuff, BossKind, EnemyKind, Lane } from '../content/level'
+import type { BigBuff, BossKind, EnemyKind, GateOp, Lane } from '../content/level'
 import { renderConfig, type Fur, type GraphicsQuality } from '../content/renderConfig'
 import { tuning } from '../content/tuning'
 import { formationOffsetX, formationOffsetZ, formationRadius } from '../sim/formation'
 import { laneBorder, laneCentreX } from '../sim/gates'
 import { shownHp } from '../sim/hp'
 import type { BuffBlockState, RunState } from '../sim/run'
-import { createBigBuffMaterial, createGatePanelMaterial, disposePanelMaterial } from './gatePanel'
+import { createBigBuffMaterial, createGatePanelMaterial, createMysteryPanelMaterial, disposePanelMaterial } from './gatePanel'
 import { createDigitMaterial, HpLabels } from './hpLabels'
 import {
   bossBrushPlace,
@@ -45,8 +45,10 @@ import {
   createBulldogGeometry,
   createCatGeometry,
   createChihuahuaGeometry,
+  createDalmatianGeometry,
   createDustBallGeometry,
   createFenceGeometry,
+  createGreyhoundGeometry,
   createHouseGeometry,
   createPuppyGeometry,
   createShieldDogGeometry,
@@ -164,6 +166,8 @@ interface Boss {
 export class GameRenderer {
   private readonly renderer: WebGLRenderer
   private readonly scene = new Scene()
+  // Its distances follow the camera, which moves back on narrow screens; resize sets them.
+  private readonly fog = new Fog(look.sky.horizon)
   private readonly camera = new PerspectiveCamera(cameraLook.fov, 1, cameraLook.near, cameraLook.far)
   private maxPixelRatio: number
   private pixelRatio = 1
@@ -224,10 +228,21 @@ export class GameRenderer {
   private levelGeometries: BufferGeometry[] = []
   private levelMeshes: InstancedMesh[] = []
   private gatePanelMaterials: MeshBasicMaterial[] = []
-  // gatePanels[i] shows the gate in gatePanelLanes[i] of the row gatePanelRows[i].
+  // gatePanels[i] shows the gate in gatePanelLanes[i] of the row gatePanelRows[i], with gatePanelFaces[i][f] for its face f;
+  // a mystery gate has the one "?" material.
   private gatePanels: Mesh[] = []
   private gatePanelRows: number[] = []
   private gatePanelLanes: Lane[] = []
+  private gatePanelFaces: MeshBasicMaterial[][] = []
+  // One label per mystery gate, which rises from the gate panel revealPanels[i] once it is taken, showing the option drawn
+  // with revealOptions[i][o] for its option o.
+  private revealLabels: Mesh[] = []
+  private revealPanels: number[] = []
+  private revealOptions: MeshBasicMaterial[][] = []
+  // The material each label shows: the option drawn.
+  private revealShown: MeshBasicMaterial[] = []
+  // Seconds since each label's reveal, or −1 before it.
+  private revealAges: number[] = []
   // One label per buff block of the level, shown on the block and then on its big buff.
   private buffLabels: Mesh[] = []
   // Each buff block's HP at the start of the run, so its cracks follow the HP lost.
@@ -266,7 +281,7 @@ export class GameRenderer {
     this.renderer = new WebGLRenderer({ canvas, antialias: true })
     this.renderer.shadowMap.enabled = graphics.shadows
     this.renderer.shadowMap.type = PCFShadowMap
-    this.scene.fog = new Fog(look.sky.horizon, look.fog.near, look.fog.far)
+    this.scene.fog = this.fog
     this.scene.background = new Color(look.sky.horizon)
     this.sky = new Mesh(
       this.ownGeometry(createSkyGeometry(cameraLook.far * look.sky.farShare)),
@@ -288,6 +303,8 @@ export class GameRenderer {
       chihuahua: this.instanced(this.ownGeometry(createChihuahuaGeometry()), dogMaterial, tuning.limits.enemies, true),
       bulldog: this.instanced(this.ownGeometry(createBulldogGeometry()), dogMaterial, tuning.limits.enemies, true),
       shieldDog: this.instanced(this.ownGeometry(createShieldDogGeometry()), dogMaterial, tuning.limits.enemies, true),
+      greyhound: this.instanced(this.ownGeometry(createGreyhoundGeometry()), dogMaterial, tuning.limits.enemies, true),
+      dalmatian: this.instanced(this.ownGeometry(createDalmatianGeometry()), dogMaterial, tuning.limits.enemies, true),
     }
     this.enemyMeshes = Object.values(this.enemies)
     this.shields = this.instanced(this.ownGeometry(createShieldGeometry()), dogMaterial, tuning.limits.enemies, true)
@@ -340,6 +357,10 @@ export class GameRenderer {
     this.lookAhead = (screenDrop * this.cameraDistance) / (Math.sin(pitch) + screenDrop * Math.cos(pitch))
     const squadDepth = this.cameraDistance - this.lookAhead * Math.cos(pitch)
     this.unitsPerPixel = (2 * squadDepth * halfHeightTan) / this.cssHeight
+    // Fog is measured from the camera along its view; a place on the road d ahead of the squad lies this far from it.
+    const depthAhead = (ahead: number) => this.cameraDistance + Math.cos(pitch) * (ahead - this.lookAhead)
+    this.fog.near = depthAhead(look.fog.nearAhead)
+    this.fog.far = depthAhead(look.fog.farAhead)
     this.placeCamera()
   }
 
@@ -436,14 +457,28 @@ export class GameRenderer {
       for (const lane of lanes) {
         const gate = row[lane]
         if (gate === null) continue
-        const material = createGatePanelMaterial(gate)
-        const panel = new Mesh(this.panelGeometry, material)
+        const mystery = gate.kind === 'mystery'
+        const faces = mystery ? [createMysteryPanelMaterial()] : gate.faces.map(createGatePanelMaterial)
+        const panel = new Mesh(this.panelGeometry, faces[0])
         panel.position.set(laneCentreX(lane), look.panel.gateHeight, -row.z)
         this.levelGroup.add(panel)
-        this.gatePanelMaterials.push(material)
+        this.gatePanelMaterials.push(...faces)
+        this.gatePanelFaces.push(faces)
         this.gatePanels.push(panel)
         this.gatePanelRows.push(rowIndex)
         this.gatePanelLanes.push(lane)
+        if (!mystery) continue
+        const options = gate.faces.map(createGatePanelMaterial)
+        this.gatePanelMaterials.push(...options)
+        const label = new Mesh(this.panelGeometry, options[0])
+        label.quaternion.copy(facingCamera)
+        label.visible = false
+        this.levelGroup.add(label)
+        this.revealLabels.push(label)
+        this.revealPanels.push(this.gatePanels.length - 1)
+        this.revealOptions.push(options)
+        this.revealShown.push(options[0])
+        this.revealAges.push(-1)
       }
     }
 
@@ -456,10 +491,12 @@ export class GameRenderer {
     // Only visible objects are compiled, so the level's boss is shown for it.
     if (bossEvent !== undefined) this.bosses[bossEvent.boss].group.visible = true
     for (const label of this.buffLabels) label.visible = true
+    for (const label of this.revealLabels) label.visible = true
     this.levelGroup.position.z = 0
     this.renderer.compile(this.scene, this.camera)
     for (const boss of Object.values(this.bosses)) boss.group.visible = false
     for (const label of this.buffLabels) label.visible = false
+    for (const label of this.revealLabels) label.visible = false
   }
 
   scatterCats(count: number): void {
@@ -473,6 +510,23 @@ export class GameRenderer {
   // A puff where an enemy died, at its sim place.
   showKill(x: number, z: number): void {
     this.particles.emitKill(x, z)
+  }
+
+  // The option a mystery gate drew rises from the gate in the lane of the row at the sim place z.
+  revealMysteryGate(state: RunState, lane: Lane, z: number, op: GateOp, value: number): void {
+    for (let i = 0; i < this.revealLabels.length; i++) {
+      const panelIndex = this.revealPanels[i]
+      const row = state.gateRows[this.gatePanelRows[panelIndex]]
+      const gate = row[lane]
+      if (row.z !== z || this.gatePanelLanes[panelIndex] !== lane || gate === null) continue
+      const optionIndex = gate.faces.findIndex((face) => face.op === op && face.value === value)
+      const label = this.revealLabels[i]
+      this.revealShown[i] = label.material = this.revealOptions[i][optionIndex]
+      label.position.copy(this.gatePanels[panelIndex].position)
+      label.visible = true
+      this.revealAges[i] = 0
+      return
+    }
   }
 
   // A splash where a barrel burst, at its sim place.
@@ -501,6 +555,7 @@ export class GameRenderer {
     this.drawBoss(state, alpha, frameSeconds)
     this.drawDustBalls(state, alpha)
     this.drawGates(state)
+    this.drawReveals(frameSeconds)
     this.particles.update(frameSeconds, this.roadZ)
     this.renderer.render(this.scene, this.camera)
   }
@@ -699,6 +754,12 @@ export class GameRenderer {
     this.gatePanels = []
     this.gatePanelRows = []
     this.gatePanelLanes = []
+    this.gatePanelFaces = []
+    this.revealLabels = []
+    this.revealPanels = []
+    this.revealOptions = []
+    this.revealShown = []
+    this.revealAges = []
     this.buffLabels = []
     this.buffBlockStartHp.clear()
   }
@@ -931,12 +992,36 @@ export class GameRenderer {
     label.visible = true
   }
 
-  // A row's other gates disappear once the squad takes one of them.
+  // A row's other gates disappear once the squad takes one of them. A switching gate shows the panel of the face it shows.
   private drawGates(state: RunState): void {
     const rows = state.gateRows
     for (let i = 0; i < this.gatePanels.length; i++) {
-      const taken = rows[this.gatePanelRows[i]].taken
-      this.gatePanels[i].visible = taken === null || taken === this.gatePanelLanes[i]
+      const row = rows[this.gatePanelRows[i]]
+      const lane = this.gatePanelLanes[i]
+      const panel = this.gatePanels[i]
+      panel.visible = row.taken === null || row.taken === lane
+      const gate = row[lane]
+      if (gate === null || gate.kind !== 'switching') continue
+      const ownFace = gate.faces[0]
+      panel.material = this.gatePanelFaces[i][gate.op === ownFace.op && gate.value === ownFace.value ? 0 : 1]
+    }
+  }
+
+  // A revealed option rises from its gate and fades out.
+  private drawReveals(frameSeconds: number): void {
+    const { revealSeconds, revealRise } = look.gate
+    for (let i = 0; i < this.revealLabels.length; i++) {
+      if (this.revealAges[i] < 0) continue
+      const label = this.revealLabels[i]
+      const age = (this.revealAges[i] += frameSeconds)
+      if (age >= revealSeconds) {
+        label.visible = false
+        this.revealAges[i] = -1
+        continue
+      }
+      const share = age / revealSeconds
+      label.position.y = look.panel.gateHeight + share * revealRise
+      this.revealShown[i].opacity = 1 - share * share
     }
   }
 }

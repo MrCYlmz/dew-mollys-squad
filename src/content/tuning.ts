@@ -76,12 +76,12 @@ export const tuning = {
   },
   // What each big buff adds or multiplies by; fire rate in per cent of the base fire rate, as on a fire rate gate.
   bigBuff: {
-    add: 30,
+    add: 60,
     multiply: 3,
-    fireRate: 60,
+    fireRate: 100,
     damage: 3,
     multiShot: 2,
-    range: 30,
+    range: 40,
   },
   // Spawn distances are at speed factor 1.
   wave: {

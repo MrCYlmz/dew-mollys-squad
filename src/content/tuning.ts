@@ -94,7 +94,7 @@ export const tuning = {
   // Walk speed in units/s. The boss HP time is the seconds the expected squad at boss needs to defeat the boss at the base weapon values.
   bosses: {
     dustbot: { walkSpeed: 1.5, hpTime: 8 },
-    megaDustbot: { walkSpeed: 1.5, hpTime: 20 },
+    megaDustbot: { walkSpeed: 1.7, hpTime: 20 },
   },
   boss: {
     // How far beyond the arena start the boss enters.

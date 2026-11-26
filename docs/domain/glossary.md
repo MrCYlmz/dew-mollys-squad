@@ -27,8 +27,9 @@ One term per concept. Code, tests and docs use these words exactly.
 | Ordinary gate | A gate with one face. |
 | Switching gate | A gate with two faces, its own and a second face, shown in turn for the switch time each. The face shown when the row reaches the squad is taken. |
 | Switch time | How long a switching gate shows each face, 1 s, counted in ticks of run time. |
-| Mystery gate | A purple gate shown as "?", with two or more hidden options. One is drawn by the seeded RNG when the squad takes it. |
+| Mystery gate | A purple gate shown as "?", with two or more hidden options. One is drawn from the run's seed and the gate's place when the squad takes it, so the same seed always gives the same option for that gate. |
 | Option | One face a mystery gate may apply. |
+| Draw seed | The seed of a mystery gate's own draw, from the run's seed and the gate's row and lane. |
 | Reveal | The floating label at a mystery gate showing the option drawn, in that option's colour. |
 | Good gate | A gate, or a face of a switching gate or an option, shown in blue. It helps the squad. |
 | Bad gate | A gate, or a face of a switching gate or an option, shown in red. It hurts the squad. |

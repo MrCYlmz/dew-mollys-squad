@@ -145,8 +145,12 @@ A switching gate has its own face and a second face (`switchTo` in the [level fi
 
 A mystery gate has two or more options (`options` in the [level file](levels.md#gate-row)), each an ordinary gate's op and value. It shows "?" in purple and never shows its options.
 
-- When the squad takes it, one option is drawn by the seeded RNG, evenly: with n options and r the RNG's next number (0 or more, less than 1), option r × n rounded down, counting from 0. The option drawn applies exactly as the ordinary gate with that op and value. Example: with the options ×2, −20 and +10 and r = 0.5, option 1, −20, applies.
-- The draw happens in the tick the gate is taken, and only then: a mystery gate that is not taken draws nothing. In that tick it comes after the [enemy stream's](#enemy-stream) draw, following the playbook's tick order (the spawner before the gates). So the same seed and the same steering give the same draw.
+- When the squad takes it, one option is drawn, evenly: with n options and r the gate's draw number (0 or more, less than 1), option r × n rounded down, counting from 0, applies exactly as the ordinary gate with that op and value. Example: with the options ×2, −20 and +10 and r = 0.5, option 1, −20, applies.
+- Each mystery gate has its own draw, apart from the run's seeded RNG, so it depends only on the run's seed and the gate itself, not on the steering or on anything else drawn in the run, and it does not change the stream's draws:
+  - The gate's key is its row's place in the level file's `events`, counting from 0, × 3 + its lane's number (left 0, centre 1, right 2) + 1. Example: a mystery gate in the centre lane of the level's fourth event (index 3) has the key 3 × 3 + 1 + 1 = 11.
+  - The gate's draw seed is the run's seed XOR (the key × 2654435769), with both as whole numbers of 32 bits: the product is kept modulo 2³², and the seed is read as an unsigned 32-bit number.
+  - The gate's draw number r is the first number of a new seeded RNG (the same generator as the run's) started from the draw seed.
+- The draw is made when the gate is taken; a mystery gate that is not taken shows nothing of it. The same seed always gives the same option for the same gate, whichever gates the squad took before.
 - An option may appear more than once, to be drawn more often. Example: with ×2, ×2 and ÷2, ×2 is drawn two times in three.
 - The result is revealed at once: a floating label with the option's label, such as "×2" or "−20", appears at the gate in the option's colour. The sound and the squad count animation follow the option, as for an ordinary gate.
 

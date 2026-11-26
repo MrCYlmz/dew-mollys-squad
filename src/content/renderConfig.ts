@@ -227,6 +227,9 @@ export const renderConfig = {
     // The label that reveals a mystery gate's option rises from the gate for revealSeconds and fades out.
     revealSeconds: 1.2,
     revealRise: 2.5,
+    // The label's size as a share of a gate panel's, and how far ahead of the squad it stands.
+    revealScale: 0.8,
+    revealAhead: 2,
   },
   hpLabel: {
     text: 0xffffff,

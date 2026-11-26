@@ -225,6 +225,8 @@ export class GameRenderer {
   // Stands in the road's place, so the track, the scenery and the gates move with roadZ.
   private readonly levelGroup = new Group()
   private readonly buffLabelGroup = new Group()
+  // Reveals stay with the squad, which passes the gate as it is taken, instead of going by with the road.
+  private readonly revealGroup = new Group()
   private levelGeometries: BufferGeometry[] = []
   private levelMeshes: InstancedMesh[] = []
   private gatePanelMaterials: MeshBasicMaterial[] = []
@@ -291,7 +293,7 @@ export class GameRenderer {
     this.scene.add(this.sky)
     this.sun = this.addLights(graphics.shadows)
     this.scene.add(this.levelGroup)
-    this.scene.add(this.buffLabelGroup)
+    this.scene.add(this.buffLabelGroup, this.revealGroup)
 
     const catMaterial = this.ownMaterial(new MeshLambertMaterial({ vertexColors: true }))
     const catMesh = (fur: Fur) => this.instanced(this.ownGeometry(createCatGeometry(look.cat.fur[fur])), catMaterial, catCapacity, true)
@@ -472,8 +474,9 @@ export class GameRenderer {
         this.gatePanelMaterials.push(...options)
         const label = new Mesh(this.panelGeometry, options[0])
         label.quaternion.copy(facingCamera)
+        label.scale.setScalar(look.gate.revealScale)
         label.visible = false
-        this.levelGroup.add(label)
+        this.revealGroup.add(label)
         this.revealLabels.push(label)
         this.revealPanels.push(this.gatePanels.length - 1)
         this.revealOptions.push(options)
@@ -512,7 +515,7 @@ export class GameRenderer {
     this.particles.emitKill(x, z)
   }
 
-  // The option a mystery gate drew rises from the gate in the lane of the row at the sim place z.
+  // The option a mystery gate drew rises from the gate in the lane of the row at the sim place z, which the squad is passing.
   revealMysteryGate(state: RunState, lane: Lane, z: number, op: GateOp, value: number): void {
     for (let i = 0; i < this.revealLabels.length; i++) {
       const panelIndex = this.revealPanels[i]
@@ -522,7 +525,7 @@ export class GameRenderer {
       const optionIndex = gate.faces.findIndex((face) => face.op === op && face.value === value)
       const label = this.revealLabels[i]
       this.revealShown[i] = label.material = this.revealOptions[i][optionIndex]
-      label.position.copy(this.gatePanels[panelIndex].position)
+      label.position.set(laneCentreX(lane), look.panel.gateHeight, -look.gate.revealAhead)
       label.visible = true
       this.revealAges[i] = 0
       return
@@ -737,6 +740,7 @@ export class GameRenderer {
     for (const mesh of this.levelMeshes) mesh.dispose()
     for (const material of this.gatePanelMaterials) disposePanelMaterial(material)
     this.buffLabelGroup.clear()
+    this.revealGroup.clear()
     for (const mesh of [this.barrels, this.walls, this.buffBlocks, this.bigBuffs, this.bigBuffGlows]) {
       if (mesh === null) continue
       this.scene.remove(mesh)

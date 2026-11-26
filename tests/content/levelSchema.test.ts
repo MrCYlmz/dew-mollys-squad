@@ -52,7 +52,9 @@ describe('level schema', () => {
   })
 
   it('accepts_a_stream_of_every_enemy_kind', () => {
-    expect(levelSchema.safeParse({ ...documentedLevel, stream: { interval: 0.01, enemies: ['puppy', 'chihuahua', 'bulldog', 'shieldDog'] } }).success).toBe(true)
+    const enemies = ['puppy', 'chihuahua', 'bulldog', 'shieldDog', 'greyhound', 'dalmatian']
+
+    expect(levelSchema.safeParse({ ...documentedLevel, stream: { interval: 0.01, enemies } }).success).toBe(true)
   })
 
   it('accepts_a_level_marked_as_placeholder', () => {
@@ -76,8 +78,62 @@ describe('level schema', () => {
     expect(levelSchema.safeParse(withEvent({ type: 'buffBlock', z: 80, lane: 'left', hp: 0.5, buff })).success).toBe(true)
   })
 
-  it.each(['bulldog', 'shieldDog'])('accepts_a_wave_of_%s', (enemy) => {
+  it.each(['bulldog', 'shieldDog', 'greyhound', 'dalmatian'])('accepts_a_wave_of_%s', (enemy) => {
     expect(levelSchema.safeParse(withEvent({ type: 'wave', z: 80, enemy, pattern: 'flank', count: 2, spacing: 1 })).success).toBe(true)
+  })
+
+  // The switching and mystery gate examples from docs/domain/levels.md.
+  it('accepts_a_switching_gate_of_plus_10_and_minus_15', () => {
+    const row = { type: 'gates', z: 95, left: { op: 'add', value: 10, switchTo: { op: 'subtract', value: 15 } }, right: { op: 'multiply', value: 2 } }
+
+    expect(levelSchema.safeParse(withEvent(row)).success).toBe(true)
+  })
+
+  it('accepts_a_mystery_gate_of_times_2_minus_20_and_damage_1', () => {
+    const options = [
+      { op: 'multiply', value: 2 },
+      { op: 'subtract', value: 20 },
+      { op: 'damage', value: 1 },
+    ]
+
+    expect(levelSchema.safeParse(withEvent({ type: 'gates', z: 200, centre: { op: 'mystery', options } })).success).toBe(true)
+  })
+
+  it('accepts_a_mystery_gate_with_two_options', () => {
+    const options = [
+      { op: 'add', value: 10 },
+      { op: 'divide', value: 2 },
+    ]
+
+    expect(levelSchema.safeParse(withEvent({ type: 'gates', z: 200, left: { op: 'mystery', options } })).success).toBe(true)
+  })
+
+  it('accepts_a_mystery_gate_with_an_option_repeated', () => {
+    const options = [
+      { op: 'multiply', value: 2 },
+      { op: 'multiply', value: 2 },
+      { op: 'divide', value: 2 },
+    ]
+
+    expect(levelSchema.safeParse(withEvent({ type: 'gates', z: 200, right: { op: 'mystery', options } })).success).toBe(true)
+  })
+
+  it('accepts_a_row_mixing_an_ordinary_a_switching_and_a_mystery_gate', () => {
+    const row = {
+      type: 'gates',
+      z: 40,
+      left: { op: 'add', value: 10 },
+      centre: { op: 'damage', value: 1, switchTo: { op: 'divide', value: 2 } },
+      right: { op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'subtract', value: 5 }] },
+    }
+
+    expect(levelSchema.safeParse(withEvent(row)).success).toBe(true)
+  })
+
+  it('accepts_a_switching_gate_whose_faces_differ_only_in_value', () => {
+    const row = { type: 'gates', z: 40, centre: { op: 'add', value: 10, switchTo: { op: 'add', value: 30 } } }
+
+    expect(levelSchema.safeParse(withEvent(row)).success).toBe(true)
   })
 
   it('accepts_a_barrel_at_the_track_edge', () => {
@@ -108,6 +164,24 @@ describe('level schema', () => {
     ['with a multi-shot gate other than 1', withEvent({ type: 'gates', z: 40, left: { op: 'multiShot', value: 2 }, right: { op: 'add', value: 1 } })],
     ['with a range gate other than 10', withEvent({ type: 'gates', z: 40, left: { op: 'range', value: 5 }, right: { op: 'add', value: 1 } })],
     ['with an unknown gate op', withEvent({ type: 'gates', z: 40, left: { op: 'speed', value: 1 }, right: { op: 'add', value: 1 } })],
+    ['with a switching gate whose faces are the same', withEvent({ type: 'gates', z: 40, left: { op: 'add', value: 10, switchTo: { op: 'add', value: 10 } } })],
+    [
+      'with a second face that switches again',
+      withEvent({ type: 'gates', z: 40, left: { op: 'add', value: 10, switchTo: { op: 'subtract', value: 15, switchTo: { op: 'add', value: 5 } } } }),
+    ],
+    ['with a second face that is a mystery gate', withEvent({ type: 'gates', z: 40, left: { op: 'add', value: 10, switchTo: { op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'subtract', value: 5 }] } } })],
+    ['with a second face of a value the op does not allow', withEvent({ type: 'gates', z: 40, left: { op: 'add', value: 10, switchTo: { op: 'divide', value: 3 } } })],
+    ['with a mystery gate of one option', withEvent({ type: 'gates', z: 40, left: { op: 'mystery', options: [{ op: 'add', value: 5 }] } })],
+    ['with a mystery gate without options', withEvent({ type: 'gates', z: 40, left: { op: 'mystery', options: [] } })],
+    ['with a mystery gate missing its options', withEvent({ type: 'gates', z: 40, left: { op: 'mystery' } })],
+    ['with a mystery gate that has a value', withEvent({ type: 'gates', z: 40, left: { ...{ op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'subtract', value: 5 }] }, value: 1 } })],
+    ['with a mystery gate that switches', withEvent({ type: 'gates', z: 40, left: { ...{ op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'subtract', value: 5 }] }, switchTo: { op: 'add', value: 1 } } })],
+    ['with an option that is a mystery gate', withEvent({ type: 'gates', z: 40, left: { op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'subtract', value: 5 }] }] } })],
+    [
+      'with an option that switches',
+      withEvent({ type: 'gates', z: 40, left: { op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'add', value: 10, switchTo: { op: 'subtract', value: 15 } }] } }),
+    ],
+    ['with an option of a value the op does not allow', withEvent({ type: 'gates', z: 40, left: { op: 'mystery', options: [{ op: 'add', value: 5 }, { op: 'multiply', value: 3 }] } })],
     ['with a gate row without a gate', withEvent({ type: 'gates', z: 40 })],
     ['with a gate in a lane the format does not define', withEvent({ type: 'gates', z: 40, middle: { op: 'add', value: 1 } })],
     ['with a buff block in an unknown lane', withEvent({ type: 'buffBlock', z: 80, lane: 'middle', hp: 40, buff: 'add' })],

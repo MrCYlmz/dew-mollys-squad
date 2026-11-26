@@ -4,7 +4,7 @@ export type GateOp = 'add' | 'subtract' | 'multiply' | 'divide' | WeaponBuffOp
 
 export type WeaponBuffOp = 'fireRate' | 'damage' | 'multiShot' | 'range'
 
-export type EnemyKind = 'puppy' | 'chihuahua' | 'bulldog' | 'shieldDog'
+export type EnemyKind = 'puppy' | 'chihuahua' | 'bulldog' | 'shieldDog' | 'greyhound' | 'dalmatian'
 
 export type BossKind = 'dustbot' | 'megaDustbot'
 
@@ -12,11 +12,25 @@ export type Lane = 'left' | 'centre' | 'right'
 
 export type BigBuff = 'add' | 'multiply' | WeaponBuffOp
 
-export interface Gate {
+// One op and value a gate can show and apply.
+export interface GateFace {
   op: GateOp
   // Unsigned in the level file; a subtract gate of value 15 is shown as −15. A fire rate gate's value is in per cent.
   value: number
 }
+
+// A switching gate shows its own face and switchTo in turn, each for the switch time.
+export interface OrdinaryOrSwitchingGate extends GateFace {
+  switchTo?: GateFace
+}
+
+// Shows "?" and applies one of its options, drawn when the squad takes it.
+export interface MysteryGate {
+  op: 'mystery'
+  options: GateFace[]
+}
+
+export type Gate = OrdinaryOrSwitchingGate | MysteryGate
 
 // A lane without a gate is empty; a row has at least one gate.
 export interface GateRowEvent {

@@ -50,18 +50,32 @@ The level file's `length` and every event's `z` are written at speed factor 1. T
 | --- | --- |
 | `type` | `"gates"` |
 | `z` | Where the squad runs through the row |
-| `left`, `centre`, `right` | The gates, each `{ "op", "value" }` and each optional, but at least one must be there. Each gate fills its lane; a lane whose field is missing is empty |
+| `left`, `centre`, `right` | The gates, each optional, but at least one must be there. Each gate fills its lane; a lane whose field is missing is empty. A gate is an ordinary gate, a switching gate or a mystery gate, as below |
+
+A face is `{ "op", "value" }`:
+
+| Field | Value |
+| --- | --- |
 | `op` | `"add"`, `"subtract"`, `"multiply"`, `"divide"`, `"fireRate"`, `"damage"`, `"multiShot"` or `"range"` |
 | `value` | The number shown, as a whole number without a sign: 1 or more for add and subtract, 2 for multiply and divide, 20 for fire rate (per cent), 1 for damage, 1 for multi-shot, 10 for range |
 
-- The gates of a row may have any ops, the same or different.
+| Gate | Written as |
+| --- | --- |
+| Ordinary gate | A face: `{ "op", "value" }` |
+| [Switching gate](run.md#switching-gates) | A face with a second face: `{ "op", "value", "switchTo": { "op", "value" } }`. The two faces must differ in `op` or `value` |
+| [Mystery gate](run.md#mystery-gates) | `{ "op": "mystery", "options": [ … ] }`: two or more faces. It has no `value` and no `switchTo` |
+
+- The gates of a row may have any ops, the same or different, and may mix ordinary, switching and mystery gates.
 - The weapon-buff values are fixed, like multiply and divide, because [the run](run.md#weapon-buffs) defines each buff's effect.
+- `switchTo` and every option are faces: none is a mystery gate or has a `switchTo` of its own.
 
 Examples:
 
 - `{ "type": "gates", "z": 40, "left": { "op": "add", "value": 10 }, "centre": { "op": "multiply", "value": 2 }, "right": { "op": "subtract", "value": 15 } }` is a row of +10 on the left, ×2 in the centre and −15 on the right.
 - `{ "type": "gates", "z": 90, "left": { "op": "add", "value": 10 }, "right": { "op": "damage", "value": 1 } }` is a row of +10 on the left, an empty centre lane and DMG +1 on the right.
 - `{ "type": "gates", "z": 140, "centre": { "op": "fireRate", "value": 20 } }` is a single FIRE RATE +20% gate in the centre lane, with both outer lanes empty.
+- `{ "type": "gates", "z": 95, "left": { "op": "add", "value": 10, "switchTo": { "op": "subtract", "value": 15 } }, "right": { "op": "multiply", "value": 2 } }` is a switching gate on the left that shows +10 in blue and −15 in red in turn, an empty centre lane and ×2 on the right.
+- `{ "type": "gates", "z": 200, "centre": { "op": "mystery", "options": [ { "op": "multiply", "value": 2 }, { "op": "subtract", "value": 20 }, { "op": "damage", "value": 1 } ] } }` is a purple "?" gate in the centre lane that applies ×2, −20 or DMG +1, drawn when the squad takes it.
 
 ### Wave
 
@@ -69,7 +83,7 @@ Examples:
 | --- | --- |
 | `type` | `"wave"` |
 | `z` | Where the wave's front row stands when it appears |
-| `enemy` | `"puppy"`, `"chihuahua"`, `"bulldog"` or `"shieldDog"`. A wave has one kind of enemy |
+| `enemy` | `"puppy"`, `"chihuahua"`, `"bulldog"`, `"shieldDog"`, `"greyhound"` or `"dalmatian"`. A wave has one kind of enemy |
 | `pattern` | `"line"`, `"block"`, `"column"` or `"flank"`, with that pattern's fields below |
 
 - A wave appears when the squad is the spawn distance (40 units at speed factor 1, in the tuning config) × the speed factor before its stretched `z`. Its enemies then start moving. Example: a wave at `"z": 80` appears at distance travelled 40 on level 1 and 158.4 − 79.2 = 79.2 on level 15, both 3⅓ s into the run.
@@ -99,11 +113,11 @@ Examples:
 | Field | Value |
 | --- | --- |
 | `interval` | Seconds between two stream enemies, more than 0 |
-| `enemies` | One or more of `"puppy"`, `"chihuahua"`, `"bulldog"` and `"shieldDog"`, sent in this order and then again from the start. A kind may appear more than once, to send it more often |
+| `enemies` | One or more of `"puppy"`, `"chihuahua"`, `"bulldog"`, `"shieldDog"`, `"greyhound"` and `"dalmatian"`, sent in this order and then again from the start. A kind may appear more than once, to send it more often |
 
 - The stream is not an event: it has no `z` and runs from the start of the run until the finish line or the arena start.
 - Where stream enemies appear and how the interval is counted is set in [the run](run.md#enemy-stream).
-- Many stream and wave enemies alive at once can reach the [enemy cap](run.md#enemy-cap) of 150; then new enemies are dropped until some are gone. Designers keep the interval long enough that this does not happen in normal play.
+- Many stream and wave enemies alive at once, and the puppies of defeated dalmatians, can reach the [enemy cap](run.md#enemy-cap) of 150; then new enemies are dropped until some are gone. Designers keep the interval long enough that this does not happen in normal play.
 
 Examples:
 
@@ -167,13 +181,14 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 ## Scaling
 
 - For each level number above 1, enemy HP is multiplied by 1.08 (the enemy HP growth) and wave size by 1.05 (the wave size growth), both in the tuning config. The level number is the level file's `level`.
-- On level L, enemy HP is the level 1 HP × 1.08^(L − 1), kept as is, without rounding. Examples: a puppy has 3 HP on level 1, 3 × 1.08 = 3.24 HP on level 2 and 3 × 1.08² = 3.4992 HP on level 3. A shield dog's shield and body both scale.
+- On level L, enemy HP is the level 1 HP × 1.08^(L − 1), kept as is, without rounding. Examples: a puppy has 3 HP on level 1, 3 × 1.08 = 3.24 HP on level 2 and 3 × 1.08² = 3.4992 HP on level 3. A shield dog's shield and body both scale. The puppies of a dalmatian's split have the puppy's HP at the level number, like any puppy.
+- Enemy HP and wave size keep growing on every level number, also past level 15, where the level speed stops growing. Example: a greyhound has 2 × 1.08¹⁵ = 6.34… HP on level 16.
 - Stream enemies' HP scales the same way as wave enemies'. The stream's `interval` does not scale with the level number; each level sets its own.
 - A buff block's HP scales the same way from its `hp`. Example: a block with `"hp": 40` has 40 × 1.08⁴ = 54.419… HP on level 5.
 - On level L, a wave's size is its size in the level file × 1.05^(L − 1), rounded to the nearest whole number, halves up. For line, column and flank waves this scales `count` (per side for flank). For block waves it scales `rows`, so the block keeps its width and grows backwards. Examples: a line of 10 has 10 × 1.05 = 10.5, so 11 enemies on level 2; a line of 5 has 5.25, so still 5. A block of 5 columns and 4 rows on level 5 has 4 × 1.05⁴ = 4.86, so 5 rows of 5.
 - Scaled waves follow the same placement rules: a scaled line still spreads evenly across the track, and extra rows and enemies stand further back at the same `spacing`.
 - Barrels, walls and gates do not scale. Boss HP does not scale with the level number either; it follows the expected squad at boss (see [balancing](#balancing)).
-- The level speed grows with the level number too, and stretches the level's distances by the same factor (see [level speed](run.md#level-speed)). Example: the speed factor is 1 on level 1, 1.07 on level 2 and 1.98 on level 15.
+- The level speed grows with the level number too, up to level 15, and stretches the level's distances by the same factor (see [level speed](run.md#level-speed)). Example: the speed factor is 1 on level 1, 1.07 on level 2, and 1.98 on level 15 and every level after it.
 
 ## Balancing
 
@@ -184,12 +199,13 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 - Example: an expected squad at boss of 60 at the base values (2 yarn balls/s, 1 damage, 1 yarn ball per shot) deals 60 × 2 × 1 × 1 = 120 damage per second, so the Dustbot has 120 × 8 = 960 HP, and the Mega Dustbot would have 120 × 20 = 2,400 HP.
 - A bad run still reaches the boss with about 40% of the expected squad, so it can win with good aim.
 - The Mega Dustbot gets stronger on each of levels 11–15: each level's boss HP is at least 1.2 × the boss HP of the level before it. With the same boss and the same base values, that is an `expectedSquadAtBoss` at least 1.2 × the level before's. Example: level 10 with an expected squad at boss of 100 needs at least 120 on level 11.
+- On levels 20 and 25 the Mega Dustbot is at least as strong as on level 15: boss HP at least level 15's, so an `expectedSquadAtBoss` at least level 15's. It need not grow by 1.2 per level there, because that would need an expected squad above the 999 cats a squad can have by level 17; the new gates and dogs carry the difficulty instead.
 - Each gate row offers one clearly better gate and at least one that looks tempting. Example: +20 against ×2 when the squad count is 8 (+20 gives 28, ×2 gives 16).
 - The expected squad at boss counts gates only, not big buffs: a big buff is a reward on top of a good run.
 
 ## The first world (MVP)
 
-15 levels in one world, from `level-1` to `level-15`, each running faster than the one before (see [level speed](run.md#level-speed)). Later worlds change the look and add one new enemy each.
+25 levels in one world, from `level-1` to `level-25`. Each of levels 1–15 runs faster than the one before; levels 16–25 run at level 15's speed (see [level speed](run.md#level-speed)) and bring new gates and dogs instead. Later worlds change the look and add one new enemy each.
 
 | Levels | Content |
 | --- | --- |
@@ -200,5 +216,9 @@ Example: a level with `"length": 400` and `"expectedSquadAtBoss": 60` ends with 
 | 7–9 | Bulldogs and shield dogs, tighter gate choices. |
 | 10 | The world boss, the Mega Dustbot, which throws dust balls. |
 | 11–15 | Much harder: all four enemy kinds, and at least half of the gate rows put a red gate next to a blue one. Each ends with a Mega Dustbot fight that is stronger than the last (see [balancing](#balancing)). Level 15's stream interval is at most 0.6 s. |
+| 16–20 | [Switching gates](run.md#switching-gates), in at least 3 gate rows per level, and greyhounds. At least four enemy kinds per level. Level 20 ends with the Mega Dustbot. |
+| 21–25 | [Mystery gates](run.md#mystery-gates), at least 2 per level, and dalmatians, besides at least one switching gate and greyhounds. At least four enemy kinds per level. Level 25 ends with the Mega Dustbot, and its stream interval is at most 0.5 s. |
 
-Levels 5 and 10–15 have a boss: the Dustbot on level 5 and the Mega Dustbot on levels 10–15. The others end at a finish line. After level 15, the victory screen goes back to the title.
+- An enemy kind counts as used in a level when it is in one of its waves or its stream. The puppies of a dalmatian's split do not count.
+- A gate row has a switching gate when at least one of its gates is a switching gate.
+- Levels 5, 10–15, 20 and 25 have a boss: the Dustbot on level 5 and the Mega Dustbot on the others. The others end at a finish line. After level 25, the victory screen goes back to the title.

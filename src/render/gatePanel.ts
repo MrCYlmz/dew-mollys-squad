@@ -3,17 +3,18 @@ import type { BigBuff, GateOp } from '../content/level'
 import { renderConfig } from '../content/renderConfig'
 import { strings } from '../content/strings'
 import { tuning } from '../content/tuning'
-import type { GateState } from '../sim/run'
+import type { GateFaceState } from '../sim/run'
 import { createCanvasTexture, cssColour } from './canvasTexture'
 
 const panel = renderConfig.panel
 const panelColours = { blue: renderConfig.gate.good, red: renderConfig.gate.bad }
+const panelColour = renderConfig.gate
 // Matches the panel's shape on the track, so labels are not stretched.
 const canvasWidth = 256
 const canvasHeight = 150
 const glowBlur = panel.glowBlur
 
-// value is signed for add and subtract, as in GateState.
+// value is signed for add and subtract, as in GateFaceState.
 function gateLabel(op: GateOp, value: number): string {
   switch (op) {
     case 'add':
@@ -74,9 +75,13 @@ function createPanelMaterial(label: string, fill: number): MeshBasicMaterial {
   return new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
 }
 
-// Gate values never change during a run, so a gate's panel is drawn once.
-export function createGatePanelMaterial(gate: GateState): MeshBasicMaterial {
-  return createPanelMaterial(gateLabel(gate.op, gate.value), panelColours[gate.colour])
+// A gate's faces never change during a run, so each face's panel is drawn once.
+export function createGatePanelMaterial(face: GateFaceState): MeshBasicMaterial {
+  return createPanelMaterial(gateLabel(face.op, face.value), panelColours[face.colour])
+}
+
+export function createMysteryPanelMaterial(): MeshBasicMaterial {
+  return createPanelMaterial(strings.gateMystery, panelColour.mystery)
 }
 
 // The label a buff block and its uncovered big buff show, such as ×3 or DMG +3.

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import type { BossKind, EnemyKind, Gate, GateOp, Level } from '../../src/content/level'
+import type { BossKind, EnemyKind, Gate, GateOp, GateRowEvent, Level } from '../../src/content/level'
 import { levelSchema, type LevelFile } from './levelSchema'
 import { worldOneLevel, worldOneLevelNumbers } from './worldOneLevels'
 
@@ -30,7 +30,7 @@ describe('level files', () => {
   })
 })
 
-// requirements S-6 (1–6) and S-11 (5–9): the fifteen levels of world 1, following "The first world (MVP)" in docs/domain/levels.md.
+// requirements S-6 (1–6), S-11 (5–9) and S-12 (10–12): the twenty-five levels of world 1, following "The first world (MVP)" in docs/domain/levels.md.
 // Every distance is checked as written in the level file, at speed factor 1.
 
 function level(number: number): Level {
@@ -39,12 +39,24 @@ function level(number: number): Level {
   return found
 }
 
-function gates(of: Level): Gate[] {
-  return of.events.flatMap((event) => (event.type === 'gates' ? [event.left, event.centre, event.right].flatMap((gate) => (gate ? [gate] : [])) : []))
+function gatesOfRow(row: GateRowEvent): Gate[] {
+  return [row.left, row.centre, row.right].flatMap((gate) => (gate ? [gate] : []))
 }
 
-function gateRows(of: Level) {
+function gates(of: Level): Gate[] {
+  return gateRows(of).flatMap(gatesOfRow)
+}
+
+function gateRows(of: Level): GateRowEvent[] {
   return of.events.flatMap((event) => (event.type === 'gates' ? [event] : []))
+}
+
+function isSwitching(gate: Gate): boolean {
+  return 'switchTo' in gate && gate.switchTo !== undefined
+}
+
+function isMystery(gate: Gate): boolean {
+  return gate.op === 'mystery'
 }
 
 // Kinds sent by waves or by the stream.
@@ -56,11 +68,11 @@ function count(of: Level, type: Level['events'][number]['type']): number {
   return of.events.filter((event) => event.type === type).length
 }
 
-const weaponBuffOps: GateOp[] = ['fireRate', 'damage', 'multiShot', 'range']
-const badOps: GateOp[] = ['subtract', 'divide']
+const weaponBuffOps: string[] = ['fireRate', 'damage', 'multiShot', 'range'] satisfies GateOp[]
+const badOps: string[] = ['subtract', 'divide'] satisfies GateOp[]
 
 describe('world 1 level files', () => {
-  it('there_are_exactly_fifteen_level_files_level_1_to_level_15', () => {
+  it('there_are_exactly_twenty_five_level_files_level_1_to_level_25', () => {
     expect([...levelFileNames].sort()).toEqual(worldOneLevelNumbers.map((number) => `level-${number}.json`).sort())
   })
 
@@ -149,11 +161,50 @@ describe('world 1 progression', () => {
     expect(enemyKinds(level(number))).toEqual(new Set(['puppy', 'chihuahua', 'bulldog', 'shieldDog']))
   })
 
-  it.each(worldOneLevelNumbers)('level_%i_has_the_dustbot_on_level_5_the_mega_dustbot_on_levels_10_to_15_and_no_other_boss', (number) => {
+  it.each(worldOneLevelNumbers)('level_%i_has_the_dustbot_on_level_5_the_mega_dustbot_on_levels_10_to_15_20_and_25_and_no_other_boss', (number) => {
     const bosses = level(number).events.flatMap((event) => (event.type === 'boss' ? [event.boss] : []))
-    const expected = number === 5 ? ['dustbot'] : number >= 10 ? ['megaDustbot'] : []
+    const expected = number === 5 ? ['dustbot'] : (number >= 10 && number <= 15) || number === 20 || number === 25 ? ['megaDustbot'] : []
 
     expect(bosses).toEqual(expected)
+  })
+
+  const levelsFrom16 = worldOneLevelNumbers.filter((number) => number >= 16)
+
+  it.each(levelsFrom16.filter((number) => number <= 20))('level_%i_has_a_switching_gate_in_at_least_3_gate_rows', (number) => {
+    expect(gateRows(level(number)).filter((row) => gatesOfRow(row).some(isSwitching)).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it.each(levelsFrom16.filter((number) => number >= 21))('level_%i_has_a_switching_gate_in_at_least_1_gate_row', (number) => {
+    expect(gateRows(level(number)).filter((row) => gatesOfRow(row).some(isSwitching)).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it.each(levelsFrom16.filter((number) => number >= 21))('level_%i_has_at_least_2_mystery_gates', (number) => {
+    expect(gates(level(number)).filter(isMystery).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it.each(levelsFrom16)('level_%i_has_greyhounds', (number) => {
+    expect(enemyKinds(level(number))).toContain('greyhound')
+  })
+
+  it.each(levelsFrom16.filter((number) => number >= 21))('level_%i_has_dalmatians', (number) => {
+    expect(enemyKinds(level(number))).toContain('dalmatian')
+  })
+
+  // The new gates and dogs come in levels 16–25 only.
+  it.each(worldOneLevelNumbers.filter((number) => number <= 15))('level_%i_has_no_switching_or_mystery_gates_and_no_greyhounds_or_dalmatians', (number) => {
+    expect(gates(level(number)).filter((gate) => isSwitching(gate) || isMystery(gate))).toEqual([])
+    expect(enemyKinds(level(number))).not.toContain('greyhound')
+    expect(enemyKinds(level(number))).not.toContain('dalmatian')
+  })
+
+  it.each(levelsFrom16.filter((number) => number <= 20))('level_%i_has_no_mystery_gates_and_no_dalmatians', (number) => {
+    expect(gates(level(number)).filter(isMystery)).toEqual([])
+    expect(enemyKinds(level(number))).not.toContain('dalmatian')
+  })
+
+  // Puppies of a dalmatian's split are not in the level file, so they never count here.
+  it.each(levelsFrom16)('level_%i_uses_at_least_four_enemy_kinds', (number) => {
+    expect(enemyKinds(level(number)).size).toBeGreaterThanOrEqual(4)
   })
 })
 
@@ -170,6 +221,16 @@ describe('world 1 bosses', () => {
 
   it.each([11, 12, 13, 14, 15])('level_%i_boss_hp_is_at_least_1_2_times_the_boss_hp_of_the_level_before', (number) => {
     expect(bossHp(level(number))).toBeGreaterThanOrEqual(1.2 * bossHp(level(number - 1)))
+  })
+
+  // requirements S-12 (12).
+  it.each([20, 25])('level_%i_boss_hp_is_at_least_the_boss_hp_of_level_15', (number) => {
+    expect(bossHp(level(number))).toBeGreaterThanOrEqual(bossHp(level(15)))
+  })
+
+  // requirements S-12 (13a): an expected squad below the 999-cat limit, so the 75–100 % arrival range of AC 13 can tell runs apart.
+  it.each([20, 25])('level_%i_expected_squad_at_boss_is_below_999', (number) => {
+    expect(level(number).expectedSquadAtBoss).toBeLessThan(999)
   })
 })
 
@@ -189,6 +250,10 @@ describe('world 1 streams', () => {
 
   it('level_15_stream_interval_is_at_most_0_6_seconds', () => {
     expect(level(15).stream.interval).toBeLessThanOrEqual(0.6)
+  })
+
+  it('level_25_stream_interval_is_at_most_0_5_seconds', () => {
+    expect(level(25).stream.interval).toBeLessThanOrEqual(0.5)
   })
 })
 

@@ -35,6 +35,28 @@ describe('enemy hp scaling', () => {
     expect(run.state.enemies[0].hp).toBeCloseTo(hp, 9)
   })
 
+  it.each([
+    ['greyhound', 2.16],
+    ['dalmatian', 12.96],
+  ] as const)('%s_on_level_2_has_its_hp_times_1_08', (enemy, hp) => {
+    const run = spawnWave({ type: 'wave', z: 80, enemy, pattern: 'line', count: 1 }, 2)
+
+    expect(run.state.enemies[0].hp).toBeCloseTo(hp, 9)
+  })
+
+  // The example from docs/domain/levels.md: HP keeps growing past level 15, where the level speed stops growing.
+  it('greyhound_on_level_16_has_2_times_1_08_to_the_15th_hp', () => {
+    const run = spawnWave({ type: 'wave', z: 80, enemy: 'greyhound', pattern: 'line', count: 1 }, 16)
+
+    expect(run.state.enemies[0].hp).toBeCloseTo(6.3443, 4)
+  })
+
+  it('puppy_on_level_25_has_3_times_1_08_to_the_24th_hp', () => {
+    const run = spawnWave({ type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 1 }, 25)
+
+    expect(run.state.enemies[0].hp).toBeCloseTo(3 * 1.08 ** 24, 9)
+  })
+
   it('shield_dog_on_level_2_has_its_shield_and_body_times_1_08', () => {
     const run = spawnWave({ type: 'wave', z: 80, enemy: 'shieldDog', pattern: 'line', count: 1 }, 2)
 
@@ -77,6 +99,19 @@ describe('wave size scaling', () => {
     const run = spawnWave({ type: 'wave', z: 80, enemy: 'puppy', pattern: 'line', count: 5 }, 2)
 
     expect(run.state.enemies).toHaveLength(5)
+  })
+
+  it.each(['greyhound', 'dalmatian'] as const)('line_of_10_%ss_on_level_2_has_11', (enemy) => {
+    const run = spawnWave({ type: 'wave', z: 80, enemy, pattern: 'line', count: 10 }, 2)
+
+    expect(run.state.enemies).toHaveLength(11)
+  })
+
+  // Wave size keeps growing past level 15: 10 × 1.05¹⁹ = 25.27, so 25 on level 20.
+  it('line_of_10_on_level_20_has_25_enemies', () => {
+    const run = spawnWave({ type: 'wave', z: 80, enemy: 'bulldog', pattern: 'line', count: 10 }, 20)
+
+    expect(run.state.enemies).toHaveLength(25)
   })
 
   it('line_on_level_1_keeps_its_count', () => {

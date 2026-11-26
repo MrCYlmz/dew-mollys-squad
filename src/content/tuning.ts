@@ -40,6 +40,13 @@ export const tuning = {
     chihuahua: { hp: 1, shield: 0, speed: 9, contactDamage: 1 },
     bulldog: { hp: 40, shield: 0, speed: 2.5, contactDamage: 10 },
     shieldDog: { hp: 15, shield: 30, speed: 3, contactDamage: 3 },
+    greyhound: { hp: 2, shield: 0, speed: 14, contactDamage: 2 },
+    dalmatian: { hp: 12, shield: 0, speed: 3, contactDamage: 2 },
+  },
+  // The puppies a defeated dalmatian leaves, one behind the other from its place, spacing units apart.
+  dalmatianSplit: {
+    puppies: 3,
+    spacing: 1,
   },
   // Units/s at which every enemy moves across the track toward the squad's centre x.
   enemyChaseSpeed: 6,
@@ -49,6 +56,12 @@ export const tuning = {
     waveSizeGrowth: 1.05,
     // Added to the speed factor per level number above 1; the speed factor multiplies the run speed and stretches distances along the road.
     speedGrowth: 0.07,
+    // The last level number the speed factor grows on; later levels run at its speed.
+    speedGrowthLastLevel: 15,
+  },
+  gate: {
+    // Seconds a switching gate shows each of its faces.
+    switchTime: 1,
   },
   barrel: {
     hp: 10,
@@ -63,12 +76,12 @@ export const tuning = {
   },
   // What each big buff adds or multiplies by; fire rate in per cent of the base fire rate, as on a fire rate gate.
   bigBuff: {
-    add: 30,
+    add: 60,
     multiply: 3,
-    fireRate: 60,
+    fireRate: 100,
     damage: 3,
     multiShot: 2,
-    range: 30,
+    range: 40,
   },
   // Spawn distances are at speed factor 1.
   wave: {
@@ -81,7 +94,7 @@ export const tuning = {
   // Walk speed in units/s. The boss HP time is the seconds the expected squad at boss needs to defeat the boss at the base weapon values.
   bosses: {
     dustbot: { walkSpeed: 1.5, hpTime: 8 },
-    megaDustbot: { walkSpeed: 1.5, hpTime: 20 },
+    megaDustbot: { walkSpeed: 1.7, hpTime: 20 },
   },
   boss: {
     // How far beyond the arena start the boss enters.
@@ -100,6 +113,8 @@ export const tuning = {
     chihuahua: 0.3,
     bulldog: 0.6,
     shieldDog: 0.45,
+    greyhound: 0.35,
+    dalmatian: 0.45,
     barrel: 0.45,
     dustbot: 2,
     megaDustbot: 2.5,

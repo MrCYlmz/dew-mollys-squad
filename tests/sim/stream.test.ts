@@ -117,6 +117,19 @@ describe('stream enemies', () => {
     expect(spawn.enemy.hp).toBeCloseTo(16.2, 9)
   })
 
+  // requirements S-12 (7): the new dogs may come in the stream, with their HP scaled by the level number.
+  it.each([
+    ['greyhound', 16, 2 * 1.08 ** 15],
+    ['dalmatian', 21, 12 * 1.08 ** 20],
+  ] as const)('stream_sends_%ss_with_the_scaled_hp_of_level_%i', (enemy, level, hp) => {
+    const run = streamRun({ interval: 0.25, enemies: ['bulldog', enemy] }, { level })
+
+    const spawns = spawnsUpTo(run, 30)
+
+    expect(spawns.map((spawn) => spawn.enemy.kind)).toEqual(['bulldog', enemy])
+    expect(spawns[1].enemy.hp).toBeCloseTo(hp, 9)
+  })
+
   it('stream_enemy_chases_the_squad_and_touches_it', () => {
     // A bulldog outlasts the shots of 1 cat, so the squad of 1 is lost to it.
     const run = streamRun({ interval: 0.25, enemies: ['bulldog'] })

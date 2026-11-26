@@ -195,6 +195,60 @@ export function createShieldDogGeometry(): BufferGeometry {
   )
 }
 
+// Slim and long-legged, with a narrow pointed head and a thin tail. Faces +z, towards the squad.
+export function createGreyhoundGeometry(): BufferGeometry {
+  const { coat, dark, belly, scale } = dogs.greyhound
+  return scaled(
+    mergeParts([
+      { geometry: new SphereGeometry(0.17, 10, 8), colour: coat, position: [0, 0.6, 0.02], scale: [0.75, 0.8, 2] },
+      { geometry: new SphereGeometry(0.12, 8, 6), colour: belly, position: [0, 0.52, 0.12], scale: [0.7, 0.7, 1.2] },
+      { geometry: new CylinderGeometry(0.06, 0.08, 0.3, 6), colour: coat, position: [0, 0.78, 0.33], rotation: [0.6, 0, 0] },
+      { geometry: new SphereGeometry(0.1, 10, 8), colour: coat, position: [0, 0.92, 0.42], scale: [0.85, 0.9, 1.1] },
+      { geometry: new ConeGeometry(0.065, 0.26, 8), colour: coat, position: [0, 0.89, 0.6], rotation: [Math.PI / 2, 0, 0] },
+      { geometry: new SphereGeometry(0.025, 6, 4), colour: dogs.nose, position: [0, 0.89, 0.73] },
+      { geometry: new SphereGeometry(0.025, 6, 4), colour: dogs.eye, position: [-0.055, 0.96, 0.5] },
+      { geometry: new SphereGeometry(0.025, 6, 4), colour: dogs.eye, position: [0.055, 0.96, 0.5] },
+      { geometry: new ConeGeometry(0.04, 0.12, 5), colour: dark, position: [-0.07, 1.0, 0.36], rotation: [-0.9, 0, 0.4] },
+      { geometry: new ConeGeometry(0.04, 0.12, 5), colour: dark, position: [0.07, 1.0, 0.36], rotation: [-0.9, 0, -0.4] },
+      { geometry: new CylinderGeometry(0.018, 0.01, 0.36, 5), colour: coat, position: [0, 0.5, -0.42], rotation: [-0.4, 0, 0] },
+      ...dogLegs(0.03, 0.5, 0.08, 0.2, -0.2, coat),
+    ]),
+    scale,
+  )
+}
+
+// White with black spots and black ears. Faces +z, towards the squad.
+export function createDalmatianGeometry(): BufferGeometry {
+  const { coat, spot, scale } = dogs.dalmatian
+  const spots: Part[] = []
+  for (const [x, y, z] of [
+    [0.15, 0.55, 0.05],
+    [-0.12, 0.6, -0.12],
+    [0.02, 0.66, -0.02],
+    [-0.18, 0.45, 0.12],
+    [0.17, 0.42, -0.2],
+    [0.08, 0.84, 0.32],
+  ] as const) {
+    spots.push({ geometry: new SphereGeometry(0.06, 6, 4), colour: spot, position: [x, y, z], scale: [1, 0.6, 1] })
+  }
+  return scaled(
+    mergeParts([
+      { geometry: new SphereGeometry(0.24, 10, 8), colour: coat, position: [0, 0.48, -0.02], scale: [0.9, 0.85, 1.4] },
+      { geometry: new SphereGeometry(0.17, 10, 8), colour: coat, position: [0, 0.76, 0.3] },
+      { geometry: new SphereGeometry(0.09, 8, 6), colour: coat, position: [0, 0.7, 0.45], scale: [1, 0.85, 1.2] },
+      { geometry: new SphereGeometry(0.035, 6, 4), colour: dogs.nose, position: [0, 0.73, 0.56] },
+      { geometry: new SphereGeometry(0.03, 6, 4), colour: dogs.eye, position: [-0.07, 0.82, 0.43] },
+      { geometry: new SphereGeometry(0.03, 6, 4), colour: dogs.eye, position: [0.07, 0.82, 0.43] },
+      { geometry: new SphereGeometry(0.08, 8, 6), colour: spot, position: [-0.16, 0.78, 0.28], scale: [0.5, 1.3, 0.9], rotation: [0, 0, -0.3] },
+      { geometry: new SphereGeometry(0.08, 8, 6), colour: spot, position: [0.16, 0.78, 0.28], scale: [0.5, 1.3, 0.9], rotation: [0, 0, 0.3] },
+      { geometry: new CylinderGeometry(0.03, 0.018, 0.3, 6), colour: coat, position: [0, 0.58, -0.42], rotation: [-0.7, 0, 0] },
+      ...spots,
+      ...dogLegs(0.055, 0.3, 0.12, 0.17, -0.17, coat),
+    ]),
+    scale,
+  )
+}
+
 // A trash-can lid held upright, facing +z, with its handle to the front.
 export function createShieldGeometry(): BufferGeometry {
   const { lid, ring, handle, scale } = renderConfig.shield

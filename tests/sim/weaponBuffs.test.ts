@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import type { Gate, Level } from '../../src/content/level'
+import type { GateFace, Level } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
 import { createRun, type Run } from '../../src/sim/run'
 import { doublingRows, everyLane, levelOf, noSteering, repeatedRows, steerTo, stepTicks, stepUntil } from './runHarness'
 
 type Lane = 'left' | 'right'
 
-const fireRate: Gate = { op: 'fireRate', value: 20 }
-const damage: Gate = { op: 'damage', value: 1 }
-const multiShot: Gate = { op: 'multiShot', value: 1 }
-const range: Gate = { op: 'range', value: 10 }
-const double: Gate = { op: 'multiply', value: 2 }
+const fireRate: GateFace = { op: 'fireRate', value: 20 }
+const damage: GateFace = { op: 'damage', value: 1 }
+const multiShot: GateFace = { op: 'multiShot', value: 1 }
+const range: GateFace = { op: 'range', value: 10 }
+const double: GateFace = { op: 'multiply', value: 2 }
 
-const buffs: [string, Gate][] = [
+const buffs: [string, GateFace][] = [
   ['fire_rate', fireRate],
   ['damage', damage],
   ['multi_shot', multiShot],
@@ -210,7 +210,7 @@ describe('range gate', () => {
 
 describe('weapon-buff gates in a row', () => {
   // A squad of 8 cats left of centre facing the gate row under test at z = 60.
-  function squadFacingGateRow(left: Gate, right: Gate) {
+  function squadFacingGateRow(left: GateFace, right: GateFace) {
     const run = createRun({ level: levelOf([...doublingRows(3), { type: 'gates', z: 60, left, right }]), seed: 1 })
     steerTo(run, -2.5)
     return run
@@ -247,9 +247,9 @@ describe('weapon-buff gates in a row', () => {
 
     expect(left.state.squad.count).toBe(11)
     expect(left.state.weapon.damage).toBe(1)
-    expect(left.gateTaken).toEqual([{ type: 'gateTaken', lane: 'left', op: 'add', value: 10, squadCount: 11 }])
+    expect(left.gateTaken).toEqual([{ type: 'gateTaken', lane: 'left', op: 'add', value: 10, squadCount: 11, z: 30, mystery: false }])
     expect(right.state.squad.count).toBe(1)
     expect(right.state.weapon.damage).toBe(2)
-    expect(right.gateTaken).toEqual([{ type: 'gateTaken', lane: 'right', op: 'damage', value: 1, squadCount: 1 }])
+    expect(right.gateTaken).toEqual([{ type: 'gateTaken', lane: 'right', op: 'damage', value: 1, squadCount: 1, z: 30, mystery: false }])
   })
 })

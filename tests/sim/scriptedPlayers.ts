@@ -1,14 +1,21 @@
-import type { Lane } from '../../src/content/level'
+import type { Gate, GateFace, GateRowEvent, Lane } from '../../src/content/level'
 import { tuning } from '../../src/content/tuning'
-import type { GateRowState, GateState, RunState, SteerInput, WeaponState } from '../../src/sim/run'
+import type { GateRowState, RunState, SteerInput, WeaponState } from '../../src/sim/run'
 
-// Scripted players for the balance tests of requirements S-6 (7–10, 9a, 9b) and S-11 (10–13).
+// Scripted players for the balance tests of requirements S-6 (7–10, 9a, 9b), S-11 (10–13) and S-12 (13–15).
 //
 // Every player steers to one lane per gate row, avoids walls and unbroken buff blocks, and otherwise stays where it is.
 // The good player takes the best choice of each row, an empty lane included; the bad player takes the worst gate, and
 // the middle player the middle-ranked gate.
 // A choice is scored by the squad's firepower after it: squad count × fire rate × damage × yarn balls per shot, so a
 // weapon buff is weighed against a gate that changes the squad count. Range adds no firepower and wins only ties.
+//
+// How each player reads the gates of S-12:
+// - A switching gate: the good and the bad player know its rhythm and score the face it will show in the tick its row
+//   reaches the squad. The middle player scores the face it sees, and in the last half second before the row arrives it
+//   keeps the face it saw half a second before, too late to react to a switch.
+// - A mystery gate: nobody sees its options, so every player scores it by the average firepower over its options, as a
+//   player who has learned what mystery gates tend to hold.
 
 export type Choice = 'best' | 'middle' | 'worst'
 
@@ -20,53 +27,92 @@ const laneCentre: Record<Lane, number> = { left: -laneWidth, centre: 0, right: l
 const obstacleLookaheadSeconds = 1.25
 // Kept between the squad's centre and a wall's edge when passing it.
 const wallClearance = 0.6
+// How long before a row arrives the middle player last reads a switching gate.
+const middlePlayerReadSeconds = 0.5
+// docs/domain/run.md: the switch time in ticks, rounded to the nearest whole tick, halves up, and at least 1 tick.
+const switchTicks = Math.max(Math.floor(tuning.gate.switchTime * tuning.tickRate + 0.5), 1)
 
 function laneOf(x: number): Lane {
   if (x < -tuning.track.halfWidth / 3) return 'left'
   return x < tuning.track.halfWidth / 3 ? 'centre' : 'right'
 }
 
-function firepowerAfter(gate: GateState | null, count: number, weapon: WeaponState): number {
+function firepowerAfter(face: GateFace | null, count: number, weapon: WeaponState): number {
   let { fireRate, damage, yarnBallsPerShot } = weapon
   const baseFireRate = tuning.cat.fireRate
-  switch (gate?.op) {
+  switch (face?.op) {
     case undefined:
     case 'range':
       break
-    // Run state holds a subtract gate's value signed, so −15 is −15.
+    // The level file holds a subtract gate's value unsigned, so −15 is 15.
     case 'add':
+      count = Math.min(count + face.value, tuning.squad.maxCount)
+      break
     case 'subtract':
-      count = Math.min(Math.max(count + gate.value, 0), tuning.squad.maxCount)
+      count = Math.max(count - face.value, 0)
       break
     case 'multiply':
-      count = Math.min(count * gate.value, tuning.squad.maxCount)
+      count = Math.min(count * face.value, tuning.squad.maxCount)
       break
     case 'divide':
-      count = Math.max(Math.floor(count / gate.value), 1)
+      count = Math.max(Math.floor(count / face.value), 1)
       break
     case 'fireRate':
-      fireRate = Math.min(fireRate + (baseFireRate * gate.value) / 100, baseFireRate * tuning.weaponBuff.maxFireRateFactor)
+      fireRate = Math.min(fireRate + (baseFireRate * face.value) / 100, baseFireRate * tuning.weaponBuff.maxFireRateFactor)
       break
     case 'damage':
-      damage += gate.value
+      damage += face.value
       break
     case 'multiShot':
-      yarnBallsPerShot = Math.min(yarnBallsPerShot + gate.value, tuning.weaponBuff.maxYarnBallsPerShot)
+      yarnBallsPerShot = Math.min(yarnBallsPerShot + face.value, tuning.weaponBuff.maxYarnBallsPerShot)
       break
   }
   return count * fireRate * damage * yarnBallsPerShot
 }
 
+// The face a switching gate shows in a tick, counting the run's first tick as tick 1; before it, its own face.
+function faceInTick(gate: GateFace & { switchTo?: GateFace }, tick: number): GateFace {
+  if (gate.switchTo === undefined || tick < 1) return gate
+  return Math.floor((tick - 1) / switchTicks) % 2 === 0 ? gate : gate.switchTo
+}
+
+// The firepower a player expects after taking the gate, or after taking nothing for an empty lane.
+function expectedFirepower(gate: Gate | undefined, state: RunState, readTick: number): number {
+  if (gate === undefined) return firepowerAfter(null, state.squad.count, state.weapon)
+  if (gate.op === 'mystery') {
+    const total = gate.options.reduce((sum, option) => sum + firepowerAfter(option, state.squad.count, state.weapon), 0)
+    return total / gate.options.length
+  }
+  return firepowerAfter(faceInTick(gate, readTick), state.squad.count, state.weapon)
+}
+
+// The row as written in the level file; the run stretches its z by the speed factor.
+function levelRowOf(row: GateRowState, state: RunState): GateRowEvent {
+  const levelRow = state.level.events.find((event) => event.type === 'gates' && Math.abs(event.z * state.speedFactor - row.z) < 1e-6)
+  if (levelRow?.type !== 'gates') throw new Error(`no gate row at ${row.z} in ${state.level.id}`)
+  return levelRow
+}
+
+// The tick in which a switching gate of the row is read: the tick the row reaches the squad, or for the middle player the
+// tick it sees now, but no later than half a second before the row arrives. `ticksDone` ticks of the run have passed.
+function readTickOf(row: GateRowState, state: RunState, choice: Choice, ticksDone: number): number {
+  const levelStep = (tuning.squad.forwardSpeed * state.speedFactor) / tuning.tickRate
+  const arrivalTick = ticksDone + Math.max(Math.ceil((row.z - state.squad.z) / levelStep - 1e-9), 1)
+  return choice === 'middle' ? Math.min(ticksDone, arrivalTick - middlePlayerReadSeconds * tuning.tickRate) : arrivalTick
+}
+
 // Ties go to range for the good player, then to the lane the squad is in, then to the nearer lane.
-function chosenLane(row: GateRowState, state: RunState, choice: Choice): Lane {
+function chosenLane(row: GateRowState, state: RunState, choice: Choice, ticksDone: number): Lane {
   const here = laneOf(state.squad.x)
-  const options = lanes.filter((lane) => choice === 'best' || row[lane] !== null)
-  const firepower = (lane: Lane) => firepowerAfter(row[lane], state.squad.count, state.weapon)
+  const levelRow = levelRowOf(row, state)
+  const readTick = readTickOf(row, state, choice, ticksDone)
+  const options = lanes.filter((lane) => choice === 'best' || levelRow[lane] !== undefined)
+  const firepower = (lane: Lane) => expectedFirepower(levelRow[lane], state, readTick)
   const ranked = options.map(firepower).sort((first, second) => second - first)
   // With two gates the middle-ranked one is the worse; with one gate, that gate.
   const rank = { best: 0, middle: Math.ceil((ranked.length - 1) / 2), worst: ranked.length - 1 }[choice]
   const tieBreak = (lane: Lane) =>
-    (choice === 'best' && row[lane]?.op === 'range' ? -10 : 0) + (lane === here ? 0 : 1) + Math.abs(laneCentre[lane] - laneCentre[here]) / 100
+    (choice === 'best' && levelRow[lane]?.op === 'range' ? -10 : 0) + (lane === here ? 0 : 1) + Math.abs(laneCentre[lane] - laneCentre[here]) / 100
   return options
     .filter((lane) => firepower(lane) === ranked[rank])
     .reduce((chosen, lane) => (tieBreak(lane) < tieBreak(chosen) ? lane : chosen))
@@ -96,13 +142,13 @@ function obstaclesAhead(state: RunState): ObstacleSpan[] {
 }
 
 // Where the player wants its squad's centre: the chosen lane of the next gate row, or where it is when no row is left.
-function wantedX(state: RunState, choice: Choice): number {
+function wantedX(state: RunState, choice: Choice, ticksDone: number): number {
   const nextRow = state.gateRows.find((row) => row.z > state.squad.z && row.taken === null)
-  return nextRow === undefined ? state.squad.steeringPoint : laneCentre[chosenLane(nextRow, state, choice)]
+  return nextRow === undefined ? state.squad.steeringPoint : laneCentre[chosenLane(nextRow, state, choice, ticksDone)]
 }
 
-function steeringTarget(state: RunState, choice: Choice): number {
-  const wanted = wantedX(state, choice)
+function steeringTarget(state: RunState, choice: Choice, ticksDone: number): number {
+  const wanted = wantedX(state, choice, ticksDone)
   const obstacles = obstaclesAhead(state)
   if (obstacles.length === 0) return wanted
   const free = (x: number) => obstacles.every((obstacle) => !obstacle.blocks(x))
@@ -127,6 +173,12 @@ function steeringTarget(state: RunState, choice: Choice): number {
   })
 }
 
+// A player for one run, called once before each tick.
 export function scriptedPlayer(choice: Choice): (state: RunState) => SteerInput {
-  return (state) => ({ drag: steeringTarget(state, choice) - state.squad.steeringPoint, left: false, right: false })
+  let ticksDone = 0
+  return (state) => {
+    const input = { drag: steeringTarget(state, choice, ticksDone) - state.squad.steeringPoint, left: false, right: false }
+    ticksDone++
+    return input
+  }
 }

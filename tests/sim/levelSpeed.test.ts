@@ -4,8 +4,8 @@ import { tuning } from '../../src/content/tuning'
 import { createRun, type GameEvent, type Run } from '../../src/sim/run'
 import { bossLevelOf, doublingRows, everyLane, levelOf, noSteering, steerTo, stepTicks, stepToArena, stepUntil } from './runHarness'
 
-// requirements S-11 (1–4) and docs/domain/run.md "Level speed": each level runs at 12 units/s × its speed factor,
-// 1 + 0.07 × (level number − 1), and the road distances of its level file are stretched by that factor.
+// requirements S-11 (1–4), S-12 (8) and docs/domain/run.md "Level speed": each level runs at 12 units/s × its speed factor,
+// 1 + 0.07 × (min(level number, 15) − 1), and the road distances of its level file are stretched by that factor.
 
 // Speed factors and level speeds from the examples in docs/domain/run.md and levels.md.
 const level15Factor = 1.98
@@ -45,6 +45,9 @@ describe('level speed', () => {
     [2, 12.84],
     [10, 19.56],
     [15, 23.76],
+    [16, 23.76],
+    [20, 23.76],
+    [25, 23.76],
   ])('squad_on_level_%i_travels_%d_units_per_second', (level, speed) => {
     const run = runOn(level)
 
@@ -73,11 +76,33 @@ describe('level speed', () => {
     expect(level15.state.squad.z / level1.state.squad.z).toBeCloseTo(level15Factor, 6)
   })
 
+  it('squad_on_level_16_moves_no_faster_than_on_level_15', () => {
+    const level15 = runOn(15)
+    const level16 = runOn(16)
+
+    stepTicks(level15, 60)
+    stepTicks(level16, 60)
+
+    expect(level16.state.squad.z).toBeCloseTo(level15.state.squad.z, 9)
+  })
+
   describe('with another speed growth in the tuning config', () => {
     const documentedGrowth = tuning.scaling.speedGrowth
+    const documentedLastLevel = tuning.scaling.speedGrowthLastLevel
 
     afterEach(() => {
       tuning.scaling.speedGrowth = documentedGrowth
+      tuning.scaling.speedGrowthLastLevel = documentedLastLevel
+    })
+
+    // With the speed growth's last level at 3, level 5 runs at level 3's speed factor of 1.14, so 13.68 units/s.
+    it('speed_factor_stops_growing_at_the_speed_growth_last_level', () => {
+      tuning.scaling.speedGrowthLastLevel = 3
+      const run = runOn(5)
+
+      stepTicks(run, 60)
+
+      expect(run.state.squad.z).toBeCloseTo(13.68, 6)
     })
 
     // A speed growth of 0.1 gives level 3 a speed factor of 1.2, so 14.4 units/s.
@@ -100,7 +125,13 @@ describe('stretched distances', () => {
     expect(run.state.gateRows.map((row) => row.z)).toEqual([expect.closeTo(118.8, 6)])
   })
 
-  it.each([1, 15])('squad_on_level_%i_meets_a_gate_row_at_z_60_after_5_seconds', (level) => {
+  it.each([16, 25])('gate_row_on_level_%i_stands_at_its_z_times_1_98_as_on_level_15', (level) => {
+    const run = runOn(level, [{ type: 'gates', z: 60, ...everyLane({ op: 'add', value: 1 }) }], 400)
+
+    expect(run.state.gateRows.map((row) => row.z)).toEqual([expect.closeTo(118.8, 6)])
+  })
+
+  it.each([1, 15, 25])('squad_on_level_%i_meets_a_gate_row_at_z_60_after_5_seconds', (level) => {
     const run = runOn(level, [{ type: 'gates', z: 60, ...everyLane({ op: 'add', value: 1 }) }], 400)
 
     const tick = ticksUntil(run, (events) => events.some((event) => event.type === 'gateTaken'))
@@ -121,7 +152,7 @@ describe('stretched distances', () => {
   })
 
   // The example from docs/domain/run.md: length 400 takes 400 ÷ 12 ≈ 33 s on level 1 and 792 ÷ 23.76 ≈ 33 s on level 15.
-  it.each([1, 15])('level_%i_with_length_400_is_won_after_33_and_a_third_seconds', (level) => {
+  it.each([1, 15, 25])('level_%i_with_length_400_is_won_after_33_and_a_third_seconds', (level) => {
     const run = runOn(level, [], 400)
 
     stepTicks(run, 1998)
@@ -200,8 +231,8 @@ describe('waves on a faster level', () => {
 })
 
 describe('enemy stream on a faster level', () => {
-  it('stream_enemy_on_level_15_appears_79_2_units_ahead_of_the_squad_centre', () => {
-    const run = runOn(15, [], 300, { interval: 0.25, enemies: ['bulldog'] })
+  it.each([15, 25])('stream_enemy_on_level_%i_appears_79_2_units_ahead_of_the_squad_centre', (level) => {
+    const run = runOn(level, [], 300, { interval: 0.25, enemies: ['bulldog'] })
 
     stepTicks(run, 15)
 
@@ -355,7 +386,7 @@ describe('what does not stretch', () => {
 })
 
 describe('boss arena on a faster level', () => {
-  // The arena start is stretched; the boss start distance of 35 and the walk speed of 1.5 units/s are not.
+  // The arena start is stretched; the boss start distance of 35 and the Mega Dustbot's walk speed of 1.7 units/s are not.
   it('mega_dustbot_on_level_15_enters_35_units_beyond_the_stretched_arena_start', () => {
     const run = createRun({ level: bossLevelOf([], { boss: 'megaDustbot', expectedSquadAtBoss: 100000, level: 15 }), seed: 1 })
 
@@ -364,7 +395,7 @@ describe('boss arena on a faster level', () => {
     expect(run.state.squad.z).toBeCloseTo(594, 6)
     expect(run.state.boss?.x).toBe(0)
     expect(run.state.boss?.z).toBeLessThanOrEqual(594 + 35 + 1e-9)
-    expect(run.state.boss?.z).toBeGreaterThanOrEqual(594 + 35 - 1.5 / 60 - 1e-9)
+    expect(run.state.boss?.z).toBeGreaterThanOrEqual(594 + 35 - 1.7 / 60 - 1e-9)
   })
 
   it('squad_on_level_15_stops_at_the_stretched_arena_start', () => {
@@ -377,14 +408,14 @@ describe('boss arena on a faster level', () => {
     expect(run.state.squad.z).toBe(arenaStart)
   })
 
-  it('mega_dustbot_on_level_15_walks_1_5_units_per_second', () => {
+  it('mega_dustbot_on_level_15_walks_1_7_units_per_second', () => {
     const run = createRun({ level: bossLevelOf([], { boss: 'megaDustbot', expectedSquadAtBoss: 100000, level: 15 }), seed: 1 })
     stepToArena(run)
     const start = run.state.boss?.z ?? Number.NaN
 
     stepTicks(run, 60)
 
-    expect(run.state.boss?.z).toBeCloseTo(start - 1.5, 6)
+    expect(run.state.boss?.z).toBeCloseTo(start - 1.7, 6)
   })
 
   it('mega_dustbot_on_level_15_throws_a_dust_ball_every_3_seconds', () => {

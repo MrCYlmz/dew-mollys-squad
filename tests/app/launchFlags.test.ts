@@ -44,6 +44,8 @@ describe('level flag', () => {
     ['?level=12', 12],
     ['?level=1', 1],
     ['?level=15', 15],
+    ['?level=16', 16],
+    ['?level=25', 25],
   ])('level_flag_%s_picks_level_%i', (search, level) => {
     expect(readLaunchFlags(search).level).toBe(level)
   })

@@ -166,9 +166,9 @@ describe('big buff', () => {
 
     events.push(...stepUntil(run, (state) => state.squad.z > 60.5, 6000))
 
-    expect(run.state.squad.count).toBe(31)
+    expect(run.state.squad.count).toBe(61)
     expect(run.state.bigBuffs).toEqual([])
-    expect(eventsOf(events, 'bigBuffCollected')).toEqual([expect.objectContaining({ buff: 'add', squadCount: 31 })])
+    expect(eventsOf(events, 'bigBuffCollected')).toEqual([expect.objectContaining({ buff: 'add', squadCount: 61 })])
     expect(eventsOf(events, 'catsLost')).toEqual([])
   })
 
@@ -192,7 +192,7 @@ describe('big buff', () => {
     const events = stepUntil(run, (state) => state.squad.z > 60.5, 6000)
 
     expect(eventsOf(events, 'buffBlockBroken')).toEqual([expect.objectContaining({ lane: 'right', buff: 'add' })])
-    expect(run.state.squad.count).toBe(31)
+    expect(run.state.squad.count).toBe(61)
   })
 
   it('big_buff_that_reached_the_squad_beside_its_lane_is_lost_though_the_squad_steers_into_its_lane_before_it_is_behind', () => {
@@ -212,14 +212,14 @@ describe('big buff', () => {
   })
 
   it.each([
-    ['add', 1, { count: 31, weapon: { fireRate: 2, damage: 1, yarnBallsPerShot: 1, range: 30 } }],
+    ['add', 1, { count: 61, weapon: { fireRate: 2, damage: 1, yarnBallsPerShot: 1, range: 30 } }],
     ['multiply', 10, { count: 30, weapon: { fireRate: 2, damage: 1, yarnBallsPerShot: 1, range: 30 } }],
-    ['fireRate', 1, { count: 1, weapon: { fireRate: 3.2, damage: 1, yarnBallsPerShot: 1, range: 30 } }],
+    ['fireRate', 1, { count: 1, weapon: { fireRate: 4, damage: 1, yarnBallsPerShot: 1, range: 30 } }],
     ['damage', 1, { count: 1, weapon: { fireRate: 2, damage: 4, yarnBallsPerShot: 1, range: 30 } }],
     ['multiShot', 1, { count: 1, weapon: { fireRate: 2, damage: 1, yarnBallsPerShot: 3, range: 30 } }],
-    ['range', 1, { count: 1, weapon: { fireRate: 2, damage: 1, yarnBallsPerShot: 1, range: 60 } }],
+    ['range', 1, { count: 1, weapon: { fireRate: 2, damage: 1, yarnBallsPerShot: 1, range: 70 } }],
   ] as const)('%s_big_buff_collected_by_a_squad_of_%i_at_the_base_values', (buff, squadCount, expected) => {
-    // +30 cats, ×3 cats, FIRE RATE +60% of the base 2, DMG +3, +2 BULLET, RANGE +30
+    // +60 cats, ×3 cats, FIRE RATE +100% of the base 2, DMG +3, +2 BULLET, RANGE +40
     const run = startRun([...squadOf(squadCount), buffBlock(40, 'centre', 1, buff)])
 
     stepUntil(run, (state) => state.squad.z > 41, 6000)
@@ -273,7 +273,7 @@ describe('big buff', () => {
 
   it.each([
     ['damage', { op: 'damage', value: 1 }, 'damage', 5],
-    ['range', { op: 'range', value: 10 }, 'range', 70],
+    ['range', { op: 'range', value: 10 }, 'range', 80],
   ] as const)('%s_big_buff_adds_up_with_a_gate_without_a_cap', (buff, gate: Gate, value, expected) => {
     const run = startRun([...repeatedRows(gate, 1), buffBlock(40, 'centre', 1, buff)])
 

@@ -1,7 +1,11 @@
 import type { GateOp, Lane } from '../content/level'
 import { tuning } from '../content/tuning'
 
-export type GateColour = 'blue' | 'red'
+// The colour of a face: blue for one that helps the squad, red for one that hurts it.
+export type FaceColour = 'blue' | 'red'
+
+// A mystery gate is purple, neither blue nor red.
+export type GateColour = FaceColour | 'purple'
 
 export interface SignedGate {
   op: GateOp
@@ -76,7 +80,7 @@ export function applyWeaponBuff(weapon: Weapon, gate: SignedGate): void {
   }
 }
 
-export function gateColour(op: GateOp): GateColour {
+export function gateColour(op: GateOp): FaceColour {
   switch (op) {
     case 'subtract':
     case 'divide':

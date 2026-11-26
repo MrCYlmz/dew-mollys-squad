@@ -49,6 +49,18 @@ describe('enemies', () => {
   it('enemy_cap_is_150', () => {
     expect(tuning.limits.enemies).toBe(150)
   })
+
+  // requirements S-12 (6): a defeated dalmatian leaves 3 puppies, 1 unit apart.
+  it('dalmatian_split_is_3_puppies_1_unit_apart', () => {
+    expect(tuning.dalmatianSplit).toEqual({ puppies: 3, spacing: 1 })
+  })
+})
+
+// requirements S-12 (1): a switching gate shows each face for 1 s.
+describe('gates', () => {
+  it('switch_time_is_1_second', () => {
+    expect(tuning.gate.switchTime).toBe(1)
+  })
 })
 
 describe('barrels and walls', () => {
@@ -81,8 +93,8 @@ describe('buff blocks', () => {
   })
 
   // Fire rate in per cent of the base fire rate, as on a fire rate gate.
-  it('big_buff_values_are_plus_30_times_3_fire_rate_60_damage_3_bullet_2_range_30', () => {
-    expect(tuning.bigBuff).toEqual({ add: 30, multiply: 3, fireRate: 60, damage: 3, multiShot: 2, range: 30 })
+  it('big_buff_values_are_plus_60_times_3_fire_rate_100_damage_3_bullet_2_range_40', () => {
+    expect(tuning.bigBuff).toEqual({ add: 60, multiply: 3, fireRate: 100, damage: 3, multiShot: 2, range: 40 })
   })
 })
 
@@ -99,6 +111,11 @@ describe('level scaling', () => {
   it('speed_grows_by_0_07_per_level', () => {
     expect(tuning.scaling.speedGrowth).toBe(0.07)
   })
+
+  // requirements S-12 (8): the speed factor grows up to level 15 and then stays.
+  it('speed_growth_last_level_is_15', () => {
+    expect(tuning.scaling.speedGrowthLastLevel).toBe(15)
+  })
 })
 
 describe('bosses', () => {
@@ -107,8 +124,8 @@ describe('bosses', () => {
     expect(tuning.hitRadius.dustbot).toBe(2)
   })
 
-  it('mega_dustbot_walks_1_5_units_per_second_with_a_hit_radius_of_2_5', () => {
-    expect(tuning.bosses.megaDustbot.walkSpeed).toBe(1.5)
+  it('mega_dustbot_walks_1_7_units_per_second_with_a_hit_radius_of_2_5', () => {
+    expect(tuning.bosses.megaDustbot.walkSpeed).toBe(1.7)
     expect(tuning.hitRadius.megaDustbot).toBe(2.5)
   })
 

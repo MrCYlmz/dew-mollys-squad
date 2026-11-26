@@ -8,10 +8,12 @@ One term per concept. Code, tests and docs use these words exactly.
 | Track | The straight road a run takes place on, 10 units wide and 300–600 units long in the level file, stretched by the speed factor in the run, with three lanes. |
 | Lane | One of the three equal strips of the track: left, centre or right. Gates and buff blocks are placed by lane; steering is free. |
 | Run speed | The 12 units/s at which the road comes toward the squad on level 1. The level speed is measured from it. |
-| Speed factor | 1 + the speed growth × (level number − 1). It multiplies the run speed and stretches a level's distances along the road. |
+| Speed factor | 1 + the speed growth × (min(level number, the speed growth's last level) − 1). It multiplies the run speed and stretches a level's distances along the road. |
 | Speed growth | How much the speed factor grows per level number above 1, 0.07. |
+| Speed growth's last level | The last level number on which the speed factor grows, 15. Every later level runs at its speed. |
 | Level speed | The run speed × the level's speed factor: the speed at which the road and everything on it comes toward the squad on that level. |
 | Stretched | Of a distance along the road written in the level file: multiplied by the level's speed factor when the run starts, so a level takes the same time at every level speed. |
+| Fog | The haze the road ahead fades into, thicker with distance from the camera. Anything the spawn distance ahead of the squad is drawn at least at half strength through it. |
 | Distance travelled | How far the road has carried the squad from the start, in units. Every z in the run is measured in it, at the stretched values. |
 | Squad | The group of cats the player steers. It holds a fixed place on screen while the road comes at it. |
 | Cat | One member of the squad. Every cat fires. |
@@ -21,12 +23,20 @@ One term per concept. Code, tests and docs use these words exactly.
 | Gate | A panel filling one lane that changes the squad count or a weapon stat when the squad takes it. Yarn balls fly through it. |
 | Gate row | One to three gates side by side, one per lane. The squad takes the gate in its lane, if there is one. |
 | Gate value | The number on a gate, such as +10 or −15. |
-| Good gate | A gate shown in blue. It helps the squad. |
-| Bad gate | A gate shown in red. It hurts the squad. |
+| Face | One op and value a gate can show and apply, such as +10 or ÷2, with its label and colour. |
+| Ordinary gate | A gate with one face. |
+| Switching gate | A gate with two faces, its own and a second face, shown in turn for the switch time each. The face shown when the row reaches the squad is taken. |
+| Switch time | How long a switching gate shows each face, 1 s, counted in ticks of run time. |
+| Mystery gate | A purple gate shown as "?", with two or more hidden options. One is drawn from the run's seed and the gate's place when the squad takes it, so the same seed always gives the same option for that gate. |
+| Option | One face a mystery gate may apply. |
+| Draw seed | The seed of a mystery gate's own draw, from the run's seed and the gate's row and lane. |
+| Reveal | The floating label at a mystery gate showing the option drawn, in that option's colour. |
+| Good gate | A gate, or a face of a switching gate or an option, shown in blue. It helps the squad. |
+| Bad gate | A gate, or a face of a switching gate or an option, shown in red. It hurts the squad. |
 | Weapon buff | An effect on fire rate, damage, multi-shot or range from a gate or big buff that lasts until the end of the run. |
-| Weapon-buff gate | A gate that gives a weapon buff. It is always blue. |
+| Weapon-buff gate | A gate, or a face, that gives a weapon buff. It is always blue. |
 | Multi-shot | Several yarn balls per cat per shot, fanned out in a spread. |
-| Enemy | A dog that chases the squad's centre: puppy, chihuahua, bulldog or shield dog. |
+| Enemy | A dog that chases the squad's centre: puppy, chihuahua, bulldog, shield dog, greyhound or dalmatian. |
 | Contact damage | The number of cats an enemy removes when it touches the squad. |
 | Wave | A group of enemies spawned together in one spawn pattern. |
 | Spawn pattern | The starting formation of a wave: line, block, column or flank. |
@@ -35,17 +45,20 @@ One term per concept. Code, tests and docs use these words exactly.
 | Stream interval | The seconds between two enemies of the enemy stream, set per level. |
 | Stream spawn distance | How far ahead of the squad's centre a stream enemy appears, stretched by the speed factor. |
 | Enemy chase speed | The speed at which every enemy moves across the track toward the squad's centre x, 6 units/s. |
-| Enemy cap | The most enemies alive at once, 150. An enemy that would spawn beyond it is dropped. |
+| Enemy cap | The most enemies alive at once, 150. An enemy that would spawn beyond it, also a puppy of a split, is dropped. |
+| Greyhound | A fast, fragile dog: slim, long-legged and grey. |
+| Dalmatian | A white dog with black spots that splits into puppies when defeated. |
+| Split | The 3 puppies a defeated dalmatian leaves at its place. |
 | Barrel | A static water bucket on the track that splashes nearby enemies when destroyed. |
 | Shield | The shield dog's extra HP, which takes all damage before its body does. |
 | Obstacle | A wall or an unbroken buff block. The squad's centre running into one loses the run. |
 | Wall | A static block on the track that stops yarn balls and is an obstacle, so the squad steers around it. |
 | Buff block | A block filling one lane, with HP, that hides a big buff. Yarn balls break it; an unbroken one is an obstacle. |
-| Big buff | The reward behind a buff block: +30 cats, ×3 cats, FIRE RATE +60%, DMG +3, +2 BULLET or RANGE +30. The squad collects it by being in its lane when it arrives. |
+| Big buff | The reward behind a buff block: +60 cats, ×3 cats, FIRE RATE +100%, DMG +3, +2 BULLET or RANGE +40. The squad collects it by being in its lane when it arrives. |
 | Coin | A fish. Coins are the currency for upgrades. |
 | Boss | A giant robot vacuum cleaner at the end of some levels: the Dustbot or the Mega Dustbot. |
 | Dustbot | The boss of level 5 in world 1. It does not throw dust balls. |
-| Mega Dustbot | The world boss of world 1, on levels 10–15, stronger on each. It throws dust balls. |
+| Mega Dustbot | The world boss of world 1, on levels 10–15, stronger on each, and on levels 20 and 25, at least as strong as on level 15. It throws dust balls. |
 | World boss | The boss of a world's last level. |
 | Dust ball | A projectile the Mega Dustbot throws at the squad. It removes cats when it touches the squad. |
 | Boss arena | The end of a boss level's track, from the stretched `length` on, where the squad stops and fights the boss. |
@@ -56,7 +69,7 @@ One term per concept. Code, tests and docs use these words exactly.
 | Level number | A level's number, stated in its level file. It sets how much enemy HP and wave size grow. |
 | Level order | The order levels are played in: by level number, then by `id`. |
 | Event | One thing placed at a distance (z) in a level: a gate row, a wave, a barrel, a wall, a buff block, coins or the boss. |
-| World | A set of levels sharing a look and a boss. The MVP has one world of 15 levels. |
+| World | A set of levels sharing a look and a boss. The MVP has one world of 25 levels. |
 | Stars | The 1–3 rating of a won run, based on the squad count left. |
 | Upgrade | A permanent improvement bought with coins between runs. |
 | Upgrade level | How many times an upgrade has been bought. |

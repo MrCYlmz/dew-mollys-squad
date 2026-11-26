@@ -235,6 +235,9 @@ export class Game {
         else if (event.type === 'bossHit') this.renderer.flashBoss()
         else if (event.type === 'enemyKilled') this.renderer.showKill(event.x, event.z)
         else if (event.type === 'barrelDestroyed') this.renderer.showBarrelSplash(event.x, event.z)
+        else if (event.type === 'gateTaken' && event.mystery) {
+          this.renderer.revealMysteryGate(this.run.state, event.lane, event.z, event.op, event.value)
+        }
       }
       if (state.status !== 'running') break
     }

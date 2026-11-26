@@ -7,7 +7,8 @@ import { bossLevelOf, copied, doublingRows, everyLane, noSteering, repeatedRows,
 // Values from docs/domain/run.md (Boss) and levels.md (Balancing).
 const length = 300
 const bossStartZ = length + 35
-const walkStep = 1.5 / 60
+const walkSpeed: Record<BossKind, number> = { dustbot: 1.5, megaDustbot: 1.7 }
+const walkStep = (boss: BossKind) => walkSpeed[boss] / 60
 const hitRadius: Record<BossKind, number> = { dustbot: 2, megaDustbot: 2.5 }
 const catRadius = 0.3
 const yarnBallRadius = 0.12
@@ -52,7 +53,7 @@ describe('boss arena', () => {
     // It may already have taken its first step in the tick it enters.
     expect(run.state.boss).toEqual(expect.objectContaining({ kind: boss, x: 0 }))
     expect(run.state.boss?.z).toBeLessThanOrEqual(bossStartZ)
-    expect(run.state.boss?.z).toBeGreaterThanOrEqual(bossStartZ - walkStep - 1e-9)
+    expect(run.state.boss?.z).toBeGreaterThanOrEqual(bossStartZ - walkStep(boss) - 1e-9)
   })
 
   it('squad_reaching_the_arena_does_not_win_the_run', () => {
@@ -91,14 +92,17 @@ describe('boss arena', () => {
     expect(run.state.squad.z).toBe(length)
   })
 
-  it.each<BossKind>(['dustbot', 'megaDustbot'])('%s_walks_toward_a_still_squad_at_1_5_units_per_second', (boss) => {
+  it.each<[BossKind, number]>([
+    ['dustbot', 1.5],
+    ['megaDustbot', 1.7],
+  ])('%s_walks_toward_a_still_squad_at_%d_units_per_second', (boss, speed) => {
     const run = bossRun(boss, unbeatable, doublingRows(3))
     stepToArena(run)
     const start = { ...run.state.boss! }
 
     stepTicks(run, 60)
 
-    expect(start.z - run.state.boss!.z).toBeCloseTo(1.5, 6)
+    expect(start.z - run.state.boss!.z).toBeCloseTo(speed, 6)
     expect(run.state.boss!.x).toBe(0)
   })
 
@@ -118,9 +122,9 @@ describe('boss arena', () => {
       const stepX = after.x - before.x
       const stepZ = after.z - before.z
 
-      expect(Math.hypot(stepX, stepZ)).toBeCloseTo(walkStep, 9)
-      expect(stepX / walkStep).toBeCloseTo(toSquadX / toSquad, 3)
-      expect(stepZ / walkStep).toBeCloseTo(toSquadZ / toSquad, 3)
+      expect(Math.hypot(stepX, stepZ)).toBeCloseTo(walkStep('dustbot'), 9)
+      expect(stepX / walkStep('dustbot')).toBeCloseTo(toSquadX / toSquad, 3)
+      expect(stepZ / walkStep('dustbot')).toBeCloseTo(toSquadZ / toSquad, 3)
     }
     expect(run.state.boss!.x).toBeGreaterThan(0)
   })
@@ -260,14 +264,14 @@ describe('hitting the boss', () => {
     stepUntil(run, (state) => state.boss!.hp < state.boss!.fullHp, 300)
 
     expect(run.state.boss!.hp).toBe(run.state.boss!.fullHp - 1)
-    // Cats fire every 0.5 s, in which the boss walks 0.75 units.
-    expect(run.state.boss!.z).toBeLessThanOrEqual(firstReach + walkStep)
-    expect(run.state.boss!.z).toBeGreaterThan(firstReach - 0.75 - 2 * walkStep)
+    // Cats fire every 0.5 s, in which the boss walks half its walk speed.
+    expect(run.state.boss!.z).toBeLessThanOrEqual(firstReach + walkStep(boss))
+    expect(run.state.boss!.z).toBeGreaterThan(firstReach - walkSpeed[boss] / 2 - 2 * walkStep(boss))
   })
 
   it.each<BossKind>(['dustbot', 'megaDustbot'])('%s_stops_every_yarn_ball_that_comes_within_reach', (boss) => {
     // After a tick no yarn ball is left within both hit radii of the boss, less the step the boss walks after the hits.
-    const reach = yarnBallRadius + hitRadius[boss] - walkStep - 1e-9
+    const reach = yarnBallRadius + hitRadius[boss] - walkStep(boss) - 1e-9
     const run = bossRun(boss, unbeatable, doublingRows(3))
     stepToArena(run)
     stepTicks(run, 120)

@@ -34,6 +34,8 @@ export const strings = {
   gateMinus: '−',
   gateTimes: '×',
   gateDivide: '÷',
+  // A mystery gate hides its options.
+  gateMystery: '?',
   // {value} stands for the gate value.
   gateFireRate: 'FIRE RATE +{value}%',
   gateDamage: 'DMG +{value}',

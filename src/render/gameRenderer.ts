@@ -522,7 +522,8 @@ export class GameRenderer {
       const row = state.gateRows[this.gatePanelRows[panelIndex]]
       const gate = row[lane]
       if (row.z !== z || this.gatePanelLanes[panelIndex] !== lane || gate === null) continue
-      const optionIndex = gate.faces.findIndex((face) => face.op === op && face.value === value)
+      let optionIndex = 0
+      while (gate.faces[optionIndex].op !== op || gate.faces[optionIndex].value !== value) optionIndex++
       const label = this.revealLabels[i]
       this.revealShown[i] = label.material = this.revealOptions[i][optionIndex]
       label.position.set(laneCentreX(lane), look.panel.gateHeight, -look.gate.revealAhead)

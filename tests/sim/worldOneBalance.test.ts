@@ -19,6 +19,9 @@ interface Outcome {
   bossFightSeconds: number | null
   mostEnemiesAlive: number
   mysteryGatesTaken: number
+  largestSquad: number
+  // The squad count when the run ended.
+  finalSquad: number
 }
 
 const outcomes = new Map<string, Outcome>()
@@ -31,11 +34,12 @@ function play(levelNumber: number, seed: number, choice: Choice): Outcome {
   if (level === null) throw new Error(`level-${levelNumber}.json is missing`)
   const run = createRun({ level, seed })
   const player = scriptedPlayer(choice)
-  const outcome: Outcome = { status: 'running', squadAtBoss: null, bossFightSeconds: null, mostEnemiesAlive: 0, mysteryGatesTaken: 0 }
+  const outcome: Outcome = { status: 'running', squadAtBoss: null, bossFightSeconds: null, mostEnemiesAlive: 0, mysteryGatesTaken: 0, largestSquad: run.state.squad.count, finalSquad: 0 }
   let bossEnteredTick = 0
   for (let tick = 0; tick < maxTicks && run.state.status === 'running'; tick++) {
     const events = run.step(player(run.state))
     outcome.mostEnemiesAlive = Math.max(outcome.mostEnemiesAlive, run.state.enemies.length)
+    outcome.largestSquad = Math.max(outcome.largestSquad, run.state.squad.count)
     if (outcome.squadAtBoss === null && run.state.boss !== null) {
       outcome.squadAtBoss = run.state.squad.count
       bossEnteredTick = tick
@@ -44,6 +48,7 @@ function play(levelNumber: number, seed: number, choice: Choice): Outcome {
     outcome.mysteryGatesTaken += events.filter((event) => event.type === 'gateTaken' && event.mystery).length
   }
   outcome.status = run.state.status
+  outcome.finalSquad = run.state.squad.count
   outcomes.set(key, outcome)
   return outcome
 }
@@ -105,6 +110,21 @@ describe('good player', () => {
 
     expect(outcome.mysteryGatesTaken).toBeGreaterThanOrEqual(1)
     expect(outcome.status).toBe('won')
+  })
+
+  // requirements S-12 (13a): levels 16–25 are not too easy.
+  const newLevelRuns = levelNumbers.filter((level) => level >= 16).flatMap((level) => seeds.map((seed) => [level, seed] as const))
+  const newFinishLineRuns = newLevelRuns.filter(([level]) => !megaDustbotLevels.includes(level))
+
+  it.each(newLevelRuns)('good_player_squad_never_reaches_999_on_level_%i_seed_%i', (level, seed) => {
+    expect(play(level, seed, 'best').largestSquad).toBeLessThan(999)
+  })
+
+  it.each(newFinishLineRuns)('good_player_finishes_level_%i_with_at_most_600_cats_on_seed_%i', (level, seed) => {
+    const outcome = play(level, seed, 'best')
+
+    expect(outcome.status).toBe('won')
+    expect(outcome.finalSquad).toBeLessThanOrEqual(600)
   })
 
   it.each(allLevels)('good_player_never_reaches_the_enemy_cap_on_level_%i_seed_%i', (level, seed) => {

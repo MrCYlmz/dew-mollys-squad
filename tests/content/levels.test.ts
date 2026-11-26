@@ -227,6 +227,11 @@ describe('world 1 bosses', () => {
   it.each([20, 25])('level_%i_boss_hp_is_at_least_the_boss_hp_of_level_15', (number) => {
     expect(bossHp(level(number))).toBeGreaterThanOrEqual(bossHp(level(15)))
   })
+
+  // requirements S-12 (13a): an expected squad below the 999-cat limit, so the 75–100 % arrival range of AC 13 can tell runs apart.
+  it.each([20, 25])('level_%i_expected_squad_at_boss_is_below_999', (number) => {
+    expect(level(number).expectedSquadAtBoss).toBeLessThan(999)
+  })
 })
 
 describe('world 1 streams', () => {

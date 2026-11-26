@@ -4,7 +4,7 @@ import { createRun, type RunStatus } from '../../src/sim/run'
 import { worldOneLevel } from '../content/worldOneLevels'
 import { scriptedPlayer, type Choice } from './scriptedPlayers'
 
-// requirements S-6 (7–10, 9a, 9b), S-11 (10–13) and S-12 (13–15): scripted players on the twenty-five levels of world 1,
+// requirements S-6 (7–10, 9a, 9b), S-11 (10–13) and S-12 (11a, 13–15, 13a, 13b): scripted players on the twenty-five levels of world 1,
 // each on the same 5 fixed seeds, at each level's level speed.
 
 const seeds = [1, 42, 1234, 98765, 20261124]
@@ -60,14 +60,26 @@ const growingBossLevels = [11, 12, 13, 14, 15]
 const allLevels = levelNumbers.flatMap((level) => seeds.map((seed) => [level, seed] as const))
 const badPlayerLevels = levelNumbers.filter((level) => level >= 7).flatMap((level) => seeds.map((seed) => [level, seed] as const))
 const megaDustbotRuns = megaDustbotLevels.flatMap((level) => seeds.map((seed) => [level, seed] as const))
+// requirements S-12 (13b): from level 11 on, the good player wins only some seeds; levels 1–10 it wins on every seed.
+const hardLevels = levelNumbers.filter((level) => level >= 11)
+const alwaysWonRuns = allLevels.filter(([level]) => level <= 10)
 
+// The shortest fight over the seeds on which the good player defeated the boss.
 function shortestBossFight(level: number): number {
-  return Math.min(...seeds.map((seed) => play(level, seed, 'best').bossFightSeconds ?? Number.NaN))
+  return Math.min(...seeds.flatMap((seed) => play(level, seed, 'best').bossFightSeconds ?? []))
 }
 
 describe('good player', () => {
-  it.each(allLevels)('good_player_wins_level_%i_on_seed_%i', (level, seed) => {
+  it.each(alwaysWonRuns)('good_player_wins_level_%i_on_seed_%i', (level, seed) => {
     expect(play(level, seed, 'best').status).toBe('won')
+  })
+
+  // requirements S-12 (13b): best gates alone are not enough from level 11 on; a player also needs big buffs, aim or steering.
+  it.each(hardLevels)('good_player_wins_level_%i_on_3_or_4_of_the_5_seeds', (level) => {
+    const wins = seeds.filter((seed) => play(level, seed, 'best').status === 'won')
+
+    expect(wins.length).toBeGreaterThanOrEqual(3)
+    expect(wins.length).toBeLessThanOrEqual(4)
   })
 
   it.each(seeds)('good_player_reaches_the_dustbot_of_level_5_with_75_to_150_percent_of_the_expected_squad_on_seed_%i', (seed) => {
@@ -80,18 +92,22 @@ describe('good player', () => {
   })
 
   // Tightened in the PO's PR review of S-6 for level 10, set for levels 10–15 by S-11 (10) and for 20 and 25 by S-12 (13): 75–100 %.
+  // Since S-12 (13b), checked on the seeds where the good player reaches the arena; on level 10 it must reach it on every seed.
   it.each(megaDustbotRuns)('good_player_reaches_the_mega_dustbot_of_level_%i_with_75_to_100_percent_of_the_expected_squad_on_seed_%i', (level, seed) => {
     const expectedSquadAtBoss = worldOneLevel(level)?.expectedSquadAtBoss ?? Number.NaN
     const squadAtBoss = play(level, seed, 'best').squadAtBoss
+    if (squadAtBoss === null && level >= 11) return
 
     expect(squadAtBoss).not.toBeNull()
     expect(squadAtBoss).toBeGreaterThanOrEqual(0.75 * expectedSquadAtBoss)
     expect(squadAtBoss).toBeLessThanOrEqual(expectedSquadAtBoss)
   })
 
-  // requirements S-6 (9b), S-11 (11) and S-12 (13): from entering the arena to the Mega Dustbot's defeat.
+  // requirements S-6 (9b), S-11 (11) and S-12 (13, 13b): from entering the arena to the Mega Dustbot's defeat, on the seeds
+  // where the good player defeats it; at least 3 seeds per level do, as it wins those.
   it.each(megaDustbotRuns)('good_player_fight_against_the_mega_dustbot_of_level_%i_lasts_at_least_12_seconds_on_seed_%i', (level, seed) => {
     const bossFightSeconds = play(level, seed, 'best').bossFightSeconds
+    if (bossFightSeconds === null && level >= 11) return
 
     expect(bossFightSeconds).not.toBeNull()
     expect(bossFightSeconds).toBeGreaterThanOrEqual(12)
@@ -102,29 +118,29 @@ describe('good player', () => {
     expect(shortestBossFight(level)).toBeGreaterThanOrEqual(shortestBossFight(level - 1))
   })
 
-  // requirements S-12 (11a): mystery gates matter, so the good player takes one on each of levels 21–25 and still wins.
+  // requirements S-12 (11a): mystery gates matter, so the good player takes one on each of levels 21–25. Whether it wins is
+  // left to S-12 (13b), which lets it lose 1–2 seeds per level.
   const mysteryGateRuns = levelNumbers.filter((level) => level >= 21).flatMap((level) => seeds.map((seed) => [level, seed] as const))
 
-  it.each(mysteryGateRuns)('good_player_takes_at_least_one_mystery_gate_and_wins_level_%i_on_seed_%i', (level, seed) => {
-    const outcome = play(level, seed, 'best')
-
-    expect(outcome.mysteryGatesTaken).toBeGreaterThanOrEqual(1)
-    expect(outcome.status).toBe('won')
+  it.each(mysteryGateRuns)('good_player_takes_at_least_one_mystery_gate_on_level_%i_on_seed_%i', (level, seed) => {
+    expect(play(level, seed, 'best').mysteryGatesTaken).toBeGreaterThanOrEqual(1)
   })
 
   // requirements S-12 (13a): levels 16–25 are not too easy.
   const newLevelRuns = levelNumbers.filter((level) => level >= 16).flatMap((level) => seeds.map((seed) => [level, seed] as const))
-  const newFinishLineRuns = newLevelRuns.filter(([level]) => !megaDustbotLevels.includes(level))
 
   it.each(newLevelRuns)('good_player_squad_never_reaches_999_on_level_%i_seed_%i', (level, seed) => {
     expect(play(level, seed, 'best').largestSquad).toBeLessThan(999)
   })
 
-  it.each(newFinishLineRuns)('good_player_finishes_level_%i_with_at_most_600_cats_on_seed_%i', (level, seed) => {
-    const outcome = play(level, seed, 'best')
+  // requirements S-12 (13b), which tightens the 600 cats of S-12 (13a) to 150 and starts at level 6. Level 5 has the Dustbot.
+  const finishLineRunsFrom6 = allLevels.filter(([level]) => level >= 6 && !megaDustbotLevels.includes(level))
 
-    expect(outcome.status).toBe('won')
-    expect(outcome.finalSquad).toBeLessThanOrEqual(600)
+  it.each(finishLineRunsFrom6)('good_player_finishes_level_%i_with_at_most_150_cats_when_it_wins_on_seed_%i', (level, seed) => {
+    const outcome = play(level, seed, 'best')
+    if (outcome.status !== 'won') return
+
+    expect(outcome.finalSquad).toBeLessThanOrEqual(150)
   })
 
   it.each(allLevels)('good_player_never_reaches_the_enemy_cap_on_level_%i_seed_%i', (level, seed) => {

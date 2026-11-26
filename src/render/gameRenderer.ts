@@ -526,7 +526,7 @@ export class GameRenderer {
       while (gate.faces[optionIndex].op !== op || gate.faces[optionIndex].value !== value) optionIndex++
       const label = this.revealLabels[i]
       this.revealShown[i] = label.material = this.revealOptions[i][optionIndex]
-      label.position.set(laneCentreX(lane), look.panel.gateHeight, -look.gate.revealAhead)
+      label.position.set(laneCentreX(lane) * look.gate.revealLaneShare, look.gate.revealHeight, -look.gate.revealAhead)
       label.visible = true
       this.revealAges[i] = 0
       return
@@ -1025,7 +1025,7 @@ export class GameRenderer {
         continue
       }
       const share = age / revealSeconds
-      label.position.y = look.panel.gateHeight + share * revealRise
+      label.position.y = look.gate.revealHeight + share * revealRise
       this.revealShown[i].opacity = 1 - share * share
     }
   }

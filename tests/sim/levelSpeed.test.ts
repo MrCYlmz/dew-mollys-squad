@@ -386,7 +386,7 @@ describe('what does not stretch', () => {
 })
 
 describe('boss arena on a faster level', () => {
-  // The arena start is stretched; the boss start distance of 35 and the walk speed of 1.5 units/s are not.
+  // The arena start is stretched; the boss start distance of 35 and the Mega Dustbot's walk speed of 1.7 units/s are not.
   it('mega_dustbot_on_level_15_enters_35_units_beyond_the_stretched_arena_start', () => {
     const run = createRun({ level: bossLevelOf([], { boss: 'megaDustbot', expectedSquadAtBoss: 100000, level: 15 }), seed: 1 })
 
@@ -395,7 +395,7 @@ describe('boss arena on a faster level', () => {
     expect(run.state.squad.z).toBeCloseTo(594, 6)
     expect(run.state.boss?.x).toBe(0)
     expect(run.state.boss?.z).toBeLessThanOrEqual(594 + 35 + 1e-9)
-    expect(run.state.boss?.z).toBeGreaterThanOrEqual(594 + 35 - 1.5 / 60 - 1e-9)
+    expect(run.state.boss?.z).toBeGreaterThanOrEqual(594 + 35 - 1.7 / 60 - 1e-9)
   })
 
   it('squad_on_level_15_stops_at_the_stretched_arena_start', () => {
@@ -408,14 +408,14 @@ describe('boss arena on a faster level', () => {
     expect(run.state.squad.z).toBe(arenaStart)
   })
 
-  it('mega_dustbot_on_level_15_walks_1_5_units_per_second', () => {
+  it('mega_dustbot_on_level_15_walks_1_7_units_per_second', () => {
     const run = createRun({ level: bossLevelOf([], { boss: 'megaDustbot', expectedSquadAtBoss: 100000, level: 15 }), seed: 1 })
     stepToArena(run)
     const start = run.state.boss?.z ?? Number.NaN
 
     stepTicks(run, 60)
 
-    expect(run.state.boss?.z).toBeCloseTo(start - 1.5, 6)
+    expect(run.state.boss?.z).toBeCloseTo(start - 1.7, 6)
   })
 
   it('mega_dustbot_on_level_15_throws_a_dust_ball_every_3_seconds', () => {

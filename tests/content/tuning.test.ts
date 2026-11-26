@@ -93,8 +93,8 @@ describe('buff blocks', () => {
   })
 
   // Fire rate in per cent of the base fire rate, as on a fire rate gate.
-  it('big_buff_values_are_plus_30_times_3_fire_rate_60_damage_3_bullet_2_range_30', () => {
-    expect(tuning.bigBuff).toEqual({ add: 30, multiply: 3, fireRate: 60, damage: 3, multiShot: 2, range: 30 })
+  it('big_buff_values_are_plus_60_times_3_fire_rate_100_damage_3_bullet_2_range_40', () => {
+    expect(tuning.bigBuff).toEqual({ add: 60, multiply: 3, fireRate: 100, damage: 3, multiShot: 2, range: 40 })
   })
 })
 
@@ -124,8 +124,8 @@ describe('bosses', () => {
     expect(tuning.hitRadius.dustbot).toBe(2)
   })
 
-  it('mega_dustbot_walks_1_5_units_per_second_with_a_hit_radius_of_2_5', () => {
-    expect(tuning.bosses.megaDustbot.walkSpeed).toBe(1.5)
+  it('mega_dustbot_walks_1_7_units_per_second_with_a_hit_radius_of_2_5', () => {
+    expect(tuning.bosses.megaDustbot.walkSpeed).toBe(1.7)
     expect(tuning.hitRadius.megaDustbot).toBe(2.5)
   })
 

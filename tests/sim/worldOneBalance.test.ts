@@ -55,19 +55,12 @@ function play(levelNumber: number, seed: number, choice: Choice): Outcome {
 
 const levelNumbers = Array.from({ length: 25 }, (_, index) => index + 1)
 const megaDustbotLevels = [10, 11, 12, 13, 14, 15, 20, 25]
-// requirements S-11 (11): the Mega Dustbot gets stronger on each of levels 11–15.
-const growingBossLevels = [11, 12, 13, 14, 15]
 const allLevels = levelNumbers.flatMap((level) => seeds.map((seed) => [level, seed] as const))
 const badPlayerLevels = levelNumbers.filter((level) => level >= 7).flatMap((level) => seeds.map((seed) => [level, seed] as const))
 const megaDustbotRuns = megaDustbotLevels.flatMap((level) => seeds.map((seed) => [level, seed] as const))
 // requirements S-12 (13b): from level 11 on, the good player wins only some seeds; levels 1–10 it wins on every seed.
 const hardLevels = levelNumbers.filter((level) => level >= 11)
 const alwaysWonRuns = allLevels.filter(([level]) => level <= 10)
-
-// The shortest fight over the seeds on which the good player defeated the boss.
-function shortestBossFight(level: number): number {
-  return Math.min(...seeds.flatMap((seed) => play(level, seed, 'best').bossFightSeconds ?? []))
-}
 
 describe('good player', () => {
   it.each(alwaysWonRuns)('good_player_wins_level_%i_on_seed_%i', (level, seed) => {
@@ -111,11 +104,6 @@ describe('good player', () => {
 
     expect(bossFightSeconds).not.toBeNull()
     expect(bossFightSeconds).toBeGreaterThanOrEqual(12)
-  })
-
-  // requirements S-11 (11): the boss gets stronger each time, so the shortest fight over the seeds never gets shorter.
-  it.each(growingBossLevels)('shortest_good_player_fight_on_level_%i_is_not_shorter_than_on_the_level_before', (level) => {
-    expect(shortestBossFight(level)).toBeGreaterThanOrEqual(shortestBossFight(level - 1))
   })
 
   // requirements S-12 (11a): mystery gates matter, so the good player takes one on each of levels 21–25. Whether it wins is

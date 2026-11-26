@@ -14,6 +14,8 @@ const enemies: [EnemyKind, { hp: number; shield: number; speed: number; contactD
   ['chihuahua', { hp: 1, shield: 0, speed: 9, contactDamage: 1 }],
   ['bulldog', { hp: 40, shield: 0, speed: 2.5, contactDamage: 10 }],
   ['shieldDog', { hp: 15, shield: 30, speed: 3, contactDamage: 3 }],
+  ['greyhound', { hp: 2, shield: 0, speed: 14, contactDamage: 2 }],
+  ['dalmatian', { hp: 12, shield: 0, speed: 3, contactDamage: 2 }],
 ]
 
 function spawnWave(wave: WaveEvent) {
@@ -33,8 +35,8 @@ function expectPositions(actual: readonly Position[], expected: Position[], tole
   })
 }
 
-// At the spawn tick an enemy may already have taken one step, at most 9/60 units for a chihuahua.
-const spawnTolerance = 0.2
+// At the spawn tick an enemy may already have taken one step, at most 14/60 units for a greyhound.
+const spawnTolerance = 0.25
 
 describe('enemy kinds', () => {
   it.each(enemies)('%s_starts_with_its_hp_and_shield', (enemy, values) => {
@@ -164,6 +166,33 @@ describe('enemy movement', () => {
       expect(ticks / 60).toBeGreaterThan(1.7)
       expect(ticks / 60).toBeLessThan(2)
     })
+  })
+
+  it('greyhound_on_level_16_from_one_track_edge_reaches_a_squad_at_the_other', () => {
+    // docs/domain/run.md: on levels 15–25 a greyhound closes the 79.2 units in 79.2 ÷ (23.76 + 14) ≈ 2.1 s and moves up to
+    // 12.6 units across in that time. On level 16 it has 2 × 1.08¹⁵ ≈ 6.3 HP, more than the few yarn balls 1 cat lands.
+    const run = createRun({
+      level: levelOf([{ type: 'wave', z: 100, enemy: 'greyhound', pattern: 'column', count: 1, x: -5, spacing: 1 }], 300, 16),
+      seed: 1,
+    })
+    steerTo(run, 5)
+    stepUntil(run, (state) => state.enemies.length > 0, 6000)
+    let ticks = 0
+
+    const events = stepUntil(
+      run,
+      () => {
+        ticks++
+        return false
+      },
+      600,
+    )
+
+    expect(events.filter((event) => event.type === 'enemyKilled')).toEqual([
+      expect.objectContaining({ type: 'enemyKilled', enemy: 'greyhound', cause: 'contact', x: run.state.squad.x }),
+    ])
+    expect(ticks / 60).toBeGreaterThan(1.9)
+    expect(ticks / 60).toBeLessThan(2.2)
   })
 
   it('bulldog_from_the_left_lane_reaches_a_squad_in_the_right_lane', () => {
@@ -416,6 +445,26 @@ describe('enemy contact', () => {
     ])
     expect(run.state.squad.count).toBe(25 - contactDamage)
     expect(run.state.status).toBe('running')
+  })
+
+  // requirements S-12 (5–6): both new dogs take 2 cats. On level 25 a greyhound has 2 × 1.08²⁴ ≈ 12.7 HP and a dalmatian
+  // 12 × 1.08²⁴ ≈ 76 HP, so 4 cats do not shoot the first of a column down before it arrives.
+  it.each(['greyhound', 'dalmatian'] as const)('%s_touching_a_squad_of_4_dies_and_takes_2_cats', (enemy) => {
+    const run = createRun({
+      level: levelOf([...doublingRows(2), { type: 'wave', z: 100, enemy, pattern: 'column', count: 1, x: 0, spacing: 2 }], 300, 25),
+      seed: 1,
+    })
+    stepUntil(run, (state) => state.enemies.length > 0, 6000)
+    expect(run.state.squad.count).toBe(4)
+    let events: GameEvent[] = []
+    while (run.state.status === 'running' && run.state.enemies.length > 0) {
+      events = copied(run.step(noSteering))
+      if (events.some((event) => event.type === 'catsLost')) break
+    }
+
+    expect(events.filter((event) => event.type === 'catsLost')).toEqual([{ type: 'catsLost', count: 2 }])
+    expect(events.filter((event) => event.type === 'enemyKilled')).toEqual([expect.objectContaining({ type: 'enemyKilled', enemy, cause: 'contact' })])
+    expect(run.state.squad.count).toBe(2)
   })
 
   it('bulldog_touching_a_squad_of_6_leaves_0_and_loses_the_run', () => {

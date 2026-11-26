@@ -49,6 +49,18 @@ describe('enemies', () => {
   it('enemy_cap_is_150', () => {
     expect(tuning.limits.enemies).toBe(150)
   })
+
+  // requirements S-12 (6): a defeated dalmatian leaves 3 puppies, 1 unit apart.
+  it('dalmatian_split_is_3_puppies_1_unit_apart', () => {
+    expect(tuning.dalmatianSplit).toEqual({ puppies: 3, spacing: 1 })
+  })
+})
+
+// requirements S-12 (1): a switching gate shows each face for 1 s.
+describe('gates', () => {
+  it('switch_time_is_1_second', () => {
+    expect(tuning.gate.switchTime).toBe(1)
+  })
 })
 
 describe('barrels and walls', () => {
@@ -98,6 +110,11 @@ describe('level scaling', () => {
   // requirements S-11 (1): the speed factor grows by 0.07 per level number above 1.
   it('speed_grows_by_0_07_per_level', () => {
     expect(tuning.scaling.speedGrowth).toBe(0.07)
+  })
+
+  // requirements S-12 (8): the speed factor grows up to level 15 and then stays.
+  it('speed_growth_last_level_is_15', () => {
+    expect(tuning.scaling.speedGrowthLastLevel).toBe(15)
   })
 })
 

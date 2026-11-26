@@ -130,7 +130,7 @@ describe('gates in a run', () => {
     expect(run.state.squad.count).toBe(2)
     expect(run.state.gateRows[0].taken).toBe('centre')
     expect(events.filter((event) => event.type === 'gateTaken')).toEqual([
-      { type: 'gateTaken', lane: 'centre', op: 'multiply', value: 2, squadCount: 2 },
+      { type: 'gateTaken', lane: 'centre', op: 'multiply', value: 2, squadCount: 2, z: 10, mystery: false },
     ])
   })
 

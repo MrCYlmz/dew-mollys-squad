@@ -13,10 +13,11 @@ Terms as in the [glossary](glossary.md).
 
 ### Level speed
 
-Every level runs faster than the one before, and its road is longer by the same factor, so a level takes the same time at every speed.
+Every level up to level 15 runs faster than the one before, and its road is longer by the same factor, so a level takes the same time at every speed. From level 15 on, every level runs at level 15's speed.
 
-- A level's speed factor is 1 + 0.07 × (level number − 1), where 0.07 is the speed growth, in the tuning config, and the level number is the level file's `level`. It is kept as is, without rounding.
-- The level speed is the run speed (12 units/s, in the tuning config) × the speed factor, kept as is. Examples: level 1 runs at 12 units/s; level 2 at 12 × 1.07 = 12.84 units/s; level 15 at 12 × 1.98 = 23.76 units/s, about twice level 1.
+- A level's speed factor is 1 + 0.07 × (min(level number, 15) − 1), where 0.07 is the speed growth and 15 the speed growth's last level, both in the tuning config, and the level number is the level file's `level`. It is kept as is, without rounding.
+- The level speed is the run speed (12 units/s, in the tuning config) × the speed factor, kept as is. Examples: level 1 runs at 12 units/s; level 2 at 12 × 1.07 = 12.84 units/s; level 15 at 12 × 1.98 = 23.76 units/s, about twice level 1; levels 16–25 at 23.76 units/s too, with a speed factor of 1.98.
+- Only the speed stops growing after level 15. Enemy HP and wave size keep growing with the level number (see [levels](levels.md#scaling)).
 - Distances along the road in the level file are written at speed factor 1. When the run starts, each is multiplied by the level's speed factor (stretched), kept as is, without rounding: the level's `length`, and so the finish line and the arena start, and every event's `z`. Every rule of the run uses the stretched values. Example: on level 15, a level file with `length` 400 and a gate row at `z` 60 has its finish line at 400 × 1.98 = 792 and the gate row at 118.8. The road takes 400 ÷ 12 ≈ 33 s on level 1 and 792 ÷ 23.76 ≈ 33 s on level 15, and the squad meets the gate row after 5 s on both.
 - The spawn distance of waves and the stream spawn distance (40 units each, at speed factor 1) are stretched the same way, so enemies appear the same time before they reach the squad at every level.
 - Everything else stays the same at every speed:
@@ -27,7 +28,15 @@ Every level runs faster than the one before, and its road is longer by the same 
   - every enemy's own speed and the enemy chase speed;
   - the steering: the steering point's clamping, the squad's follow time and the key steering speed.
 - Yarn balls move the same relative to the squad at every level speed (see [shooting](#shooting)).
-- Times are not stretched: the stream interval, the dust ball interval and the hand icon time stay as they are.
+- Times are not stretched: the stream interval, the dust ball interval, the switch time of [switching gates](#switching-gates) and the hand icon time stay as they are.
+
+### Visibility
+
+The road ahead fades into a fog that thickens with the distance from the camera, from where it starts to where it hides everything. Nothing may appear hidden in the fog:
+
+- At every level speed and on every screen shape, a place on the track the stretched spawn distance ahead of the squad's centre (40 × the speed factor, so 79.2 units at most, on levels 15–25) is drawn at least at half strength: at most half of its colour is fog.
+- So an enemy appearing at the spawn distance, from a wave or the stream, can be seen at once. Gate rows, barrels, walls and buff blocks are on the track from the start of the run; they come out of the fog as the road brings them closer, and are drawn at least at half strength from the spawn distance on.
+- The fog's distances are look values, in the render config.
 
 ### Lanes
 
@@ -114,12 +123,32 @@ A gate row has one, two or three gates, each filling one [lane](#lanes); a lane 
 | Range | RANGE +10 | yarn balls travel 10 units farther | Blue |
 
 - Examples: a squad of 8 taking ×2 becomes 16. A squad of 7 taking ÷2 becomes 3. A squad of 1 taking ÷2 stays 1. A squad of 10 taking −15 becomes 0 and the run is lost.
-- Gates cannot be shot. Yarn balls fly through every gate, good, bad or weapon-buff, without stopping, without dealing damage and without changing it. A gate's value never changes during a run.
-- Add, multiply and weapon-buff gates are blue; subtract and divide gates are red.
+- Gates cannot be shot. Yarn balls fly through every gate, good, bad, weapon-buff, switching or mystery, without stopping, without dealing damage and without changing it. A gate's faces never change during a run; a [switching gate](#switching-gates) only changes which of its two faces it shows.
+- Add, multiply and weapon-buff gates are blue; subtract and divide gates are red. A [mystery gate](#mystery-gates) is purple, neither blue nor red.
 - A gate row may mix any gate types. Example: +10 on the left, −15 in the centre and DMG +1 on the right.
 - Each gate can be taken once. When the squad takes one gate of a row, the rest of the row disappears.
 - When the squad's centre is in an empty lane as the row reaches it, the squad takes no gate, and the row passes behind the squad and disappears.
 - Taking a gate shows a big floating number and plays a sound, and the squad count animates up or down.
+
+A gate in the table above is an ordinary gate: one face, an op and a value, shown with its label in its colour. A gate may instead be a switching gate, with two ordinary faces shown in turn, or a mystery gate, with hidden options. A gate is never both.
+
+### Switching gates
+
+A switching gate has its own face and a second face (`switchTo` in the [level file](levels.md#gate-row)), each an ordinary gate's op and value. It shows them in turn, each for the switch time (1 s, in the tuning config), and each with its own label and colour, so a gate of +10 and −15 turns from blue to red and back.
+
+- Switching follows the run's ticks, not the clock: the switch time in ticks is the switch time × the tick rate (60 ticks/s), rounded to the nearest whole number of ticks, halves up, and at least 1 tick. Counting the run's first tick as tick 1, in tick t the gate shows its own face when (t − 1) ÷ the switch time in ticks, rounded down, is even, and its second face when it is odd. Before the first tick it shows its own face.
+- Example: with a switch time of 1 s (60 ticks), the gate shows its own face on ticks 1–60, its second face on ticks 61–120, its own face on ticks 121–180, and so on. All switching gates of a level switch together.
+- So switching is the same on every seed and at every level speed, and stops while the game is paused. The switch time is not stretched: a gate row at `"z": 95` reaches the squad about 7.9 s into the run on every level, in its 8th second, so a switching gate in it shows its second face then.
+- The face the gate shows in the tick the row reaches the squad is the one taken: it applies exactly as the ordinary gate with that op and value, and the floating number shows it.
+
+### Mystery gates
+
+A mystery gate has two or more options (`options` in the [level file](levels.md#gate-row)), each an ordinary gate's op and value. It shows "?" in purple and never shows its options.
+
+- When the squad takes it, one option is drawn by the seeded RNG, evenly: with n options and r the RNG's next number (0 or more, less than 1), option r × n rounded down, counting from 0. The option drawn applies exactly as the ordinary gate with that op and value. Example: with the options ×2, −20 and +10 and r = 0.5, option 1, −20, applies.
+- The draw happens in the tick the gate is taken, and only then: a mystery gate that is not taken draws nothing. In that tick it comes after the [enemy stream's](#enemy-stream) draw, following the playbook's tick order (the spawner before the gates). So the same seed and the same steering give the same draw.
+- An option may appear more than once, to be drawn more often. Example: with ×2, ×2 and ÷2, ×2 is drawn two times in three.
+- The result is revealed at once: a floating label with the option's label, such as "×2" or "−20", appears at the gate in the option's colour. The sound and the squad count animation follow the option, as for an ordinary gate.
 
 ### Weapon buffs
 
@@ -147,6 +176,8 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
 | Chihuahua | Runner | 1 | 9 | 1 | Fast lines |
 | Bulldog | Brute | 40 | 2.5 | 10 | A slow tank, alone or in small groups |
 | Shield dog | Shield bearer | 15, plus a shield of 30 | 3 | 3 | The shield must break before the body takes damage |
+| Greyhound | Sprinter | 2 | 14 | 2 | Fast lines and columns that must be shot before they arrive |
+| Dalmatian | Splitter | 12 | 3 | 2 | Alone or in small groups; each one defeated becomes 3 [puppies](#dalmatian) |
 
 - An enemy starts where its wave's spawn pattern (see [levels](levels.md#wave)) or the [enemy stream](#enemy-stream) places it. Every enemy can come in every spawn pattern; the typical use is a guide for designers.
 - Every enemy chases the squad's centre, in any lane, from its first tick, following the squad as it steers:
@@ -154,7 +185,7 @@ Every enemy shows its HP as a number above it. Values are for level 1 and scale 
   - Across the track it moves toward the squad's centre x at up to 6 units/s (the enemy chase speed, in the tuning config, the same for every kind). When the squad's centre x is closer than one tick's move, the enemy stops exactly at it and does not overshoot. So it never leaves the track, because the squad's centre is always on it.
 - The road brings an enemy toward the squad as well, at the [level speed](#level-speed), so an enemy ahead of the squad closes in at the level speed plus its own speed, wherever it is across the track. Example: a puppy closes in at 12 + 4 = 16 units/s on level 1 and 23.76 + 4 = 27.76 units/s on level 15. In the boss arena, where the road has stopped, it closes in at its own speed.
 - Example: on level 1, a puppy appears 40 units ahead at the left lane centre (x = −10/3) while the squad stays at the right lane centre (x = 10/3). It crosses the 20/3 units in about 1.1 s at 6 units/s and then runs at the squad's x, reaching the squad about 2.5 s after it appeared, if it is not shot. Steering away does not escape it, because the squad cannot leave the track.
-- Every kind reaches a squad anywhere on the track from the spawn distance: the chihuahua, the fastest, closes the 40 units on level 1 in 40 ÷ (12 + 9) ≈ 1.9 s, and in that time moves up to 6 × 1.9 ≈ 11.4 units across, more than the 10 units of the whole track. On faster levels the stretched spawn distance gives it longer: on level 15, 79.2 ÷ (23.76 + 9) ≈ 2.4 s. Slower kinds take longer along the road and so have more time to cross.
+- Every kind but the greyhound reaches a squad anywhere on the track from the spawn distance at every level speed: the chihuahua closes the 40 units on level 1 in 40 ÷ (12 + 9) ≈ 1.9 s, and in that time moves up to 6 × 1.9 ≈ 11.4 units across, more than the 10 units of the whole track. On faster levels the stretched spawn distance gives it longer: on level 15, 79.2 ÷ (23.76 + 9) ≈ 2.4 s. Slower kinds take longer along the road and so have more time to cross. The greyhound does so from level 4 on: on levels 15–25 it closes the 79.2 units in 79.2 ÷ (23.76 + 14) ≈ 2.1 s and moves up to 6 × 2.1 ≈ 12.6 units across, but on level 1 only 6 × 40 ÷ (12 + 14) ≈ 9.2. Levels use it from level 16 on.
 - When an enemy touches the squad, the enemy dies and the squad loses cats equal to its contact damage, whatever HP it has left. Example: a bulldog touching a squad of 25 leaves 15; touching a squad of 6 leaves 0 and loses the run.
 - An enemy that gets past the squad disappears behind it and does no damage.
 - An enemy is past the squad only once it is past the squad's last cat. Until then, an enemy touching any cat, even one inside the cluster, costs cats.
@@ -174,7 +205,21 @@ Besides its waves, every level has an endless enemy stream, set by the level fil
 ### Enemy cap
 
 - At most 150 enemies are alive at once (the enemy cap, in the tuning config), from the performance budget.
-- An enemy that would spawn, from a wave or the stream, while 150 are alive is dropped: it never appears. Enemies already alive are not affected.
+- An enemy that would spawn, from a wave, the stream or a [dalmatian's split](#dalmatian), while 150 are alive is dropped: it never appears. Enemies already alive are not affected.
+
+### Greyhound
+
+- A greyhound is a slim, long-legged grey dog, clearly different from the other dogs. It is fast and fragile: 2 HP, 14 units/s along the road and a contact damage of 2.
+- It chases across the track at the enemy chase speed like every enemy, so its speed along the road does not make it steer faster.
+
+### Dalmatian
+
+- A dalmatian is a white dog with black spots: 12 HP, 3 units/s and a contact damage of 2.
+- When it is defeated, by a yarn ball or a barrel splash bringing its HP to 0 or less, it splits: 3 puppies (the split's puppy count, in the tuning config) appear in the same tick at its x, one behind the other from its z away from the squad, 1 unit apart (the split spacing, in the tuning config): at z, z + 1 and z + 2. Example: a dalmatian defeated at x = 1, z = 50 leaves puppies at x = 1 and z 50, 51 and 52.
+- The puppies are puppies like any other: their HP is a puppy's at the level number (see [levels](levels.md#scaling)), and they chase, touch, die and get past the squad as above, moving from the tick they appear in.
+- The yarn ball or barrel splash that defeats the dalmatian does not hit its puppies; damage beyond what the dalmatian had left is lost.
+- A dalmatian that dies by touching the squad, or that gets past the squad, does not split.
+- The puppies count toward the [enemy cap](#enemy-cap). They are placed nearest first, after the dalmatian is gone; those that would go beyond the cap are dropped. Example: with 150 enemies alive, a dalmatian defeated leaves 149, so its first puppy appears and the other two are dropped.
 
 ### Shield dog
 
@@ -258,7 +303,7 @@ A boss level ends in a boss arena instead of a finish line (see the [level file]
 | Boss | World 1 levels | Hit radius (units) | Walk speed (units/s) | Boss HP time (s) | Throws dust balls |
 | --- | --- | --- | --- | --- | --- |
 | Dustbot | 5 | 2 | 1.5 | 8 | No |
-| Mega Dustbot (the world boss) | 10–15 | 2.5 | 1.5 | 20 | Yes |
+| Mega Dustbot (the world boss) | 10–15, 20 and 25 | 2.5 | 1.5 | 20 | Yes |
 
 The hit radii, walk speeds and boss HP times are in the tuning config.
 

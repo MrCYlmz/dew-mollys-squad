@@ -47,11 +47,19 @@ describe('level order', () => {
     expect(levelAfter(world, world[1])?.id).toBe('level-10')
   })
 
-  // requirements S-11 (6): the shipped levels run level-1 → level-15, and the victory after level-15 goes back to the title.
-  it('shipped_levels_are_played_from_level_1_to_level_15_then_back_to_the_title', () => {
+  // requirements S-11 (6) and S-12 (10): the shipped levels run level-1 → level-25, and the victory after level-25 goes back
+  // to the title.
+  it('shipped_levels_are_played_from_level_1_to_level_25_then_back_to_the_title', () => {
     const played = [firstLevel(levels)]
     for (let next = levelAfter(levels, played[0]); next !== null; next = levelAfter(levels, next)) played.push(next)
 
-    expect(played.map((level) => level.id)).toEqual(Array.from({ length: 15 }, (_, index) => `level-${index + 1}`))
+    expect(played.map((level) => level.id)).toEqual(Array.from({ length: 25 }, (_, index) => `level-${index + 1}`))
+  })
+
+  it('victory_of_shipped_level_25_leads_back_to_the_title', () => {
+    const level25 = levels.find((level) => level.id === 'level-25')
+
+    expect(level25).toBeDefined()
+    expect(levelAfter(levels, level25 as Level)).toBeNull()
   })
 })

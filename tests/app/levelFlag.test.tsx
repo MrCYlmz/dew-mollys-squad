@@ -6,6 +6,7 @@ import { App } from '../../src/app/App'
 import { Game } from '../../src/app/game'
 import { readLaunchFlags } from '../../src/app/launchFlags'
 import type { Level } from '../../src/content/level'
+import { levels } from '../../src/content/levels'
 import { strings } from '../../src/content/strings'
 import type { RunState } from '../../src/sim/run'
 import { levelOf } from '../sim/runHarness'
@@ -177,6 +178,16 @@ describe('level flag', () => {
     await tapToPlay()
 
     expect(shownLevel()).toBe(1)
+  })
+
+  // requirements S-12 (16): the flag reaches the new levels 16–25 of the shipped world.
+  it.each([16, 20, 25])('title_tap_with_the_flag_level_%i_starts_that_shipped_level_and_the_hud_shows_it', async (level) => {
+    openGame(levels, `?level=${level}`)
+
+    await tapToPlay()
+
+    expect(shownLevel()).toBe(level)
+    expect(screen.getByText(`Level ${level}`)).toBeTruthy()
   })
 
   // Nothing on the title screen gives the flag away: it offers the same buttons as without it.

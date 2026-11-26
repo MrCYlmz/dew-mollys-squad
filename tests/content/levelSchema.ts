@@ -8,16 +8,46 @@ const trackEdge = 5
 const obstacleClearanceBeforeArena = 5
 
 const addOrSubtractValue = z.int().min(1)
-const gate = z.discriminatedUnion('op', [
-  z.strictObject({ op: z.literal('add'), value: addOrSubtractValue }),
-  z.strictObject({ op: z.literal('subtract'), value: addOrSubtractValue }),
-  z.strictObject({ op: z.literal('multiply'), value: z.literal(2) }),
-  z.strictObject({ op: z.literal('divide'), value: z.literal(2) }),
-  z.strictObject({ op: z.literal('fireRate'), value: z.literal(20) }),
-  z.strictObject({ op: z.literal('damage'), value: z.literal(1) }),
-  z.strictObject({ op: z.literal('multiShot'), value: z.literal(1) }),
-  z.strictObject({ op: z.literal('range'), value: z.literal(10) }),
+const add = { op: z.literal('add'), value: addOrSubtractValue }
+const subtract = { op: z.literal('subtract'), value: addOrSubtractValue }
+const multiply = { op: z.literal('multiply'), value: z.literal(2) }
+const divide = { op: z.literal('divide'), value: z.literal(2) }
+const fireRate = { op: z.literal('fireRate'), value: z.literal(20) }
+const damage = { op: z.literal('damage'), value: z.literal(1) }
+const multiShot = { op: z.literal('multiShot'), value: z.literal(1) }
+const range = { op: z.literal('range'), value: z.literal(10) }
+
+const face = z.discriminatedUnion('op', [
+  z.strictObject(add),
+  z.strictObject(subtract),
+  z.strictObject(multiply),
+  z.strictObject(divide),
+  z.strictObject(fireRate),
+  z.strictObject(damage),
+  z.strictObject(multiShot),
+  z.strictObject(range),
 ])
+
+// An ordinary gate is a face; a switching gate is a face with a second face that differs from it in op or value.
+const withSecondFace = <Shape extends { op: z.ZodLiteral<string>; value: z.ZodType<number> }>(shape: Shape) => z.strictObject({ ...shape, switchTo: face.optional() })
+const ordinaryOrSwitchingGate = z
+  .discriminatedUnion('op', [
+    withSecondFace(add),
+    withSecondFace(subtract),
+    withSecondFace(multiply),
+    withSecondFace(divide),
+    withSecondFace(fireRate),
+    withSecondFace(damage),
+    withSecondFace(multiShot),
+    withSecondFace(range),
+  ])
+  .refine((gate) => gate.switchTo === undefined || gate.switchTo.op !== gate.op || gate.switchTo.value !== gate.value, {
+    message: "a switching gate's two faces differ",
+  })
+
+const mysteryGate = z.strictObject({ op: z.literal('mystery'), options: z.array(face).min(2) })
+
+const gate = z.union([mysteryGate, ordinaryOrSwitchingGate])
 
 const lane = z.enum(['left', 'centre', 'right'])
 
@@ -33,7 +63,7 @@ const gateRow = z
     message: 'a gate row has at least one gate',
   })
 
-const enemyKind = z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog'])
+const enemyKind = z.enum(['puppy', 'chihuahua', 'bulldog', 'shieldDog', 'greyhound', 'dalmatian'])
 
 const stream = z.strictObject({
   interval: z.number().positive(),

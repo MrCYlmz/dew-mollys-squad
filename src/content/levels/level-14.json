@@ -2,7 +2,7 @@
   "id": "level-14",
   "level": 14,
   "length": 600,
-  "expectedSquadAtBoss": 720,
+  "expectedSquadAtBoss": 788,
   "stream": { "interval": 0.6, "enemies": ["puppy", "chihuahua", "puppy", "chihuahua"] },
   "events": [
     { "type": "gates", "z": 30, "left": { "op": "add", "value": 30 }, "centre": { "op": "divide", "value": 2 }, "right": { "op": "add", "value": 10 } },
@@ -24,14 +24,14 @@
     { "type": "wave", "z": 330, "enemy": "bulldog", "pattern": "column", "count": 2, "x": 0, "spacing": 4 },
     { "type": "gates", "z": 360, "left": { "op": "add", "value": 30 }, "centre": { "op": "subtract", "value": 20 }, "right": { "op": "divide", "value": 2 } },
     { "type": "wave", "z": 385, "enemy": "shieldDog", "pattern": "line", "count": 3 },
-    { "type": "gates", "z": 415, "left": { "op": "fireRate", "value": 20 }, "centre": { "op": "subtract", "value": 30 }, "right": { "op": "add", "value": 30 } },
+    { "type": "gates", "z": 415, "left": { "op": "range", "value": 10 }, "centre": { "op": "subtract", "value": 30 }, "right": { "op": "add", "value": 30 } },
     { "type": "wave", "z": 440, "enemy": "bulldog", "pattern": "column", "count": 3, "x": 0, "spacing": 4 },
     { "type": "wall", "z": 450, "x": 0, "width": 3.2 },
     { "type": "gates", "z": 470, "left": { "op": "multiply", "value": 2 }, "centre": { "op": "divide", "value": 2 }, "right": { "op": "subtract", "value": 30 } },
     { "type": "wave", "z": 495, "enemy": "chihuahua", "pattern": "line", "count": 12 },
     { "type": "gates", "z": 525, "left": { "op": "subtract", "value": 30 }, "centre": { "op": "add", "value": 50 }, "right": { "op": "divide", "value": 2 } },
     { "type": "wave", "z": 550, "enemy": "shieldDog", "pattern": "line", "count": 3 },
-    { "type": "gates", "z": 580, "left": { "op": "divide", "value": 2 }, "centre": { "op": "subtract", "value": 40 }, "right": { "op": "add", "value": 50 } },
+    { "type": "gates", "z": 580, "left": { "op": "divide", "value": 2 }, "centre": { "op": "subtract", "value": 115 }, "right": { "op": "subtract", "value": 90 } },
     { "type": "boss", "z": 600, "boss": "megaDustbot" }
   ]
 }

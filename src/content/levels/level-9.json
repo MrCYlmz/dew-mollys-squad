@@ -23,10 +23,10 @@
     { "type": "buffBlock", "z": 340, "lane": "right", "hp": 70, "buff": "multiply" },
     { "type": "gates", "z": 360, "left": { "op": "damage", "value": 1 }, "centre": { "op": "multiShot", "value": 1 }, "right": { "op": "subtract", "value": 30 } },
     { "type": "wave", "z": 385, "enemy": "shieldDog", "pattern": "line", "count": 6 },
-    { "type": "gates", "z": 415, "left": { "op": "divide", "value": 2 }, "centre": { "op": "add", "value": 40 }, "right": { "op": "multiply", "value": 2 } },
+    { "type": "gates", "z": 415, "left": { "op": "divide", "value": 2 }, "centre": { "op": "add", "value": 40 }, "right": { "op": "add", "value": 30 } },
     { "type": "wave", "z": 440, "enemy": "bulldog", "pattern": "column", "count": 6, "x": 0, "spacing": 4 },
     { "type": "wall", "z": 450, "x": 3.3, "width": 3.2 },
-    { "type": "gates", "z": 470, "left": { "op": "multiply", "value": 2 }, "centre": { "op": "subtract", "value": 40 }, "right": { "op": "add", "value": 30 } },
+    { "type": "gates", "z": 470, "left": { "op": "subtract", "value": 10 }, "centre": { "op": "subtract", "value": 40 }, "right": { "op": "divide", "value": 2 } },
     { "type": "wave", "z": 490, "enemy": "shieldDog", "pattern": "line", "count": 7 }
   ]
 }

@@ -307,7 +307,7 @@ A boss level ends in a boss arena instead of a finish line (see the [level file]
 | Boss | World 1 levels | Hit radius (units) | Walk speed (units/s) | Boss HP time (s) | Throws dust balls |
 | --- | --- | --- | --- | --- | --- |
 | Dustbot | 5 | 2 | 1.5 | 8 | No |
-| Mega Dustbot (the world boss) | 10–15, 20 and 25 | 2.5 | 1.5 | 20 | Yes |
+| Mega Dustbot (the world boss) | 10–15, 20 and 25 | 2.5 | 1.7 | 20 | Yes |
 
 The hit radii, walk speeds and boss HP times are in the tuning config.
 

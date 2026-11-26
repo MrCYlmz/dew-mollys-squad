@@ -18,6 +18,7 @@ interface Outcome {
   // Seconds from the tick the boss entered to the tick it was defeated, or null when it was not.
   bossFightSeconds: number | null
   mostEnemiesAlive: number
+  mysteryGatesTaken: number
 }
 
 const outcomes = new Map<string, Outcome>()
@@ -30,7 +31,7 @@ function play(levelNumber: number, seed: number, choice: Choice): Outcome {
   if (level === null) throw new Error(`level-${levelNumber}.json is missing`)
   const run = createRun({ level, seed })
   const player = scriptedPlayer(choice)
-  const outcome: Outcome = { status: 'running', squadAtBoss: null, bossFightSeconds: null, mostEnemiesAlive: 0 }
+  const outcome: Outcome = { status: 'running', squadAtBoss: null, bossFightSeconds: null, mostEnemiesAlive: 0, mysteryGatesTaken: 0 }
   let bossEnteredTick = 0
   for (let tick = 0; tick < maxTicks && run.state.status === 'running'; tick++) {
     const events = run.step(player(run.state))
@@ -40,6 +41,7 @@ function play(levelNumber: number, seed: number, choice: Choice): Outcome {
       bossEnteredTick = tick
     }
     if (events.some((event) => event.type === 'bossDefeated')) outcome.bossFightSeconds = (tick - bossEnteredTick) / tuning.tickRate
+    outcome.mysteryGatesTaken += events.filter((event) => event.type === 'gateTaken' && event.mystery).length
   }
   outcome.status = run.state.status
   outcomes.set(key, outcome)
@@ -93,6 +95,16 @@ describe('good player', () => {
   // requirements S-11 (11): the boss gets stronger each time, so the shortest fight over the seeds never gets shorter.
   it.each(growingBossLevels)('shortest_good_player_fight_on_level_%i_is_not_shorter_than_on_the_level_before', (level) => {
     expect(shortestBossFight(level)).toBeGreaterThanOrEqual(shortestBossFight(level - 1))
+  })
+
+  // requirements S-12 (11a): mystery gates matter, so the good player takes one on each of levels 21–25 and still wins.
+  const mysteryGateRuns = levelNumbers.filter((level) => level >= 21).flatMap((level) => seeds.map((seed) => [level, seed] as const))
+
+  it.each(mysteryGateRuns)('good_player_takes_at_least_one_mystery_gate_and_wins_level_%i_on_seed_%i', (level, seed) => {
+    const outcome = play(level, seed, 'best')
+
+    expect(outcome.mysteryGatesTaken).toBeGreaterThanOrEqual(1)
+    expect(outcome.status).toBe('won')
   })
 
   it.each(allLevels)('good_player_never_reaches_the_enemy_cap_on_level_%i_seed_%i', (level, seed) => {

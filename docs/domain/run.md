@@ -289,16 +289,16 @@ A buff block is a block filling one [lane](#lanes), with HP, that hides a big bu
 
 | Big buff | Shown as | Effect when collected | Cap |
 | --- | --- | --- | --- |
-| Add | +30 | squad count + 30 | 999 cats |
+| Add | +60 | squad count + 60 | 999 cats |
 | Multiply | ×3 | squad count × 3 | 999 cats |
-| Fire rate | FIRE RATE +60% | fire rate + 60% of the base fire rate | 3 × the base fire rate |
+| Fire rate | FIRE RATE +100% | fire rate + 100% of the base fire rate | 3 × the base fire rate |
 | Damage | DMG +3 | yarn ball damage + 3 | None |
 | Multi-shot | +2 BULLET | yarn balls per shot + 2 | 5 per cat |
-| Range | RANGE +30 | range + 30 units | None |
+| Range | RANGE +40 | range + 40 units | None |
 
 - The values are in the tuning config (the big buff values).
-- Big buffs add up with gates and other big buffs, and last until the end of the run, like [weapon buffs](#weapon-buffs). At a cap the value stays at the cap. Examples: a squad of 400 collecting ×3 becomes 999. Yarn balls per shot of 4 with +2 BULLET become 5. A fire rate of 5.2 at a base of 2 with FIRE RATE +60% becomes 6, the cap.
-- Collecting a big buff shows a big floating number and plays the good gate sound, as when taking a gate; for +30 and ×3 the squad count animates up.
+- Big buffs add up with gates and other big buffs, and last until the end of the run, like [weapon buffs](#weapon-buffs). At a cap the value stays at the cap. Examples: a squad of 400 collecting ×3 becomes 999. Yarn balls per shot of 4 with +2 BULLET become 5. A fire rate of 5.2 at a base of 2 with FIRE RATE +100% becomes 6, the cap.
+- Collecting a big buff shows a big floating number and plays the good gate sound, as when taking a gate; for +60 and ×3 the squad count animates up.
 
 ## Boss
 

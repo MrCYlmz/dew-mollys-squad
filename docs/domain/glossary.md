@@ -54,7 +54,7 @@ One term per concept. Code, tests and docs use these words exactly.
 | Obstacle | A wall or an unbroken buff block. The squad's centre running into one loses the run. |
 | Wall | A static block on the track that stops yarn balls and is an obstacle, so the squad steers around it. |
 | Buff block | A block filling one lane, with HP, that hides a big buff. Yarn balls break it; an unbroken one is an obstacle. |
-| Big buff | The reward behind a buff block: +30 cats, ×3 cats, FIRE RATE +60%, DMG +3, +2 BULLET or RANGE +30. The squad collects it by being in its lane when it arrives. |
+| Big buff | The reward behind a buff block: +60 cats, ×3 cats, FIRE RATE +100%, DMG +3, +2 BULLET or RANGE +40. The squad collects it by being in its lane when it arrives. |
 | Coin | A fish. Coins are the currency for upgrades. |
 | Boss | A giant robot vacuum cleaner at the end of some levels: the Dustbot or the Mega Dustbot. |
 | Dustbot | The boss of level 5 in world 1. It does not throw dust balls. |
